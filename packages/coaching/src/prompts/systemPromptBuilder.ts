@@ -1,4 +1,5 @@
 import { Profile, BehavioralIntel, Win, CoachMemory, TensionType, LearningStyle, DepthLevel, StageOfChange } from '@toney/types';
+import { topicDetails, TopicKey } from '@toney/constants';
 
 interface PromptContext {
   profile: Profile;
@@ -6,9 +7,12 @@ interface PromptContext {
   recentWins?: Win[];
   rewireCardTitles?: string[];
   coachMemories?: CoachMemory[];
-  recentSummaries?: { summary: string; ended_at: string }[];
   isFirstConversation?: boolean;
   messageCount?: number;
+  topicKey?: string | null;
+  isFirstTopicConversation?: boolean;
+  /** Other topics user has engaged with: { topicKey, messageCount } */
+  otherTopics?: { topicKey: string; messageCount: number }[];
 }
 
 // ────────────────────────────────────────────
@@ -254,7 +258,7 @@ const stageLines: Record<StageOfChange, string> = {
 };
 
 function buildConversationSection(ctx: PromptContext): string {
-  const { behavioralIntel, coachMemories, recentSummaries, recentWins, rewireCardTitles, isFirstConversation } = ctx;
+  const { behavioralIntel, coachMemories, recentWins, rewireCardTitles, isFirstConversation } = ctx;
   const lines: string[] = ['THE CONVERSATION:'];
 
   // First conversation
@@ -309,12 +313,6 @@ function buildConversationSection(ctx: PromptContext): string {
     lines.push(`\nThings you remember:\n${memoryLines.join('\n')}`);
   }
 
-  // Session summaries
-  if (recentSummaries && recentSummaries.length > 0) {
-    const summaryLines = recentSummaries.map(s => `- ${getTimeAgo(s.ended_at)}: ${s.summary}`);
-    lines.push(`\nRecent sessions:\n${summaryLines.join('\n')}`);
-  }
-
   // Wins
   if (recentWins && recentWins.length > 0) {
     const winTexts = recentWins.slice(0, 5).map(w => `"${w.text}" (${w.date ? new Date(w.date).toLocaleDateString() : 'recently'})`);
@@ -324,6 +322,41 @@ function buildConversationSection(ctx: PromptContext): string {
   // Saved insights
   if (rewireCardTitles && rewireCardTitles.length > 0) {
     lines.push(`Insights they've saved: ${rewireCardTitles.map(t => `"${t}"`).join(', ')}`);
+  }
+
+  return lines.join('\n');
+}
+
+// ────────────────────────────────────────────
+// Section 3.5: This Topic (scope guidance)
+// ────────────────────────────────────────────
+
+function buildTopicSection(ctx: PromptContext): string | null {
+  if (!ctx.topicKey) return null;
+
+  const topic = topicDetails[ctx.topicKey as TopicKey];
+  if (!topic) return null;
+
+  const lines: string[] = [`THIS TOPIC: ${topic.name}`];
+  lines.push(topic.scope_guidance);
+
+  if (ctx.isFirstTopicConversation) {
+    lines.push("This is their first time exploring this topic. Start with genuine curiosity about what brought them here. Don't assume — ask.");
+  } else {
+    lines.push("They've been here before. Pick up where you left off. Reference what you remember from previous sessions on this topic.");
+  }
+
+  lines.push('If they bring up something that belongs in a different topic, acknowledge it briefly and gently suggest they explore it there: "That sounds like something worth digging into — you could explore that in [topic name]."');
+
+  // Cross-topic awareness
+  if (ctx.otherTopics && ctx.otherTopics.length > 0) {
+    const otherNames = ctx.otherTopics.map(t => {
+      const def = topicDetails[t.topicKey as TopicKey];
+      return def ? `${def.name} (${t.messageCount} messages)` : null;
+    }).filter(Boolean);
+    if (otherNames.length > 0) {
+      lines.push(`Other topics they've explored: ${otherNames.join(', ')}`);
+    }
   }
 
   return lines.join('\n');
@@ -344,6 +377,10 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 
   // Section 3: This Person
   sections.push(buildPersonSection(ctx.profile));
+
+  // Section 3.5: This Topic (if topic-based conversation)
+  const topicSection = buildTopicSection(ctx);
+  if (topicSection) sections.push(topicSection);
 
   // Section 4: The Conversation
   sections.push(buildConversationSection(ctx));

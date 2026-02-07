@@ -3,5 +3,3 @@ export { extractBehavioralIntel, mergeIntel } from './extraction/intelExtractor'
 export type { ExtractionResult } from './extraction/intelExtractor';
 export { analyzeBetaConversation } from './extraction/betaAnalyzer';
 export type { BetaAnalysis } from './extraction/betaAnalyzer';
-export { closeSession } from './extraction/sessionCloser';
-export type { SessionCloseResult } from './extraction/sessionCloser';

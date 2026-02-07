@@ -8,6 +8,7 @@ import {
   OnboardingPattern,
   OnboardingStyleIntro,
   OnboardingStyleQuiz,
+  OnboardingTopicPicker,
 } from '@/components/onboarding';
 import HomeScreen from '@/components/home/HomeScreen';
 import ChatScreen from '@/components/chat/ChatScreen';
@@ -49,6 +50,7 @@ export default function ToneyApp() {
           {onboardingStep === 'pattern' && <OnboardingPattern />}
           {onboardingStep === 'style_intro' && <OnboardingStyleIntro />}
           {onboardingStep === 'style_quiz' && <OnboardingStyleQuiz />}
+          {onboardingStep === 'topic_picker' && <OnboardingTopicPicker />}
         </>
       ) : (
         <>

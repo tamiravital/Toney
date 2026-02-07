@@ -15,6 +15,7 @@ export interface Message {
 export interface Conversation {
   id: string;
   user_id: string;
+  topic_key?: string | null;
   started_at?: string;
   created_at: string;
   updated_at?: string;

@@ -4,6 +4,7 @@ import { formatDateTime, formatRelativeTime } from '@/lib/format';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import { MessageSquare } from 'lucide-react';
+import { topicDetails, TopicKey } from '@toney/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,9 @@ export default async function ConversationsPage({
                   {formatDateTime(c.created_at)}
                 </span>
                 <Badge label={`${c.message_count} msgs`} />
+                {c.topic_key && topicDetails[c.topic_key as TopicKey] && (
+                  <Badge label={topicDetails[c.topic_key as TopicKey].name} bg="bg-indigo-100" text="text-indigo-700" />
+                )}
                 {c.is_active && (
                   <Badge label="Active" bg="bg-green-100" text="text-green-700" />
                 )}

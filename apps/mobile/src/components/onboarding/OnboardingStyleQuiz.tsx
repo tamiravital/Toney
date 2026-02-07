@@ -68,7 +68,6 @@ export default function OnboardingStyleQuiz() {
     tempStyle, setTempStyle,
     tempLifeContext, setTempLifeContext,
     setOnboardingStep,
-    finishOnboarding,
   } = useToney();
 
   // Step 1: Tone
@@ -318,10 +317,10 @@ export default function OnboardingStyleQuiz() {
         </div>
 
         <button
-          onClick={finishOnboarding}
+          onClick={() => setOnboardingStep('topic_picker')}
           className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-semibold text-lg mt-6 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
         >
-          Start Coaching
+          Next
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>

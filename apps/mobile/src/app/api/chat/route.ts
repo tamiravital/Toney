@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
-import { buildSystemPrompt, closeSession } from '@toney/coaching';
+import { buildSystemPrompt } from '@toney/coaching';
 import { Profile, BehavioralIntel, Win, CoachMemory } from '@toney/types';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
-
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,49 +19,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message } = body;
+    const { message, topicKey } = body;
     let { conversationId } = body;
 
     if (!message || !conversationId) {
       return NextResponse.json({ error: 'Missing message or conversationId' }, { status: 400 });
-    }
-
-    // ── Session gap detection ──
-    // If the last message in this conversation is >2hrs old, close the old
-    // session (extract summary + memories) and create a new one.
-    let newSessionCreated = false;
-    try {
-      const { data: lastMsg } = await supabase
-        .from('messages')
-        .select('created_at')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (lastMsg) {
-        const gap = Date.now() - new Date(lastMsg.created_at).getTime();
-        if (gap > TWO_HOURS_MS) {
-          // Close old session in background (fire-and-forget)
-          closeOldSession(conversationId, user.id, supabase).catch(() => {
-            // Non-critical — session close can fail silently
-          });
-
-          // Create new conversation
-          const { data: newConv } = await supabase
-            .from('conversations')
-            .insert({ user_id: user.id })
-            .select('id')
-            .single();
-
-          if (newConv) {
-            conversationId = newConv.id;
-            newSessionCreated = true;
-          }
-        }
-      }
-    } catch {
-      // Gap detection failed — continue with existing conversation
     }
 
     // Load profile
@@ -125,20 +85,6 @@ export async function POST(request: NextRequest) {
       coachMemories = (data || []) as CoachMemory[];
     } catch { /* table may not exist yet */ }
 
-    // Load recent session summaries (non-critical)
-    let recentSummaries: { summary: string; ended_at: string }[] = [];
-    try {
-      const { data } = await supabase
-        .from('conversations')
-        .select('summary, ended_at')
-        .eq('user_id', user.id)
-        .not('summary', 'is', null)
-        .not('ended_at', 'is', null)
-        .order('ended_at', { ascending: false })
-        .limit(3);
-      recentSummaries = (data || []) as { summary: string; ended_at: string }[];
-    } catch { /* non-critical */ }
-
     // Load conversation history (last 50 messages)
     const { data: historyRows } = await supabase
       .from('messages')
@@ -147,13 +93,36 @@ export async function POST(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(50);
 
-    // Check if this is the first conversation
+    // Check if this is the first conversation overall
     const { count: conversationCount } = await supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
     const isFirstConversation = (conversationCount || 0) <= 1;
+
+    // Detect if this is the first time in this topic (no messages yet)
+    const isFirstTopicConversation = (historyRows || []).length === 0;
+
+    // Load cross-topic conversation counts for prompt context
+    let otherTopics: { topicKey: string; messageCount: number }[] = [];
+    if (topicKey) {
+      try {
+        const { data: topicConvs } = await supabase
+          .from('conversations')
+          .select('topic_key, message_count')
+          .eq('user_id', user.id)
+          .not('topic_key', 'is', null)
+          .neq('topic_key', topicKey);
+
+        otherTopics = (topicConvs || [])
+          .filter((c: { topic_key: string | null; message_count: number | null }) => c.topic_key && (c.message_count || 0) > 0)
+          .map((c: { topic_key: string; message_count: number | null }) => ({
+            topicKey: c.topic_key,
+            messageCount: c.message_count || 0,
+          }));
+      } catch { /* non-critical */ }
+    }
 
     // Build system prompt
     const systemPrompt = buildSystemPrompt({
@@ -167,9 +136,11 @@ export async function POST(request: NextRequest) {
       })) as Win[],
       rewireCardTitles: (rewireCards || []).map(c => c.title),
       coachMemories,
-      recentSummaries,
       isFirstConversation,
       messageCount: (historyRows || []).length,
+      topicKey: topicKey || null,
+      isFirstTopicConversation,
+      otherTopics,
     });
 
     // Save user message
@@ -256,8 +227,6 @@ export async function POST(request: NextRequest) {
         input_tokens: response.usage.input_tokens,
         output_tokens: response.usage.output_tokens,
       },
-      // If a new session was created due to 2hr gap, tell the client
-      ...(newSessionCreated && { newConversationId: conversationId }),
     });
   } catch (error) {
     console.error('Chat API error:', error);
@@ -287,75 +256,4 @@ async function triggerExtraction(conversationId: string, userId: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ conversationId, userId }),
   });
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function closeOldSession(conversationId: string, userId: string, supabase: any) {
-  try {
-    // Load messages for the old conversation
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('role, content')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
-
-    if (!messages || messages.length < 2) {
-      // Too few messages — just mark as ended
-      await supabase
-        .from('conversations')
-        .update({ ended_at: new Date().toISOString(), summary: 'Brief session.' })
-        .eq('id', conversationId);
-      return;
-    }
-
-    // Load existing active memories
-    let existingMemories: CoachMemory[] = [];
-    try {
-      const { data } = await supabase
-        .from('coach_memories')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('active', true);
-      existingMemories = (data || []) as CoachMemory[];
-    } catch { /* table may not exist */ }
-
-    // Run Claude extraction
-    const result = await closeSession(messages, existingMemories);
-
-    // Update conversation
-    await supabase
-      .from('conversations')
-      .update({
-        ended_at: new Date().toISOString(),
-        summary: result.summary,
-      })
-      .eq('id', conversationId);
-
-    // Insert new memories
-    if (result.memories.length > 0) {
-      const memoryRows = result.memories.map(m => ({
-        user_id: userId,
-        session_id: conversationId,
-        memory_type: m.memory_type,
-        content: m.content,
-        importance: m.importance,
-        active: true,
-      }));
-      await supabase.from('coach_memories').insert(memoryRows);
-    }
-
-    // Deactivate resolved memories
-    if (result.resolved_memory_ids.length > 0) {
-      await supabase
-        .from('coach_memories')
-        .update({ active: false })
-        .in('id', result.resolved_memory_ids)
-        .eq('user_id', userId);
-    }
-
-    // Also run behavioral intel extraction
-    triggerExtraction(conversationId, userId).catch(() => {});
-  } catch (err) {
-    console.error('Background session close failed:', err);
-  }
 }
