@@ -391,43 +391,48 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         try {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
+          console.log('[Toney] Restore: user=', user?.id ?? 'NONE');
 
           if (user) {
             // Try saved conversation ID first, otherwise find the most recent one
             let convId = localStorage.getItem('toney_conversation_id');
             let convValid = false;
+            console.log('[Toney] Restore: localStorage convId=', convId);
 
             if (convId) {
-              const { data: conv } = await supabase
+              const { data: conv, error: convErr } = await supabase
                 .from('conversations')
                 .select('id, ended_at')
                 .eq('id', convId)
                 .single();
+              console.log('[Toney] Restore: saved conv=', conv, 'error=', convErr);
               convValid = !!(conv && !conv.ended_at);
             }
 
             // No saved ID or it's invalid — find the user's most recent conversation
             if (!convValid) {
               // First try open conversations, then any conversation
-              const { data: openConvs } = await supabase
+              const { data: openConvs, error: openErr } = await supabase
                 .from('conversations')
                 .select('id')
                 .eq('user_id', user.id)
                 .is('ended_at', null)
                 .order('created_at', { ascending: false })
                 .limit(1);
+              console.log('[Toney] Restore: open convs=', openConvs, 'error=', openErr);
 
               if (openConvs && openConvs.length > 0) {
                 convId = openConvs[0].id;
                 convValid = true;
               } else {
                 // All conversations are closed — load the most recent one anyway
-                const { data: anyConvs } = await supabase
+                const { data: anyConvs, error: anyErr } = await supabase
                   .from('conversations')
                   .select('id')
                   .eq('user_id', user.id)
                   .order('created_at', { ascending: false })
                   .limit(1);
+                console.log('[Toney] Restore: any convs=', anyConvs, 'error=', anyErr);
 
                 if (anyConvs && anyConvs.length > 0) {
                   convId = anyConvs[0].id;
@@ -436,14 +441,17 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               }
             }
 
+            console.log('[Toney] Restore: final convId=', convId, 'valid=', convValid);
+
             if (convId && convValid) {
               // Load messages from this conversation
-              const { data: dbMessages } = await supabase
+              const { data: dbMessages, error: msgErr } = await supabase
                 .from('messages')
                 .select('id, role, content, created_at')
                 .eq('conversation_id', convId)
                 .order('created_at', { ascending: true })
                 .limit(50);
+              console.log('[Toney] Restore: messages=', dbMessages?.length ?? 0, 'error=', msgErr);
 
               if (dbMessages && dbMessages.length > 0) {
                 setConversationId(convId);
@@ -465,6 +473,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('toney_conversation_id');
         }
       }
+      console.log('[Toney] Restore: restoredMessages=', restoredMessages);
 
       // Fall back to localStorage messages if we didn't restore from DB
       if (!restoredMessages) {
