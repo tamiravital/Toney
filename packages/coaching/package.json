@@ -1,0 +1,16 @@
+{
+  "name": "@toney/coaching",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./prompts": "./src/prompts/systemPromptBuilder.ts",
+    "./extraction": "./src/extraction/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@toney/types": "workspace:*",
+    "@anthropic-ai/sdk": "^0.73.0"
+  }
+}

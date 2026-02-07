@@ -1,31 +1,17 @@
 {
-  "name": "toney",
-  "version": "0.1.0",
+  "name": "toney-monorepo",
   "private": true,
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.73.0",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.95.2",
-    "lucide-react": "^0.563.0",
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-markdown": "^10.1.0"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "dev:mobile": "turbo dev --filter=@toney/mobile",
+    "dev:admin": "turbo dev --filter=@toney/admin",
+    "build:mobile": "turbo build --filter=@toney/mobile",
+    "build:admin": "turbo build --filter=@toney/admin"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "turbo": "^2"
   }
 }
