@@ -143,15 +143,19 @@ export async function POST(request: NextRequest) {
       otherTopics,
     });
 
-    // Save user message
-    await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        user_id: user.id,
-        role: 'user',
-        content: message,
-      });
+    const isTopicOpener = message.startsWith('[TOPIC_OPENER]');
+
+    // Save user message (skip for topic openers — they're internal instructions)
+    if (!isTopicOpener) {
+      await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          user_id: user.id,
+          role: 'user',
+          content: message,
+        });
+    }
 
     // Build message history for Claude
     const messageHistory: { role: 'user' | 'assistant'; content: string }[] = (historyRows || []).map(m => ({
@@ -159,7 +163,7 @@ export async function POST(request: NextRequest) {
       content: m.content,
     }));
 
-    // Add current message
+    // Add current message (topic openers are sent as user instructions to Claude but not persisted)
     messageHistory.push({ role: 'user', content: message });
 
     // Call Claude
@@ -201,7 +205,7 @@ export async function POST(request: NextRequest) {
 
       await supabase
         .from('conversations')
-        .update({ message_count: (conv?.message_count || 0) + 2 })
+        .update({ message_count: (conv?.message_count || 0) + (isTopicOpener ? 1 : 2) })
         .eq('id', conversationId);
     } catch { /* non-critical */ }
 

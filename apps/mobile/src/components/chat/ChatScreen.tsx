@@ -146,7 +146,7 @@ function ActiveChatView() {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Chat header with topic switcher */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg">
+      <div className="relative px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
         <div className="flex items-center gap-2">
           <button
             onClick={leaveTopic}
@@ -165,9 +165,14 @@ function ActiveChatView() {
           </button>
         </div>
 
-        {/* Topic switcher dropdown */}
+        {/* Topic switcher dropdown — absolute overlay */}
         {showTopicSwitcher && (
-          <TopicSwitcherDropdown onClose={() => setShowTopicSwitcher(false)} />
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setShowTopicSwitcher(false)} />
+            <div className="absolute left-4 right-4 top-full mt-1 z-20">
+              <TopicSwitcherDropdown onClose={() => setShowTopicSwitcher(false)} />
+            </div>
+          </>
         )}
       </div>
 

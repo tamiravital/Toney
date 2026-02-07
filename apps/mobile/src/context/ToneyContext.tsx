@@ -463,7 +463,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           .limit(50);
 
         if (dbMessages && dbMessages.length > 0) {
-          setMessages(dbMessages.reverse().map(m => ({
+          // Filter out [TOPIC_OPENER] instructions that may have been saved
+          const filtered = dbMessages.reverse().filter(m => !m.content.startsWith('[TOPIC_OPENER]'));
+          setMessages(filtered.map(m => ({
             id: m.id,
             role: m.role as 'user' | 'assistant',
             content: m.content,
