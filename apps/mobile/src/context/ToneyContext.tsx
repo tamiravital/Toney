@@ -385,73 +385,108 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       if (savedWins.length > 0) setWins(savedWins);
       if (savedStreak) setStreak(savedStreak);
 
-      // Restore conversation session — try to resume from localStorage + Supabase
+      // Restore conversation session from Supabase
       let restoredMessages = false;
       if (hasOnboarded && isSupabaseConfigured()) {
-        const savedConvId = localStorage.getItem('toney_conversation_id');
-        if (savedConvId) {
-          try {
-            const supabase = createClient();
-            // Check if the conversation is still active (not ended, and has recent messages)
-            const { data: conv } = await supabase
-              .from('conversations')
-              .select('id, ended_at')
-              .eq('id', savedConvId)
-              .single();
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
 
-            if (conv && !conv.ended_at) {
-              // Check if last message was within 2 hours
-              const { data: lastMsg } = await supabase
-                .from('messages')
-                .select('created_at')
-                .eq('conversation_id', savedConvId)
+          if (user) {
+            // Try saved conversation ID first, otherwise find the most recent one
+            let convId = localStorage.getItem('toney_conversation_id');
+            let convValid = false;
+
+            if (convId) {
+              const { data: conv } = await supabase
+                .from('conversations')
+                .select('id, ended_at')
+                .eq('id', convId)
+                .single();
+              convValid = !!(conv && !conv.ended_at);
+            }
+
+            // No saved ID or it's invalid — find the user's most recent conversation
+            if (!convValid) {
+              const { data: recentConv } = await supabase
+                .from('conversations')
+                .select('id')
+                .eq('user_id', user.id)
+                .is('ended_at', null)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
 
-              const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-              const isRecent = lastMsg && new Date(lastMsg.created_at) > twoHoursAgo;
-
-              if (isRecent) {
-                // Resume this conversation — load messages from DB
-                setConversationId(savedConvId);
-                const { data: dbMessages } = await supabase
-                  .from('messages')
-                  .select('id, role, content, created_at')
-                  .eq('conversation_id', savedConvId)
-                  .order('created_at', { ascending: true })
-                  .limit(50);
-
-                if (dbMessages && dbMessages.length > 0) {
-                  setMessages(dbMessages.map(m => ({
-                    id: m.id,
-                    role: m.role as 'user' | 'assistant',
-                    content: m.content,
-                    timestamp: new Date(m.created_at),
-                    canSave: m.role === 'assistant',
-                    saved: false,
-                  })));
-                  restoredMessages = true;
-                }
-              } else {
-                // Session expired — clear the stored ID
-                localStorage.removeItem('toney_conversation_id');
+              if (recentConv) {
+                convId = recentConv.id;
+                convValid = true;
               }
-            } else {
-              // Conversation ended or doesn't exist — clear
-              localStorage.removeItem('toney_conversation_id');
             }
-          } catch {
-            // DB check failed — fall through to localStorage messages
-            localStorage.removeItem('toney_conversation_id');
+
+            if (convId && convValid) {
+              // Load messages from this conversation
+              const { data: dbMessages } = await supabase
+                .from('messages')
+                .select('id, role, content, created_at')
+                .eq('conversation_id', convId)
+                .order('created_at', { ascending: true })
+                .limit(50);
+
+              if (dbMessages && dbMessages.length > 0) {
+                setConversationId(convId);
+                localStorage.setItem('toney_conversation_id', convId);
+                setMessages(dbMessages.map(m => ({
+                  id: m.id,
+                  role: m.role as 'user' | 'assistant',
+                  content: m.content,
+                  timestamp: new Date(m.created_at),
+                  canSave: m.role === 'assistant',
+                  saved: false,
+                })));
+                restoredMessages = true;
+              }
+            }
           }
+        } catch {
+          // DB check failed — fall through to localStorage messages
+          localStorage.removeItem('toney_conversation_id');
         }
       }
 
       // Fall back to localStorage messages if we didn't restore from DB
       if (!restoredMessages) {
         const savedMessages = loadJSON<Message[]>('toney_messages', []);
-        if (savedMessages.length > 0) setMessages(savedMessages);
+        if (savedMessages.length > 0) {
+          setMessages(savedMessages);
+          restoredMessages = true;
+        }
+      }
+
+      // If onboarded but no messages at all (new browser, expired session),
+      // generate a welcome message so the chat isn't blank
+      if (hasOnboarded && !restoredMessages) {
+        const tension = loadJSON<IdentifiedTension | null>('toney_tension', null);
+        const primary = tension?.primaryDetails;
+        const secondary = tension?.secondaryDetails;
+
+        let welcomeText = `Hey! Welcome back \u{1F499}\n\n`;
+        if (primary) {
+          welcomeText += `I remember — ${primary.description}\n\n`;
+          welcomeText += `${primary.reframe}\n\n`;
+        }
+        if (secondary) {
+          welcomeText += `I also notice that ${secondary.description.charAt(0).toLowerCase()}${secondary.description.slice(1)}\n\n`;
+        }
+        welcomeText += `What's on your mind today?`;
+
+        setMessages([{
+          id: 'msg-welcome-back',
+          role: 'assistant',
+          content: welcomeText,
+          timestamp: new Date(),
+          canSave: false,
+          quickReplies: primary?.conversation_starters?.slice(0, 3) || [],
+        }]);
       }
 
       if (hasOnboarded) {
