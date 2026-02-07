@@ -315,7 +315,55 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const hasOnboarded = localStorage.getItem('toney_onboarded') === 'true';
+      let hasOnboarded = localStorage.getItem('toney_onboarded') === 'true';
+
+      // If localStorage doesn't know about onboarding, check the Supabase profile
+      // (handles new browser / cleared cache where user already onboarded)
+      if (!hasOnboarded && isSupabaseConfigured()) {
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('onboarding_completed, tension_type, secondary_tension_type, tension_score, tone, depth, learning_styles')
+              .eq('id', user.id)
+              .single();
+
+            if (profile?.onboarding_completed) {
+              hasOnboarded = true;
+              localStorage.setItem('toney_onboarded', 'true');
+
+              // Restore profile data into localStorage so the app has it
+              if (profile.tension_type) {
+                const tension: IdentifiedTension = {
+                  primary: profile.tension_type as TensionType,
+                  primaryScore: profile.tension_score ?? 5,
+                  primaryDetails: tensionDetails[profile.tension_type as TensionType],
+                  ...(profile.secondary_tension_type && {
+                    secondary: profile.secondary_tension_type as TensionType,
+                    secondaryDetails: tensionDetails[profile.secondary_tension_type as TensionType],
+                  }),
+                };
+                saveJSON('toney_tension', tension);
+                setIdentifiedTension(tension);
+              }
+              if (profile.tone || profile.depth || profile.learning_styles) {
+                const style: StyleProfile = {
+                  tone: profile.tone ?? defaultStyle.tone,
+                  depth: (profile.depth as StyleProfile['depth']) ?? defaultStyle.depth,
+                  learningStyles: (profile.learning_styles as StyleProfile['learningStyles']) ?? defaultStyle.learningStyles,
+                };
+                saveJSON('toney_style', style);
+                setStyleProfile(style);
+                setTempStyle(style);
+              }
+            }
+          }
+        } catch {
+          // Profile check failed — fall through to onboarding
+        }
+      }
 
       // Try new tension key first, then migrate old pattern key
       let savedTension = loadJSON<IdentifiedTension | null>('toney_tension', null);
