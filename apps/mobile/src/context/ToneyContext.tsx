@@ -408,18 +408,31 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             // No saved ID or it's invalid — find the user's most recent conversation
             if (!convValid) {
-              const { data: recentConv } = await supabase
+              // First try open conversations, then any conversation
+              const { data: openConvs } = await supabase
                 .from('conversations')
                 .select('id')
                 .eq('user_id', user.id)
                 .is('ended_at', null)
                 .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
+                .limit(1);
 
-              if (recentConv) {
-                convId = recentConv.id;
+              if (openConvs && openConvs.length > 0) {
+                convId = openConvs[0].id;
                 convValid = true;
+              } else {
+                // All conversations are closed — load the most recent one anyway
+                const { data: anyConvs } = await supabase
+                  .from('conversations')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+
+                if (anyConvs && anyConvs.length > 0) {
+                  convId = anyConvs[0].id;
+                  convValid = true;
+                }
               }
             }
 
@@ -447,8 +460,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               }
             }
           }
-        } catch {
-          // DB check failed — fall through to localStorage messages
+        } catch (err) {
+          console.error('[Toney] Conversation restore failed:', err);
           localStorage.removeItem('toney_conversation_id');
         }
       }
