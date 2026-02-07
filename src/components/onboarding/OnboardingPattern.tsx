@@ -1,0 +1,84 @@
+'use client';
+
+import { ArrowRight } from 'lucide-react';
+import { useToney } from '@/context/ToneyContext';
+import { tensionColor } from '@/lib/constants/tensions';
+import { TensionType } from '@/types';
+
+export default function OnboardingPattern() {
+  const { identifiedTension, setOnboardingStep } = useToney();
+
+  if (!identifiedTension) return null;
+  const p = identifiedTension.primaryDetails;
+  const colors = tensionColor(identifiedTension.primary);
+
+  return (
+    <div className="flex flex-col min-h-full px-6 py-8">
+      {/* Header — reflective, not labeling */}
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Here's what I notice</h2>
+        <p className="text-gray-500 text-sm">Based on your answers, here's what's going on with your money relationship</p>
+      </div>
+
+      <div className="space-y-4 flex-1">
+        {/* Primary tension — natural description */}
+        <div className={`${colors.bg} rounded-2xl p-5`}>
+          <p className={`${colors.text} text-sm leading-relaxed`}>{p.description}</p>
+        </div>
+
+        {/* Root feelings */}
+        <div className="bg-gray-50 rounded-2xl p-5">
+          <h3 className="font-semibold text-gray-900 text-sm mb-2">What's underneath</h3>
+          <p className="text-gray-700 text-sm mb-3">{p.root_feelings}</p>
+          <ul className="space-y-1.5">
+            {p.common_behaviors.map((b, i) => (
+              <li key={i} className="text-gray-600 text-sm flex items-start gap-2">
+                <span className="text-gray-400 mt-0.5">{"\u2022"}</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Reframe — the hopeful part */}
+        <div className={`${colors.light} rounded-2xl p-5`}>
+          <h3 className="font-semibold text-gray-900 text-sm mb-2">The reframe</h3>
+          <p className="text-gray-700 text-sm leading-relaxed">{p.reframe}</p>
+        </div>
+
+        {/* Secondary tension (if exists) */}
+        {identifiedTension.secondary && identifiedTension.secondaryDetails && (
+          <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
+            <h3 className="font-semibold text-gray-900 text-sm mb-2">I also notice...</h3>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              {identifiedTension.secondaryDetails.description}
+            </p>
+          </div>
+        )}
+
+        {/* Conversation starters preview */}
+        <div className="pt-2">
+          <p className="text-gray-500 text-xs mb-3">When we start chatting, here are some things we can explore:</p>
+          <div className="flex flex-wrap gap-2">
+            {p.conversation_starters.slice(0, 3).map((starter, i) => (
+              <span
+                key={i}
+                className={`${colors.bg} ${colors.text} text-xs px-3 py-1.5 rounded-full`}
+              >
+                {starter}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setOnboardingStep('style_intro')}
+        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-semibold text-lg mt-6 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+      >
+        Continue
+        <ArrowRight className="w-5 h-5" />
+      </button>
+    </div>
+  );
+}
