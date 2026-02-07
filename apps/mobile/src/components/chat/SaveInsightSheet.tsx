@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Brain, RotateCcw, Lightbulb, Quote, Zap } from 'lucide-react';
+import { X, Brain, RotateCcw, Lightbulb, Quote, Zap, MessageCircle } from 'lucide-react';
 import { ComponentType } from 'react';
 
-type Category = 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play';
+type Category = 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
 
 interface CategoryOption {
   id: Category;
@@ -20,6 +20,7 @@ const categoryOptions: CategoryOption[] = [
   { id: 'truth', label: 'Truth', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
   { id: 'mantra', label: 'Mantra', icon: Quote, color: 'text-green-600', bgColor: 'bg-green-50' },
   { id: 'play', label: 'Play', icon: Zap, color: 'text-red-600', bgColor: 'bg-red-50' },
+  { id: 'conversation_kit', label: 'Conversation Kit', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
 
 interface SaveInsightSheetProps {
@@ -34,6 +35,7 @@ function guessCategory(content: string): Category {
   if (lower.includes('ritual') || lower.includes('every day') || lower.includes('each time') || lower.includes('before any')) return 'ritual';
   if (lower.includes('realize') || lower.includes('truth') || lower.includes('actually') || lower.includes('the real')) return 'truth';
   if (lower.includes('mantra') || lower.includes('remind yourself') || lower.includes('remember that')) return 'mantra';
+  if (lower.includes('conversation') || lower.includes('money talk') || lower.includes('approach kit')) return 'conversation_kit';
   return 'reframe';
 }
 

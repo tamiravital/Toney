@@ -27,7 +27,7 @@ export interface BehavioralIntel {
 export interface RewireCard {
   id: string;
   user_id: string;
-  category: 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play';
+  category: 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
   title: string;
   content: string;
   source_message_id?: string | null;
@@ -52,7 +52,7 @@ export interface Win {
 export interface Insight {
   id: string;
   content: string;
-  category?: 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play';
+  category?: 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
   savedAt: Date;
   fromChat: boolean;
   tags: string[];

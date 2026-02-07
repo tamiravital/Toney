@@ -110,6 +110,7 @@ export function learningStyleLabel(style: string): string {
 }
 
 export function categoryLabel(cat: string): string {
+  if (cat === 'conversation_kit') return 'Conversation Kit';
   return cat.charAt(0).toUpperCase() + cat.slice(1);
 }
 

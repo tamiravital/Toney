@@ -5,8 +5,8 @@ import { Brain, RotateCcw, Lightbulb, Quote, Zap, MessageCircle, Sparkles, Penci
 import { useToney } from '@/context/ToneyContext';
 import { ComponentType } from 'react';
 
-type Category = 'all' | 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play';
-type InsightCategory = 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play';
+type Category = 'all' | 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
+type InsightCategory = 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
 
 interface CategoryConfig {
   id: Category;
@@ -23,6 +23,7 @@ const categories: CategoryConfig[] = [
   { id: 'truth', label: 'Truths', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
   { id: 'mantra', label: 'Mantras', icon: Quote, color: 'text-green-600', bgColor: 'bg-green-50' },
   { id: 'play', label: 'Plays', icon: Zap, color: 'text-red-600', bgColor: 'bg-red-50' },
+  { id: 'conversation_kit', label: 'Kits', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
 
 const categoryColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -31,6 +32,7 @@ const categoryColors: Record<string, { bg: string; text: string; border: string 
   truth: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
   mantra: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100' },
   play: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' },
+  conversation_kit: { bg: 'bg-teal-50', text: 'text-teal-600', border: 'border-teal-100' },
 };
 
 const categoryOptionsForEdit: { id: InsightCategory; label: string; icon: ComponentType<{ className?: string }>; color: string; bgColor: string }[] = [
@@ -39,6 +41,7 @@ const categoryOptionsForEdit: { id: InsightCategory; label: string; icon: Compon
   { id: 'truth', label: 'Truth', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
   { id: 'mantra', label: 'Mantra', icon: Quote, color: 'text-green-600', bgColor: 'bg-green-50' },
   { id: 'play', label: 'Play', icon: Zap, color: 'text-red-600', bgColor: 'bg-red-50' },
+  { id: 'conversation_kit', label: 'Conversation Kit', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
 
 function guessCategory(content: string): InsightCategory {
@@ -47,6 +50,7 @@ function guessCategory(content: string): InsightCategory {
   if (lower.includes('ritual') || lower.includes('every day') || lower.includes('each time')) return 'ritual';
   if (lower.includes('realize') || lower.includes('truth') || lower.includes('actually')) return 'truth';
   if (lower.includes('instead') || lower.includes('reframe') || lower.includes('not about')) return 'reframe';
+  if (lower.includes('conversation') || lower.includes('money talk') || lower.includes('approach kit')) return 'conversation_kit';
   return 'reframe';
 }
 
