@@ -1,9 +1,20 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, ComponentPropsWithoutRef } from 'react';
 import { Send, Bookmark, BookmarkCheck } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import SaveInsightSheet from './SaveInsightSheet';
+
+// Custom markdown components for chat bubble styling
+const markdownComponents = {
+  p: (props: ComponentPropsWithoutRef<'p'>) => <p className="mb-2 last:mb-0" {...props} />,
+  strong: (props: ComponentPropsWithoutRef<'strong'>) => <strong className="font-semibold" {...props} />,
+  em: (props: ComponentPropsWithoutRef<'em'>) => <em {...props} />,
+  ul: (props: ComponentPropsWithoutRef<'ul'>) => <ul className="ml-4 mb-2 last:mb-0 space-y-1 list-disc" {...props} />,
+  ol: (props: ComponentPropsWithoutRef<'ol'>) => <ol className="ml-4 mb-2 last:mb-0 space-y-1 list-decimal" {...props} />,
+  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm leading-relaxed" {...props} />,
+};
 
 function extractInsight(assistantContent: string, userContent?: string): string {
   // Pull out the actionable/insightful part, not the whole message
@@ -75,18 +86,7 @@ export default function ChatScreen() {
   };
 
   const handleQuickReply = (text: string) => {
-    setChatInput(text);
-    // Use setTimeout to ensure state update, then trigger send
-    setTimeout(() => {
-      const input = document.querySelector('textarea');
-      if (input) {
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLTextAreaElement.prototype, 'value'
-        )?.set;
-        nativeInputValueSetter?.call(input, text);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    }, 0);
+    handleSendMessage(text);
   };
 
   return (
@@ -111,13 +111,19 @@ export default function ChatScreen() {
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className="w-10/12">
                 <div
-                  className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
+                  className={`p-4 rounded-2xl text-sm leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-md'
+                      ? 'bg-indigo-600 text-white rounded-br-md whitespace-pre-line'
                       : 'bg-gray-100 text-gray-900 rounded-bl-md'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown components={markdownComponents}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
                 {/* Save button for assistant messages */}
                 {msg.role === 'assistant' && msg.canSave !== false && (
@@ -189,7 +195,7 @@ export default function ChatScreen() {
             />
           </div>
           <button
-            onClick={handleSendMessage}
+            onClick={() => handleSendMessage()}
             disabled={!chatInput.trim()}
             className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
               chatInput.trim()

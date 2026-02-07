@@ -112,7 +112,7 @@ interface ToneyContextValue {
   setChatInput: (input: string) => void;
   isTyping: boolean;
   setIsTyping: (typing: boolean) => void;
-  handleSendMessage: () => void;
+  handleSendMessage: (overrideText?: string) => void;
   handleSaveInsight: (messageId: string, editedContent?: string, category?: string) => void;
 
   // Rewire
@@ -138,6 +138,109 @@ interface ToneyContextValue {
 }
 
 const ToneyContext = createContext<ToneyContextValue | null>(null);
+
+/**
+ * Context-aware fallback responses when the Claude API is unavailable.
+ * Matches the user's message to a relevant response, avoids repeats.
+ */
+function getFallbackResponse(userMessage: string, previousMessages: Message[]): string {
+  const msg = userMessage.toLowerCase();
+  const usedResponses = new Set(
+    previousMessages.filter(m => m.role === 'assistant').map(m => m.content)
+  );
+
+  // Detect explicit requests for help/plan/advice
+  const wantsPlan = /\b(plan|steps|what should i|how do i|give me|help me|advice|strategy|what can i)\b/.test(msg);
+  const feelsOverwhelmed = /\b(too (much|emotional|overwhelm|stressed)|can'?t handle|freaking out|panic|anxious|scared)\b/.test(msg);
+  const expressesRegret = /\b(regret|mistake|shouldn'?t have|wish i|feel stupid|feel dumb|blew it|messed up)\b/.test(msg);
+  const talksInvesting = /\b(invest|stock|crypto|trading|market|portfolio|buy in|jumped on|trending|ticker|shares)\b/.test(msg);
+  const talksSpending = /\b(spend|bought|shopping|purchase|splurge|impulse|cart|order)\b/.test(msg);
+  const talksSaving = /\b(save|saving|budget|frugal|cheap|can'?t afford|broke|tight)\b/.test(msg);
+  const talksComparison = /\b(everyone|behind|ahead|friend|coworker|they all|compare|jealous|fomo|getting rich|except me|left out)\b/.test(msg);
+  const talksAvoidance = /\b(avoid|don'?t look|ignore|pretend|head in sand|don'?t want to think|feels wrong|boring|don'?t care|whatever|doesn'?t matter)\b/.test(msg);
+  const talksGiving = /\b(give|lend|loan|help (them|her|him|my)|can'?t say no|generous|family needs)\b/.test(msg);
+
+  // Build a pool of contextually relevant responses
+  const pool: string[] = [];
+
+  if (wantsPlan && feelsOverwhelmed) {
+    pool.push(
+      "Ok, let's slow this down together. When everything feels like too much, the move is **shrink the problem**. What's the *one* money thing that's weighing on you most right now? Just one.",
+      "I can hear the urgency in that. Here's what I'd suggest as a first step: **pick one thing you can control today.** Not the whole picture \u2014 just one corner of it. What feels most within reach?",
+      "That emotional flood is real, and wanting a plan is actually a sign of strength. Let's start small: what's the **very next money moment** you'll face this week? We'll build from there.",
+    );
+  } else if (wantsPlan) {
+    pool.push(
+      "Let's build something you can actually use. First \u2014 what's the **specific situation** you want a plan for? The more concrete, the better I can help.",
+      "I like that you're ready to do something different. Before we map it out, tell me: **what have you already tried?** I don't want to give you something that hasn't worked before.",
+      "Absolutely. The best plans start tiny. What's **one thing** that, if you did it this week, would make you feel like you're moving in the right direction?",
+    );
+  } else if (feelsOverwhelmed) {
+    pool.push(
+      "That overwhelm makes total sense. **You don't have to figure it all out right now.** Can you tell me what specifically is feeling like too much?",
+      "When money stress hits that hard, the first step isn't a strategy \u2014 it's a breath. You're here, you're talking about it. **That already matters.** What's the feeling underneath the overwhelm?",
+      "The fact that you're naming it as *too emotional* tells me you're more aware than you think. Emotions aren't the enemy here \u2014 **they're data.** What triggered this one?",
+    );
+  } else if (expressesRegret && talksInvesting) {
+    pool.push(
+      "That regret is telling you something important. Can you walk me through **the moment you decided to jump in?** Not to judge it \u2014 I want to understand what you were feeling right before you pulled the trigger.",
+      "Jumping on investments and then regretting it \u2014 there's usually a pattern to the pull. Was it a tip from someone? **A fear of missing out?** Something happening in your life that made you want to feel in control?",
+      "That *act-then-regret* cycle is exhausting. I'm curious \u2014 in the moment you decide to invest, **what story are you telling yourself?** Not what you think logically, but what it *feels* like.",
+    );
+  } else if (talksAvoidance && talksInvesting) {
+    pool.push(
+      "That resistance to investing \u2014 it's worth paying attention to. Something about it *feels wrong* to you, and I'm curious what that's about. Is it the risk? The complexity? Something else?",
+      "When you say investing feels wrong, what does *wrong* mean for you? Like it's not for people like you? Or more like it stirs something uncomfortable?",
+    );
+  } else if (talksInvesting) {
+    pool.push(
+      "Tell me more about the investing side of things. When you think about your money and investments, what comes up \u2014 *excitement, anxiety, pressure?* Something else?",
+      "Investing can bring up a lot \u2014 the thrill, the fear, the what-ifs. What's your **relationship** with it feeling like right now?",
+    );
+  } else if (talksSpending) {
+    pool.push(
+      "The spending pattern you're describing \u2014 I want to understand it from the inside. **What does it feel like right before you make that purchase?** Not after, when the guilt hits. *Before.*",
+      "There's usually something the spending is *doing for you* emotionally, even when it's hurting you financially. Any sense of what that might be?",
+    );
+  } else if (talksComparison) {
+    pool.push(
+      "That feeling of *everyone else being ahead* \u2014 it's one of the most painful money experiences there is. When you look at other people's lives, what specifically makes you feel behind?",
+      "Comparison is a trap with no bottom. I'm curious: **if you couldn't see what anyone else was doing, what would \"enough\" look like for you?**",
+    );
+  } else if (talksAvoidance) {
+    pool.push(
+      "The not-looking thing \u2014 I want you to know that's actually **a really common way people protect themselves.** You're not broken for doing it. What would feel scary about looking?",
+      "Avoiding money stuff takes real energy, even though it looks like *doing nothing.* When did you first start turning away from it?",
+    );
+  } else if (talksSaving) {
+    pool.push(
+      "The pressure around saving \u2014 is that coming from *inside you*, from people around you, or from looking at what you think you *should* have by now?",
+      "Tell me about what saving **feels** like for you. For some people it's empowering, for others it feels like deprivation. Where do you land?",
+    );
+  } else if (talksGiving) {
+    pool.push(
+      "That pull to give \u2014 it comes from a good place, but it can also leave you **running on empty.** When was the last time someone asked for money and you said yes even though part of you didn't want to?",
+      "Being generous is beautiful. But I'm curious \u2014 when you help others financially, **what happens to the part of you that also has needs?**",
+    );
+  } else {
+    pool.push(
+      "That's interesting \u2014 say more about that. What's the part that feels *most loaded* for you?",
+      "I want to make sure I'm tracking. When you say that, **what's the feeling that comes with it?**",
+      "Something about the way you said that feels important. Can you unpack it a bit?",
+      "Let's stay with that for a second. What does that look like *in your day-to-day?*",
+      "I'm picking up on something underneath what you're saying. **What would you say is the real issue here?**",
+    );
+  }
+
+  // Filter out already-used responses
+  const available = pool.filter(r => !usedResponses.has(r));
+  if (available.length === 0) {
+    // All contextual responses used — generate a dynamic follow-up
+    return "I want to keep going with this. We've been circling something important \u2014 **what feels like the thing you most want to figure out right now?**";
+  }
+
+  return available[Math.floor(Math.random() * available.length)];
+}
 
 const defaultStyle: StyleProfile = {
   tone: 5,
@@ -184,18 +287,24 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     const hydrate = async () => {
       let isSignedIn = localStorage.getItem('toney_signed_in') === 'true';
 
-      // If not signed in via localStorage, check for a Supabase session
-      // (handles OAuth redirect flow where localStorage wasn't set yet)
-      if (!isSignedIn && isSupabaseConfigured()) {
+      // Always verify the Supabase session is alive — localStorage alone can't be trusted
+      // (session may have expired even if localStorage flag is set)
+      if (isSupabaseConfigured()) {
         try {
           const supabase = createClient();
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             isSignedIn = true;
             localStorage.setItem('toney_signed_in', 'true');
+          } else {
+            // Session expired or doesn't exist — clear stale flag
+            isSignedIn = false;
+            localStorage.removeItem('toney_signed_in');
           }
         } catch {
-          // Supabase check failed — fall through to signed_out
+          // Supabase check failed — if we had a localStorage flag, clear it to be safe
+          isSignedIn = false;
+          localStorage.removeItem('toney_signed_in');
         }
       }
 
@@ -370,13 +479,14 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
   }, [currentQuestionIndex]);
 
-  const handleSendMessage = useCallback(async () => {
-    if (!chatInput.trim()) return;
+  const handleSendMessage = useCallback(async (overrideText?: string) => {
+    const text = overrideText || chatInput;
+    if (!text.trim()) return;
 
     const userMsg: Message = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: chatInput.trim(),
+      content: text.trim(),
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMsg]);
@@ -384,6 +494,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setIsTyping(true);
 
     // If Supabase is configured, use the real Claude API
+    console.log('[Toney] Supabase configured:', isSupabaseConfigured());
     if (isSupabaseConfigured()) {
       try {
         // Ensure we have a conversation
@@ -391,6 +502,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         if (!convId) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
+          console.log('[Toney] Auth user:', user?.id ?? 'NO USER');
           if (user) {
             const { data: conv } = await supabase
               .from('conversations')
@@ -405,12 +517,15 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        console.log('[Toney] Conversation ID:', convId ?? 'NONE');
+
         if (convId) {
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: userMsg.content, conversationId: convId }),
           });
+          console.log('[Toney] API response status:', res.status);
           const data = await res.json();
 
           // If the server created a new session (2hr gap), update our conversationId
@@ -435,31 +550,21 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             return;
           }
         }
-      } catch {
-        // Fall through to simulated response
+      } catch (err) {
+        console.error('[Toney] Chat API failed:', err);
       }
     }
 
-    // Fallback: simulated coaching responses (no diagnosis, only questions)
-    setTimeout(() => {
-      const responses = [
-        "That's a really honest thing to share. I want to make sure I understand \u2014 what were you feeling right before that happened?",
-        "I appreciate you telling me that. It sounds like there's something deeper going on underneath. Can you walk me through what that moment was actually like for you?",
-        "That makes a lot of sense. I'm curious \u2014 when you think about that situation now, what comes up for you? Not what you think *should* come up, but what actually does.",
-        "I hear you. And I don't think that's something to fix right away \u2014 I think it's something to understand first. What do you think is really driving that for you?",
-        "Thank you for sharing that. I want to sit with this for a second because I think there's something important here. What does that moment tell you about what you actually need?",
-      ];
-      const toneyMsg: Message = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant',
-        content: responses[Math.floor(Math.random() * responses.length)],
-        timestamp: new Date(),
-        canSave: true,
-        saved: false,
-      };
-      setMessages(prev => [...prev, toneyMsg]);
-      setIsTyping(false);
-    }, 1500 + Math.random() * 1000);
+    // API failed — show error instead of fake fallback
+    setMessages(prev => [...prev, {
+      id: `msg-${Date.now() + 1}`,
+      role: 'assistant' as const,
+      content: '⚠️ API call failed — check browser console for details.',
+      timestamp: new Date(),
+      canSave: false,
+      saved: false,
+    }]);
+    setIsTyping(false);
   }, [chatInput, conversationId]);
 
   const handleSaveInsight = useCallback((messageId: string, editedContent?: string, category?: string) => {
