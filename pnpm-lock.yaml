@@ -14,9 +14,15 @@ importers:
 
   apps/admin:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.73.0
+        version: 0.73.0(zod@4.3.6)
       '@supabase/supabase-js':
         specifier: ^2.95.2
         version: 2.95.3
+      '@toney/coaching':
+        specifier: workspace:*
+        version: link:../../packages/coaching
       '@toney/constants':
         specifier: workspace:*
         version: link:../../packages/constants

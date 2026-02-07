@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@toney/types",
     "@toney/constants",
+    "@toney/coaching",
   ],
 };
 

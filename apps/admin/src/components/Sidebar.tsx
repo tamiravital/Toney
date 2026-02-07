@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Heart, LayoutDashboard, Users, LogOut } from 'lucide-react';
+import { Heart, LayoutDashboard, Users, FlaskConical, LogOut } from 'lucide-react';
 import { logoutAction } from '@/app/login/actions';
 
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/users', label: 'Users', icon: Users },
+  { href: '/dashboard/simulator', label: 'Simulator', icon: FlaskConical },
 ];
 
 export default function Sidebar() {
