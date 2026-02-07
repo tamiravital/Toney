@@ -142,109 +142,6 @@ interface ToneyContextValue {
 
 const ToneyContext = createContext<ToneyContextValue | null>(null);
 
-/**
- * Context-aware fallback responses when the Claude API is unavailable.
- * Matches the user's message to a relevant response, avoids repeats.
- */
-function getFallbackResponse(userMessage: string, previousMessages: Message[]): string {
-  const msg = userMessage.toLowerCase();
-  const usedResponses = new Set(
-    previousMessages.filter(m => m.role === 'assistant').map(m => m.content)
-  );
-
-  // Detect explicit requests for help/plan/advice
-  const wantsPlan = /\b(plan|steps|what should i|how do i|give me|help me|advice|strategy|what can i)\b/.test(msg);
-  const feelsOverwhelmed = /\b(too (much|emotional|overwhelm|stressed)|can'?t handle|freaking out|panic|anxious|scared)\b/.test(msg);
-  const expressesRegret = /\b(regret|mistake|shouldn'?t have|wish i|feel stupid|feel dumb|blew it|messed up)\b/.test(msg);
-  const talksInvesting = /\b(invest|stock|crypto|trading|market|portfolio|buy in|jumped on|trending|ticker|shares)\b/.test(msg);
-  const talksSpending = /\b(spend|bought|shopping|purchase|splurge|impulse|cart|order)\b/.test(msg);
-  const talksSaving = /\b(save|saving|budget|frugal|cheap|can'?t afford|broke|tight)\b/.test(msg);
-  const talksComparison = /\b(everyone|behind|ahead|friend|coworker|they all|compare|jealous|fomo|getting rich|except me|left out)\b/.test(msg);
-  const talksAvoidance = /\b(avoid|don'?t look|ignore|pretend|head in sand|don'?t want to think|feels wrong|boring|don'?t care|whatever|doesn'?t matter)\b/.test(msg);
-  const talksGiving = /\b(give|lend|loan|help (them|her|him|my)|can'?t say no|generous|family needs)\b/.test(msg);
-
-  // Build a pool of contextually relevant responses
-  const pool: string[] = [];
-
-  if (wantsPlan && feelsOverwhelmed) {
-    pool.push(
-      "Ok, let's slow this down together. When everything feels like too much, the move is **shrink the problem**. What's the *one* money thing that's weighing on you most right now? Just one.",
-      "I can hear the urgency in that. Here's what I'd suggest as a first step: **pick one thing you can control today.** Not the whole picture \u2014 just one corner of it. What feels most within reach?",
-      "That emotional flood is real, and wanting a plan is actually a sign of strength. Let's start small: what's the **very next money moment** you'll face this week? We'll build from there.",
-    );
-  } else if (wantsPlan) {
-    pool.push(
-      "Let's build something you can actually use. First \u2014 what's the **specific situation** you want a plan for? The more concrete, the better I can help.",
-      "I like that you're ready to do something different. Before we map it out, tell me: **what have you already tried?** I don't want to give you something that hasn't worked before.",
-      "Absolutely. The best plans start tiny. What's **one thing** that, if you did it this week, would make you feel like you're moving in the right direction?",
-    );
-  } else if (feelsOverwhelmed) {
-    pool.push(
-      "That overwhelm makes total sense. **You don't have to figure it all out right now.** Can you tell me what specifically is feeling like too much?",
-      "When money stress hits that hard, the first step isn't a strategy \u2014 it's a breath. You're here, you're talking about it. **That already matters.** What's the feeling underneath the overwhelm?",
-      "The fact that you're naming it as *too emotional* tells me you're more aware than you think. Emotions aren't the enemy here \u2014 **they're data.** What triggered this one?",
-    );
-  } else if (expressesRegret && talksInvesting) {
-    pool.push(
-      "That regret is telling you something important. Can you walk me through **the moment you decided to jump in?** Not to judge it \u2014 I want to understand what you were feeling right before you pulled the trigger.",
-      "Jumping on investments and then regretting it \u2014 there's usually a pattern to the pull. Was it a tip from someone? **A fear of missing out?** Something happening in your life that made you want to feel in control?",
-      "That *act-then-regret* cycle is exhausting. I'm curious \u2014 in the moment you decide to invest, **what story are you telling yourself?** Not what you think logically, but what it *feels* like.",
-    );
-  } else if (talksAvoidance && talksInvesting) {
-    pool.push(
-      "That resistance to investing \u2014 it's worth paying attention to. Something about it *feels wrong* to you, and I'm curious what that's about. Is it the risk? The complexity? Something else?",
-      "When you say investing feels wrong, what does *wrong* mean for you? Like it's not for people like you? Or more like it stirs something uncomfortable?",
-    );
-  } else if (talksInvesting) {
-    pool.push(
-      "Tell me more about the investing side of things. When you think about your money and investments, what comes up \u2014 *excitement, anxiety, pressure?* Something else?",
-      "Investing can bring up a lot \u2014 the thrill, the fear, the what-ifs. What's your **relationship** with it feeling like right now?",
-    );
-  } else if (talksSpending) {
-    pool.push(
-      "The spending pattern you're describing \u2014 I want to understand it from the inside. **What does it feel like right before you make that purchase?** Not after, when the guilt hits. *Before.*",
-      "There's usually something the spending is *doing for you* emotionally, even when it's hurting you financially. Any sense of what that might be?",
-    );
-  } else if (talksComparison) {
-    pool.push(
-      "That feeling of *everyone else being ahead* \u2014 it's one of the most painful money experiences there is. When you look at other people's lives, what specifically makes you feel behind?",
-      "Comparison is a trap with no bottom. I'm curious: **if you couldn't see what anyone else was doing, what would \"enough\" look like for you?**",
-    );
-  } else if (talksAvoidance) {
-    pool.push(
-      "The not-looking thing \u2014 I want you to know that's actually **a really common way people protect themselves.** You're not broken for doing it. What would feel scary about looking?",
-      "Avoiding money stuff takes real energy, even though it looks like *doing nothing.* When did you first start turning away from it?",
-    );
-  } else if (talksSaving) {
-    pool.push(
-      "The pressure around saving \u2014 is that coming from *inside you*, from people around you, or from looking at what you think you *should* have by now?",
-      "Tell me about what saving **feels** like for you. For some people it's empowering, for others it feels like deprivation. Where do you land?",
-    );
-  } else if (talksGiving) {
-    pool.push(
-      "That pull to give \u2014 it comes from a good place, but it can also leave you **running on empty.** When was the last time someone asked for money and you said yes even though part of you didn't want to?",
-      "Being generous is beautiful. But I'm curious \u2014 when you help others financially, **what happens to the part of you that also has needs?**",
-    );
-  } else {
-    pool.push(
-      "That's interesting \u2014 say more about that. What's the part that feels *most loaded* for you?",
-      "I want to make sure I'm tracking. When you say that, **what's the feeling that comes with it?**",
-      "Something about the way you said that feels important. Can you unpack it a bit?",
-      "Let's stay with that for a second. What does that look like *in your day-to-day?*",
-      "I'm picking up on something underneath what you're saying. **What would you say is the real issue here?**",
-    );
-  }
-
-  // Filter out already-used responses
-  const available = pool.filter(r => !usedResponses.has(r));
-  if (available.length === 0) {
-    // All contextual responses used — generate a dynamic follow-up
-    return "I want to keep going with this. We've been circling something important \u2014 **what feels like the thing you most want to figure out right now?**";
-  }
-
-  return available[Math.floor(Math.random() * available.length)];
-}
-
 const defaultStyle: StyleProfile = {
   tone: 5,
   depth: 'balanced',
@@ -475,41 +372,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
       console.log('[Toney] Restore: restoredMessages=', restoredMessages);
 
-      // Fall back to localStorage messages if we didn't restore from DB
-      if (!restoredMessages) {
-        const savedMessages = loadJSON<Message[]>('toney_messages', []);
-        if (savedMessages.length > 0) {
-          setMessages(savedMessages);
-          restoredMessages = true;
-        }
-      }
-
-      // If onboarded but no messages at all (new browser, expired session),
-      // generate a welcome message so the chat isn't blank
-      if (hasOnboarded && !restoredMessages) {
-        const tension = loadJSON<IdentifiedTension | null>('toney_tension', null);
-        const primary = tension?.primaryDetails;
-        const secondary = tension?.secondaryDetails;
-
-        let welcomeText = `Hey! Welcome back \u{1F499}\n\n`;
-        if (primary) {
-          welcomeText += `I remember — ${primary.description}\n\n`;
-          welcomeText += `${primary.reframe}\n\n`;
-        }
-        if (secondary) {
-          welcomeText += `I also notice that ${secondary.description.charAt(0).toLowerCase()}${secondary.description.slice(1)}\n\n`;
-        }
-        welcomeText += `What's on your mind today?`;
-
-        setMessages([{
-          id: 'msg-welcome-back',
-          role: 'assistant',
-          content: welcomeText,
-          timestamp: new Date(),
-          canSave: false,
-          quickReplies: primary?.conversation_starters?.slice(0, 3) || [],
-        }]);
-      }
+      // No fallback messages — if DB restore failed, chat stays empty
+      // so the issue is visible and debuggable via console logs above
 
       if (hasOnboarded) {
         setAppPhase('main');
