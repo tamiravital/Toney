@@ -122,6 +122,15 @@ Profile auto-created on signup via DB trigger.
 - Shared package names use `@toney/*` prefix
 - The extraction endpoint (`/api/extract-intel`) is called internally via fetch — needs `NEXT_PUBLIC_SITE_URL` or `VERCEL_URL`
 
+## Deployment (Vercel)
+- **GitHub repo:** `tamiravital/Toney` (private)
+- **Mobile:** https://toney-mobile.vercel.app (project: `toney-mobile`, root: `apps/mobile`)
+- **Admin:** https://toney-admin.vercel.app (project: `toney-admin`, root: `apps/admin`)
+- Both auto-deploy on push to `main`
+- Build command uses turbo filter: `cd ../.. && pnpm turbo build --filter=@toney/mobile`
+- Install command: `cd ../.. && pnpm install`
+- Node version: 22.x on Vercel
+
 ## Environment Variables
 
 ### Mobile (`apps/mobile/.env.local`)

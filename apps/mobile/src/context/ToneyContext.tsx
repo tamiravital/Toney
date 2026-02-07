@@ -10,6 +10,8 @@ type OnboardingStep = 'welcome' | 'questions' | 'pattern' | 'style_intro' | 'sty
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
 type ActiveTab = 'home' | 'chat' | 'rewire' | 'wins';
 
+const VALID_TABS = new Set<ActiveTab>(['home', 'chat', 'rewire', 'wins']);
+
 // localStorage helpers
 function loadJSON<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -135,6 +137,7 @@ interface ToneyContextValue {
 
   // Reset
   resetAll: () => void;
+  retakeQuiz: () => void;
 }
 
 const ToneyContext = createContext<ToneyContextValue | null>(null);
@@ -246,7 +249,6 @@ const defaultStyle: StyleProfile = {
   tone: 5,
   depth: 'balanced',
   learningStyles: [],
-  checkInFrequency: 'few_times_week',
 };
 
 export function ToneyProvider({ children }: { children: ReactNode }) {
@@ -406,7 +408,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
       if (hasOnboarded) {
         setAppPhase('main');
-        setActiveTab('chat');
+        // Read URL hash to restore tab on refresh, default to chat
+        const hash = window.location.hash.replace('#', '') as ActiveTab;
+        setActiveTab(VALID_TABS.has(hash) ? hash : 'chat');
       } else {
         setAppPhase('onboarding');
       }
@@ -456,6 +460,57 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('toney_conversation_id');
     }
   }, [conversationId, appPhase]);
+
+  // ── URL Hash Navigation ──
+
+  // Sync activeTab → URL hash (pushState so back/forward works)
+  useEffect(() => {
+    if (appPhase !== 'main') return;
+    if (showSettings) return; // Settings has its own hash sync
+    const currentHash = window.location.hash.replace('#', '');
+    if (currentHash !== activeTab) {
+      window.history.pushState(null, '', `#${activeTab}`);
+    }
+  }, [activeTab, appPhase, showSettings]);
+
+  // Sync URL hash → activeTab (browser back/forward)
+  useEffect(() => {
+    if (appPhase !== 'main') return;
+
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'settings') {
+        if (!showSettings) setShowSettings(true);
+      } else if (VALID_TABS.has(hash as ActiveTab)) {
+        if (showSettings) setShowSettings(false);
+        if (hash !== activeTab) setActiveTab(hash as ActiveTab);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [appPhase, activeTab, showSettings]);
+
+  // Clear hash when leaving main phase (sign out, retake quiz)
+  useEffect(() => {
+    if (appPhase !== 'main' && typeof window !== 'undefined' && window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [appPhase]);
+
+  // Sync showSettings → URL hash
+  useEffect(() => {
+    if (appPhase !== 'main') return;
+    if (showSettings) {
+      window.history.pushState(null, '', '#settings');
+    } else {
+      // Restore tab hash when settings closes
+      const currentHash = window.location.hash.replace('#', '');
+      if (currentHash === 'settings') {
+        window.history.pushState(null, '', `#${activeTab}`);
+      }
+    }
+  }, [showSettings, appPhase, activeTab]);
 
   // ── Handlers ──
 
@@ -639,7 +694,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       setWins(savedWins);
       setStreak(savedStreak);
       setAppPhase('main');
-      setActiveTab('chat');
+      // Read URL hash to restore tab, default to chat
+      const hash = window.location.hash.replace('#', '') as ActiveTab;
+      setActiveTab(VALID_TABS.has(hash) ? hash : 'chat');
     } else {
       setAppPhase('onboarding');
     }
@@ -740,6 +797,21 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setConversationId(null);
   }, []);
 
+  const retakeQuiz = useCallback(() => {
+    // Reset only onboarding state — keep auth, keep messages/insights/wins
+    localStorage.removeItem('toney_tension');
+    localStorage.removeItem('toney_onboarded');
+    setOnboardingStep('questions'); // Skip welcome page
+    setCurrentQuestionIndex(0);
+    setAnswers({});
+    setIdentifiedTension(null);
+    setQuizStep(0);
+    setTempStyle({ ...defaultStyle });
+    setTempLifeContext({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
+    setShowSettings(false);
+    setAppPhase('onboarding');
+  }, []);
+
   return (
     <ToneyContext.Provider
       value={{
@@ -785,6 +857,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         signOut,
         finishOnboarding,
         resetAll,
+        retakeQuiz,
       }}
     >
       {children}

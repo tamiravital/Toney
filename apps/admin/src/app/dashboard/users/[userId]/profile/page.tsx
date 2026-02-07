@@ -1,5 +1,5 @@
 import { getUserProfile } from '@/lib/queries/users';
-import { tensionLabel, toneLabel, depthLabel, frequencyLabel, learningStyleLabel, formatDate } from '@/lib/format';
+import { tensionLabel, toneLabel, depthLabel, learningStyleLabel, formatDate } from '@/lib/format';
 import { tensionColor } from '@toney/constants';
 import Badge from '@/components/Badge';
 import { notFound } from 'next/navigation';
@@ -81,7 +81,6 @@ export default async function ProfilePage({
         <div className="grid grid-cols-2 gap-4">
           <Field label="Tone" value={toneLabel(profile.tone)} />
           <Field label="Depth" value={depthLabel(profile.depth)} />
-          <Field label="Check-in Frequency" value={frequencyLabel(profile.check_in_frequency)} />
           <div>
             <dt className="text-xs font-medium text-gray-500 mb-1">Learning Styles</dt>
             <dd className="flex flex-wrap gap-1">
@@ -103,20 +102,6 @@ export default async function ProfilePage({
           <Field label="Life Stage" value={profile.life_stage} />
           <Field label="Income Type" value={profile.income_type} />
           <Field label="Relationship Status" value={profile.relationship_status} />
-          <div>
-            <dt className="text-xs font-medium text-gray-500 mb-1">Financial Goals</dt>
-            <dd>
-              {profile.financial_goals && profile.financial_goals.length > 0 ? (
-                <ul className="text-sm text-gray-900 space-y-0.5">
-                  {profile.financial_goals.map((g, i) => (
-                    <li key={i}>{g}</li>
-                  ))}
-                </ul>
-              ) : (
-                <span className="text-sm text-gray-400">—</span>
-              )}
-            </dd>
-          </div>
         </div>
       </Section>
 

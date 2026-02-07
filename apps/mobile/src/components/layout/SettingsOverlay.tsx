@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { X, RotateCcw, LogOut } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { tensionColor } from '@toney/constants';
-import { toneLabel, checkInOptions } from '@toney/constants';
-import { DepthLevel, CheckInFrequency } from '@toney/types';
+import { tensionColor, learningStyleOptions } from '@toney/constants';
+import { toneLabel } from '@toney/constants';
+import { DepthLevel, LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
 const lifeStageOptions = [
@@ -31,13 +31,24 @@ const relationshipOptions = [
 ];
 
 export default function SettingsOverlay() {
-  const { identifiedTension, styleProfile, setStyleProfile, setShowSettings, signOut, resetAll } = useToney();
+  const { identifiedTension, styleProfile, setStyleProfile, setShowSettings, signOut, retakeQuiz } = useToney();
   const [localStyle, setLocalStyle] = useState({ ...styleProfile });
   const [lifeStage, setLifeStage] = useState('');
   const [incomeType, setIncomeType] = useState('');
   const [relationship, setRelationship] = useState('');
   const [emotionalWhy, setEmotionalWhy] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const toggleLearningStyle = (style: LearningStyle) => {
+    setLocalStyle(prev => {
+      const current = prev.learningStyles || [];
+      const has = current.includes(style);
+      return {
+        ...prev,
+        learningStyles: has ? current.filter(s => s !== style) : [...current, style],
+      };
+    });
+  };
 
   const handleSave = async () => {
     setStyleProfile(localStyle);
@@ -52,11 +63,10 @@ export default function SettingsOverlay() {
             tone: localStyle.tone,
             depth: localStyle.depth,
             learning_styles: localStyle.learningStyles || [],
-            check_in_frequency: localStyle.checkInFrequency,
-            ...(lifeStage && { life_stage: lifeStage }),
-            ...(incomeType && { income_type: incomeType }),
-            ...(relationship && { relationship_status: relationship }),
-            ...(emotionalWhy && { emotional_why: emotionalWhy }),
+            life_stage: lifeStage || null,
+            income_type: incomeType || null,
+            relationship_status: relationship || null,
+            emotional_why: emotionalWhy || null,
           }).eq('id', user.id);
         }
       } catch {
@@ -138,23 +148,26 @@ export default function SettingsOverlay() {
           </div>
         </div>
 
-        {/* Check-in frequency */}
+        {/* Learning Styles */}
         <div className="mb-8">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Check-in Frequency</h3>
+          <h3 className="font-semibold text-gray-900 text-sm mb-3">How You Learn Best</h3>
           <div className="grid grid-cols-2 gap-2">
-            {checkInOptions.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setLocalStyle(prev => ({ ...prev, checkInFrequency: f.value as CheckInFrequency }))}
-                className={`p-3 rounded-xl border-2 text-xs font-medium transition-all ${
-                  localStyle.checkInFrequency === f.value
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-100 text-gray-600 hover:border-gray-200'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            {learningStyleOptions.map((opt) => {
+              const selected = (localStyle.learningStyles || []).includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => toggleLearningStyle(opt.value)}
+                  className={`p-3 rounded-xl border-2 text-xs font-medium transition-all ${
+                    selected
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-100 text-gray-600 hover:border-gray-200'
+                  }`}
+                >
+                  {opt.emoji} {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -249,7 +262,7 @@ export default function SettingsOverlay() {
 
         {/* Retake quiz */}
         <button
-          onClick={resetAll}
+          onClick={retakeQuiz}
           className="w-full mt-3 flex items-center justify-center gap-2 text-gray-500 text-sm font-medium py-3 hover:text-gray-700 transition-all"
         >
           <RotateCcw className="w-4 h-4" />

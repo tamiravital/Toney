@@ -109,17 +109,6 @@ export function learningStyleLabel(style: string): string {
   return style.charAt(0).toUpperCase() + style.slice(1);
 }
 
-export function frequencyLabel(freq: string | null | undefined): string {
-  if (!freq) return 'Unknown';
-  const labels: Record<string, string> = {
-    daily: 'Daily',
-    few_times_week: 'Few times/week',
-    weekly: 'Weekly',
-    on_demand: 'On demand',
-  };
-  return labels[freq] || freq;
-}
-
 export function categoryLabel(cat: string): string {
   return cat.charAt(0).toUpperCase() + cat.slice(1);
 }

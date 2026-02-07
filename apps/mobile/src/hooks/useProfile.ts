@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Profile, TensionType, DepthLevel, LearningStyle, CheckInFrequency } from '@toney/types';
+import { Profile, TensionType, DepthLevel, LearningStyle } from '@toney/types';
 
 export function useProfile() {
   const supabase = createClient();
@@ -29,11 +29,9 @@ export function useProfile() {
     tone: number;
     depth: DepthLevel;
     learning_styles: LearningStyle[];
-    check_in_frequency: CheckInFrequency;
     life_stage: string;
     income_type: string;
     relationship_status: string;
-    financial_goals: string[];
     emotional_why: string;
     onboarding_completed: boolean;
     display_name: string;
@@ -60,7 +58,6 @@ export function useProfile() {
     tone: number;
     depth: DepthLevel;
     learning_styles: LearningStyle[];
-    check_in_frequency: CheckInFrequency;
   }) => {
     return updateProfile({
       ...params,

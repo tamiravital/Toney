@@ -31,7 +31,6 @@ export interface RewireCard {
   title: string;
   content: string;
   source_message_id?: string | null;
-  pattern_type?: string | null;
   tension_type?: string | null;
   trigger_context?: string | null;
   times_viewed: number;
@@ -46,7 +45,6 @@ export interface Win {
   user_id?: string;
   text: string;
   tension_type?: string | null;
-  pattern_type?: string | null;
   date?: Date;
   created_at?: string;
 }

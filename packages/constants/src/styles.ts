@@ -1,4 +1,4 @@
-import { TensionType, DepthLevel, LearningStyle, CheckInFrequency } from '@toney/types';
+import { TensionType, DepthLevel, LearningStyle } from '@toney/types';
 
 export interface ToneExample {
   emoji: string;
@@ -61,18 +61,6 @@ export const depthOptions: DepthOption[] = [
   { value: "surface", emoji: "\u26A1", label: "Quick tactics", desc: "Just help me fix the behavior" },
   { value: "balanced", emoji: "\u2696\u{FE0F}", label: "Balanced", desc: "Understanding + action" },
   { value: "deep", emoji: "\u{1F30A}", label: "Deep exploration", desc: "Where this came from, and how to transform it" },
-];
-
-export interface CheckInOption {
-  value: CheckInFrequency;
-  label: string;
-}
-
-export const checkInOptions: CheckInOption[] = [
-  { value: "daily", label: "Daily" },
-  { value: "few_times_week", label: "Few times/week" },
-  { value: "weekly", label: "Weekly" },
-  { value: "on_demand", label: "When I reach out" },
 ];
 
 export const suggestedWins: Record<TensionType, string[]> = {
