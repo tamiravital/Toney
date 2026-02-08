@@ -1,10 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { buildSystemPrompt } from '@toney/coaching';
-import type { Profile, BehavioralIntel } from '@toney/types';
+import type { Profile } from '@toney/types';
 import {
   createMessage,
   getRunMessages,
-  updateRun,
   type SimulatorPersona,
   type SimulatorMessage,
 } from '@/lib/queries/simulator';
@@ -90,38 +88,21 @@ export async function runSingleTurn(
 // Manual Turn
 // ============================================================
 
+/**
+ * Manual turn: takes a user message (typed or edited by admin),
+ * generates the coach response, and saves both.
+ * Uses the stored system prompt from the run (same as automated mode).
+ */
 export async function runManualTurn(
   runId: string,
   persona: SimulatorPersona,
+  systemPrompt: string,
   userMessage: string,
-  topicKey: string | null
 ): Promise<string> {
-  const profileConfig = persona.profile_config as Profile;
-
   // Load existing messages to build history
   const existingMessages = await getRunMessages(runId);
   const conversationHistory: { role: 'user' | 'assistant'; content: string }[] =
     existingMessages.map(m => ({ role: m.role, content: m.content }));
-
-  // Build system prompt
-  const systemPrompt = buildSystemPrompt({
-    profile: {
-      ...profileConfig,
-      id: 'simulator',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      onboarding_completed: true,
-    } as Profile,
-    behavioralIntel: persona.behavioral_intel_config as BehavioralIntel | null,
-    isFirstConversation: conversationHistory.length === 0,
-    topicKey,
-    isFirstTopicConversation: conversationHistory.length === 0,
-  });
-
-  // Save system prompt on first turn
-  if (conversationHistory.length === 0) {
-    await updateRun(runId, { system_prompt_used: systemPrompt });
-  }
 
   // Add user message to history
   conversationHistory.push({ role: 'user', content: userMessage });
@@ -141,7 +122,7 @@ export async function runManualTurn(
 // Claude API Calls
 // ============================================================
 
-async function generateUserMessage(
+export async function generateUserMessage(
   userPrompt: string,
   history: { role: 'user' | 'assistant'; content: string }[],
   topicKey: string | null
@@ -183,7 +164,7 @@ async function generateCoachResponse(
 // Helpers
 // ============================================================
 
-function buildDefaultUserPrompt(profile: Partial<Profile>): string {
+export function buildDefaultUserPrompt(profile: Partial<Profile>): string {
   return `You are roleplaying as a person in a money coaching session.
 Your primary money tension is "${profile.tension_type || 'unknown'}".
 ${profile.emotional_why ? `You said: "${profile.emotional_why}"` : ''}

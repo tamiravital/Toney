@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRun } from '@/lib/queries/simulator';
 import { runManualTurn } from '@/lib/simulator/engine';
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -18,12 +20,15 @@ export async function POST(request: NextRequest) {
     if (run.status !== 'running') {
       return NextResponse.json({ error: 'Run is not active' }, { status: 400 });
     }
+    if (!run.system_prompt_used) {
+      return NextResponse.json({ error: 'Run has no system prompt' }, { status: 500 });
+    }
 
     const coachResponse = await runManualTurn(
       runId,
       run.persona,
+      run.system_prompt_used,
       userMessage,
-      run.topic_key
     );
 
     return NextResponse.json({

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Square, Loader2 } from 'lucide-react';
+import { Send, Square, Loader2, Sparkles } from 'lucide-react';
 import MessageBubble from '@/components/MessageBubble';
 import CardBadge from '@/components/simulator/CardBadge';
 import type { SimulatorMessage, CardEvaluationSummary } from '@/lib/queries/simulator';
@@ -29,7 +29,9 @@ export default function SimulatorChat({
   const [sending, setSending] = useState(false);
   const [ending, setEnding] = useState(false);
   const [ticking, setTicking] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef(false);
   const tickingRef = useRef(false);
 
@@ -40,12 +42,10 @@ export default function SimulatorChat({
 
   // ============================================================
   // Automated mode: client-driven tick loop
-  // Each tick = one serverless call = one turn (user msg + coach response)
-  // Messages appear instantly after each turn completes (~5-10s per turn)
   // ============================================================
 
   const runTickLoop = useCallback(async () => {
-    if (tickingRef.current) return; // Already running
+    if (tickingRef.current) return;
     tickingRef.current = true;
     abortRef.current = false;
     setTicking(true);
@@ -61,28 +61,23 @@ export default function SimulatorChat({
           const errorData = await res.json().catch(() => ({}));
           console.error('Tick failed:', errorData);
 
-          // If run is no longer active, stop
           if (errorData.status && errorData.status !== 'running') {
             setStatus(errorData.status);
             break;
           }
 
-          // Retry after a short delay on transient errors
           await new Promise(r => setTimeout(r, 2000));
           continue;
         }
 
         const data = await res.json();
 
-        // Add the two new messages
         if (data.userMsg && data.assistantMsg) {
           setMessages(prev => [...prev, data.userMsg, data.assistantMsg]);
         }
 
-        // Check if conversation is done
         if (data.done) {
           setStatus('completed');
-          // Reload the page to show card evaluation results
           window.location.reload();
           return;
         }
@@ -95,7 +90,6 @@ export default function SimulatorChat({
     }
   }, [runId]);
 
-  // Start tick loop when component mounts for automated running runs
   useEffect(() => {
     if (status === 'running' && mode === 'automated' && !tickingRef.current) {
       runTickLoop();
@@ -107,8 +101,32 @@ export default function SimulatorChat({
   }, [status, mode, runTickLoop]);
 
   // ============================================================
-  // Manual mode: single message send
+  // Manual mode: generate suggestion + send
   // ============================================================
+
+  const generateSuggestion = async () => {
+    if (generating) return;
+    setGenerating(true);
+
+    try {
+      const res = await fetch('/api/simulator/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId }),
+      });
+
+      const data = await res.json();
+      if (data.suggestion) {
+        setInput(data.suggestion);
+        // Focus the textarea so they can edit right away
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+    } catch (err) {
+      console.error('Failed to generate suggestion:', err);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || sending) return;
@@ -170,6 +188,13 @@ export default function SimulatorChat({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   const isRunning = status === 'running' && mode === 'automated';
 
   return (
@@ -226,20 +251,47 @@ export default function SimulatorChat({
       {/* Input (manual mode only) */}
       {isActive && mode === 'manual' && (
         <div className="border-t border-gray-200 pt-4 mt-4">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
+          {/* Generate button */}
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={generateSuggestion}
+              disabled={generating || sending}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3 w-3" />
+                  Generate as persona
+                </>
+              )}
+            </button>
+            <span className="text-xs text-gray-400">
+              AI generates a message as the persona — edit before sending
+            </span>
+          </div>
+
+          {/* Input + send */}
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder="Type as the user..."
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              onKeyDown={handleKeyDown}
+              placeholder="Type as the user or click Generate..."
+              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
               disabled={sending}
+              rows={input.split('\n').length > 3 ? 4 : input.length > 80 ? 3 : 2}
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() || sending}
               className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Send message"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -253,7 +305,7 @@ export default function SimulatorChat({
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            Type as the simulated user. Click stop to end and evaluate cards.
+            Enter to send · Shift+Enter for new line · Stop to end and evaluate cards
           </p>
         </div>
       )}
