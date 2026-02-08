@@ -17,7 +17,7 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
   const [personaId, setPersonaId] = useState(personas[0]?.id ?? '');
   const [topicKey, setTopicKey] = useState('');
   const [mode, setMode] = useState<'automated' | 'manual'>('automated');
-  const [numTurns, setNumTurns] = useState(8);
+  const [numTurns, setNumTurns] = useState(50);
   const [running, setRunning] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [cloneUserId, setCloneUserId] = useState('');
@@ -183,19 +183,19 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
           {/* Turn Count (automated only) */}
           {mode === 'automated' && (
             <div>
-              <label className={labelClass}>Number of turns: {numTurns}</label>
+              <label className={labelClass}>Max turns: {numTurns}</label>
               <input
                 type="range"
                 min={3}
-                max={20}
+                max={100}
                 value={numTurns}
                 onChange={(e) => setNumTurns(Number(e.target.value))}
                 className="w-full accent-indigo-600"
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
                 <span>3</span>
-                <span>10</span>
-                <span>20</span>
+                <span>50</span>
+                <span>100</span>
               </div>
             </div>
           )}
@@ -220,7 +220,7 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
             ) : (
               <>
                 <Play className="h-4 w-4" />
-                {mode === 'automated' ? `Run ${numTurns}-turn simulation` : 'Start manual session'}
+                {mode === 'automated' ? `Run simulation (max ${numTurns} turns)` : 'Start manual session'}
               </>
             )}
           </button>
