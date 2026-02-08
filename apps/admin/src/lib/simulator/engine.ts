@@ -31,10 +31,15 @@ export interface TickResult {
  * Execute exactly one turn of the automated conversation.
  * Called by the client in a loop — each call is a separate serverless invocation.
  * Returns the two new messages + whether the conversation should stop.
+ *
+ * The system prompt is passed in (built once at run creation and stored on the run).
+ * This matches the mobile app where isFirstConversation stays true for the entire
+ * first conversation — the prompt doesn't change mid-conversation.
  */
 export async function runSingleTurn(
   runId: string,
   persona: SimulatorPersona,
+  systemPrompt: string,
   topicKey: string | null,
   numTurns: number
 ): Promise<TickResult> {
@@ -45,26 +50,6 @@ export async function runSingleTurn(
   const existingMessages = await getRunMessages(runId);
   const conversationHistory: { role: 'user' | 'assistant'; content: string }[] =
     existingMessages.map(m => ({ role: m.role, content: m.content }));
-
-  // Build system prompt (same as before)
-  const systemPrompt = buildSystemPrompt({
-    profile: {
-      ...profileConfig,
-      id: 'simulator',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      onboarding_completed: true,
-    } as Profile,
-    behavioralIntel: persona.behavioral_intel_config as BehavioralIntel | null,
-    isFirstConversation: conversationHistory.length === 0,
-    topicKey,
-    isFirstTopicConversation: conversationHistory.length === 0,
-  });
-
-  // Save system prompt on first turn
-  if (conversationHistory.length === 0) {
-    await updateRun(runId, { system_prompt_used: systemPrompt, status: 'running' });
-  }
 
   const turnIndex = Math.floor(existingMessages.length / 2); // 0-based turn number
   const turnNumber = existingMessages.length;

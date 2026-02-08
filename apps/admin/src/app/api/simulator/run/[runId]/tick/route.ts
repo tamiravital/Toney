@@ -26,10 +26,18 @@ export async function POST(
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
     }
 
+    // Use the system prompt stored on the run (built at creation).
+    // This matches the mobile app: the prompt stays consistent for the
+    // entire conversation (isFirstConversation doesn't flip mid-session).
+    if (!run.system_prompt_used) {
+      return NextResponse.json({ error: 'Run has no system prompt' }, { status: 500 });
+    }
+
     // Execute exactly one turn
     const result = await runSingleTurn(
       runId,
       persona,
+      run.system_prompt_used,
       run.topic_key,
       run.num_turns || 50
     );
