@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Brain, RotateCcw, Lightbulb, Quote, Zap, MessageCircle, Sparkles, Pencil, Trash2, X } from 'lucide-react';
+import { Brain, RotateCcw, Lightbulb, ClipboardList, MessageCircle, Sparkles, Pencil, Trash2, X } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
+import { RewireCardCategory } from '@toney/types';
 import { ComponentType } from 'react';
 
-type Category = 'all' | 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
-type InsightCategory = 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
+type Category = 'all' | RewireCardCategory;
 
 interface CategoryConfig {
   id: Category;
@@ -19,37 +19,33 @@ interface CategoryConfig {
 const categories: CategoryConfig[] = [
   { id: 'all', label: 'All', icon: Sparkles, color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
   { id: 'reframe', label: 'Reframes', icon: Brain, color: 'text-purple-600', bgColor: 'bg-purple-50' },
-  { id: 'ritual', label: 'Rituals', icon: RotateCcw, color: 'text-blue-600', bgColor: 'bg-blue-50' },
   { id: 'truth', label: 'Truths', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
-  { id: 'mantra', label: 'Mantras', icon: Quote, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { id: 'play', label: 'Plays', icon: Zap, color: 'text-red-600', bgColor: 'bg-red-50' },
+  { id: 'plan', label: 'Plans', icon: ClipboardList, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  { id: 'practice', label: 'Practices', icon: RotateCcw, color: 'text-green-600', bgColor: 'bg-green-50' },
   { id: 'conversation_kit', label: 'Kits', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
 
 const categoryColors: Record<string, { bg: string; text: string; border: string }> = {
   reframe: { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
-  ritual: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
   truth: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-  mantra: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100' },
-  play: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' },
+  plan: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
+  practice: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100' },
   conversation_kit: { bg: 'bg-teal-50', text: 'text-teal-600', border: 'border-teal-100' },
 };
 
-const categoryOptionsForEdit: { id: InsightCategory; label: string; icon: ComponentType<{ className?: string }>; color: string; bgColor: string }[] = [
+const categoryOptionsForEdit: { id: RewireCardCategory; label: string; icon: ComponentType<{ className?: string }>; color: string; bgColor: string }[] = [
   { id: 'reframe', label: 'Reframe', icon: Brain, color: 'text-purple-600', bgColor: 'bg-purple-50' },
-  { id: 'ritual', label: 'Ritual', icon: RotateCcw, color: 'text-blue-600', bgColor: 'bg-blue-50' },
   { id: 'truth', label: 'Truth', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
-  { id: 'mantra', label: 'Mantra', icon: Quote, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { id: 'play', label: 'Play', icon: Zap, color: 'text-red-600', bgColor: 'bg-red-50' },
+  { id: 'plan', label: 'Plan', icon: ClipboardList, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  { id: 'practice', label: 'Practice', icon: RotateCcw, color: 'text-green-600', bgColor: 'bg-green-50' },
   { id: 'conversation_kit', label: 'Conversation Kit', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
 
-function guessCategory(content: string): InsightCategory {
+function guessCategory(content: string): RewireCardCategory {
   const lower = content.toLowerCase();
-  if (lower.includes('try') || lower.includes('experiment') || lower.includes('this week')) return 'play';
-  if (lower.includes('ritual') || lower.includes('every day') || lower.includes('each time')) return 'ritual';
-  if (lower.includes('realize') || lower.includes('truth') || lower.includes('actually')) return 'truth';
-  if (lower.includes('instead') || lower.includes('reframe') || lower.includes('not about')) return 'reframe';
+  if (lower.includes('step 1') || lower.includes('step 2') || lower.includes('1)') || lower.includes('1.') && lower.includes('2.')) return 'plan';
+  if (lower.includes('every day') || lower.includes('each time') || lower.includes('before any') || lower.includes('when you') || lower.includes('one breath') || lower.includes('pause')) return 'practice';
+  if (lower.includes('realize') || lower.includes('truth') || lower.includes('actually') || lower.includes('the real')) return 'truth';
   if (lower.includes('conversation') || lower.includes('money talk') || lower.includes('approach kit')) return 'conversation_kit';
   return 'reframe';
 }
@@ -60,14 +56,14 @@ export default function RewireScreen() {
   const [editingInsight, setEditingInsight] = useState<{
     id: string;
     content: string;
-    category: InsightCategory;
+    category: RewireCardCategory;
   } | null>(null);
   const [deletingInsightId, setDeletingInsightId] = useState<string | null>(null);
 
   // Use the saved category if available, otherwise guess from content
   const categorizedInsights = savedInsights.map(insight => ({
     ...insight,
-    category: (insight.category as InsightCategory) || guessCategory(insight.content),
+    category: (insight.category as RewireCardCategory) || guessCategory(insight.content),
   }));
 
   const filtered = activeCategory === 'all'
@@ -148,7 +144,7 @@ export default function RewireScreen() {
                       <CatIcon className={`w-3.5 h-3.5 ${colors.text}`} />
                     </div>
                     <span className={`text-xs font-medium ${colors.text} capitalize`}>
-                      {insight.category}
+                      {insight.category === 'conversation_kit' ? 'Conversation Kit' : insight.category}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

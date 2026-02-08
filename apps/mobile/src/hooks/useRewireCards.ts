@@ -83,5 +83,14 @@ export function useRewireCards() {
     if (error) throw error;
   }, [supabase]);
 
-  return { getCards, saveCard, deleteCard, recordView, setFeedback };
+  const setScore = useCallback(async (cardId: string, score: number) => {
+    const { error } = await supabase
+      .from('rewire_cards')
+      .update({ usefulness_score: score })
+      .eq('id', cardId);
+
+    if (error) throw error;
+  }, [supabase]);
+
+  return { getCards, saveCard, deleteCard, recordView, setFeedback, setScore };
 }

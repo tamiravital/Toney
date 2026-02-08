@@ -22,16 +22,15 @@ interface CardEvaluation {
 const EVALUATION_SYSTEM = `You evaluate coaching messages for "card-worthiness" — whether they contain insights valuable enough for a user to save as a card they revisit later.
 
 A message is card-worthy if it contains:
-- A powerful reframe that shifts perspective on money behavior
-- A concrete ritual or micro-practice the person can use
-- A hard truth they needed to hear about themselves
-- A memorable phrase or mantra worth revisiting
-- A playful or lightening perspective that breaks a pattern
-- A conversation script or template for money talks
+- A powerful reframe that shifts perspective on a money belief
+- A truth — a self-awareness insight the user realized about themselves and money
+- A plan — a concrete strategy with steps for solving a specific money problem
+- A practice — something to do, either a quick reflex for a trigger moment or a longer recurring routine
+- A conversation kit — an approach, principle, or starter for a money conversation with someone
 
 NOT card-worthy: generic encouragement, questions, transitions, or summaries.
 
-Categories: reframe, ritual, truth, mantra, play, conversation_kit
+Categories: reframe, truth, plan, practice, conversation_kit
 
 Respond with ONLY valid JSON (no markdown, no backticks):
 {"card_worthy": true/false, "card_category": "category_name", "card_reason": "brief explanation"}`;
@@ -47,7 +46,7 @@ export async function quickCardCheck(content: string): Promise<boolean> {
       model: FAST_MODEL,
       max_tokens: 50,
       temperature: 0,
-      system: 'Does this coaching message contain a concrete reframe, ritual, truth, mantra, or actionable insight worth saving? Answer ONLY "yes" or "no".',
+      system: 'Does this coaching message contain a concrete reframe, truth, plan, practice, or conversation kit worth saving as a card? Answer ONLY "yes" or "no".',
       messages: [{ role: 'user', content }],
     });
 

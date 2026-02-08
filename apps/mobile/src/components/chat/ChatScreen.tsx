@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useEffect, useState, ComponentType, ComponentPropsWithoutRef } from 'react';
+import { useRef, useEffect, useState, useCallback, ComponentType, ComponentPropsWithoutRef } from 'react';
 import { Send, Bookmark, BookmarkCheck, ChevronLeft, ChevronDown, Shield, MessageSquare, Clock, CreditCard, TrendingUp, Rocket, Target } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
+import { useRewireCards } from '@/hooks/useRewireCards';
 import { ALL_TOPICS, topicDetails, topicColor, TopicKey } from '@toney/constants';
 import SaveInsightSheet from './SaveInsightSheet';
 
@@ -109,7 +110,9 @@ function ActiveChatView() {
     messageId: string;
     content: string;
   } | null>(null);
+  const [lastSavedCardId, setLastSavedCardId] = useState<string | null>(null);
   const [showTopicSwitcher, setShowTopicSwitcher] = useState(false);
+  const { setScore } = useRewireCards();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -136,12 +139,25 @@ function ActiveChatView() {
     setSaveSheetData({ messageId, content: extracted });
   };
 
-  const handleSheetSave = (content: string, category: string) => {
+  const handleSheetSave = async (content: string, category: string) => {
     if (saveSheetData) {
-      handleSaveInsight(saveSheetData.messageId, content, category);
-      setSaveSheetData(null);
+      const cardId = await handleSaveInsight(saveSheetData.messageId, content, category);
+      setLastSavedCardId(cardId);
     }
   };
+
+  const handleSheetScore = useCallback(async (score: number) => {
+    if (lastSavedCardId) {
+      try {
+        await setScore(lastSavedCardId, score);
+      } catch { /* non-critical */ }
+    }
+  }, [lastSavedCardId, setScore]);
+
+  const handleSheetClose = useCallback(() => {
+    setSaveSheetData(null);
+    setLastSavedCardId(null);
+  }, []);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -188,7 +204,12 @@ function ActiveChatView() {
           </div>
         )}
 
-        {messages.map((msg) => (
+        {messages.map((msg) => {
+          // Find if this is the last assistant message
+          const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id;
+          const isLastAssistant = msg.role === 'assistant' && msg.id === lastAssistantId;
+
+          return (
           <div key={msg.id}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className="w-10/12">
@@ -211,15 +232,19 @@ function ActiveChatView() {
                   <button
                     onClick={() => handleSaveClick(msg.id)}
                     className={`mt-1.5 flex items-center gap-1.5 text-xs transition-all ${
-                      msg.saved ? 'text-indigo-600 font-medium' : 'text-gray-400 hover:text-gray-600'
+                      msg.saved
+                        ? 'text-indigo-600 font-medium'
+                        : isLastAssistant
+                          ? 'text-indigo-500 hover:text-indigo-700 font-medium'
+                          : 'text-gray-300 hover:text-gray-500'
                     }`}
                   >
                     {msg.saved ? (
                       <BookmarkCheck className="w-3.5 h-3.5" />
                     ) : (
-                      <Bookmark className="w-3.5 h-3.5" />
+                      <Bookmark className={`${isLastAssistant ? 'w-4 h-4' : 'w-3 h-3'}`} />
                     )}
-                    {msg.saved ? 'Saved to Rewire' : 'Save insight'}
+                    {msg.saved ? 'Saved to Rewire' : isLastAssistant ? 'Save insight' : ''}
                   </button>
                 )}
               </div>
@@ -239,7 +264,8 @@ function ActiveChatView() {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
 
         {isTyping && (
           <div className="flex justify-start">
@@ -293,7 +319,8 @@ function ActiveChatView() {
         <SaveInsightSheet
           initialContent={saveSheetData.content}
           onSave={handleSheetSave}
-          onClose={() => setSaveSheetData(null)}
+          onClose={handleSheetClose}
+          onScore={handleSheetScore}
         />
       )}
     </div>

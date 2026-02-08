@@ -24,10 +24,12 @@ export interface BehavioralIntel {
   updated_at: string;
 }
 
+export type RewireCardCategory = 'reframe' | 'truth' | 'plan' | 'practice' | 'conversation_kit';
+
 export interface RewireCard {
   id: string;
   user_id: string;
-  category: 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
+  category: RewireCardCategory;
   title: string;
   content: string;
   source_message_id?: string | null;
@@ -36,6 +38,7 @@ export interface RewireCard {
   times_viewed: number;
   last_viewed_at?: string | null;
   user_feedback?: 'helpful' | 'not_useful' | null;
+  usefulness_score?: number | null;
   auto_generated: boolean;
   created_at: string;
 }
@@ -52,7 +55,7 @@ export interface Win {
 export interface Insight {
   id: string;
   content: string;
-  category?: 'reframe' | 'ritual' | 'truth' | 'mantra' | 'play' | 'conversation_kit';
+  category?: RewireCardCategory;
   savedAt: Date;
   fromChat: boolean;
   tags: string[];

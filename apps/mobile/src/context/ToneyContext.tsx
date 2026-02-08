@@ -118,7 +118,7 @@ interface ToneyContextValue {
   isTyping: boolean;
   setIsTyping: (typing: boolean) => void;
   handleSendMessage: (overrideText?: string) => void;
-  handleSaveInsight: (messageId: string, editedContent?: string, category?: string) => void;
+  handleSaveInsight: (messageId: string, editedContent?: string, category?: string) => Promise<string | null>;
   loadingTopic: boolean;
 
   // Rewire
@@ -698,7 +698,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setIsTyping(false);
   }, [chatInput, activeTopic, topicConversations]);
 
-  const handleSaveInsight = useCallback((messageId: string, editedContent?: string, category?: string) => {
+  const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
     setMessages(prev =>
       prev.map(m => (m.id === messageId ? { ...m, saved: !m.saved } : m))
     );
@@ -718,29 +718,36 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
       // Also save to Supabase
       if (isSupabaseConfigured() && activeTopic) {
-        const saveToDb = async () => {
-          try {
-            const supabase = createClient();
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-              await supabase.from('rewire_cards').insert({
-                user_id: user.id,
-                source_message_id: messageId.startsWith('msg-') ? null : messageId,
-                category: category || 'reframe',
-                title: (editedContent || msg.content).substring(0, 80),
-                content: editedContent || msg.content,
-                tension_type: identifiedTensionState?.primary || null,
-                topic_key: activeTopic,
-                auto_generated: false,
-              });
-            }
-          } catch { /* non-critical */ }
-        };
-        saveToDb();
+        // Build trigger_context from recent messages leading to this card
+        const msgIndex = messages.findIndex(m => m.id === messageId);
+        const recentMessages = messages.slice(Math.max(0, msgIndex - 5), msgIndex + 1);
+        const triggerContext = recentMessages
+          .map(m => `${m.role === 'user' ? 'User' : 'Toney'}: ${m.content.substring(0, 150)}`)
+          .join('\n');
+
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data } = await supabase.from('rewire_cards').insert({
+              user_id: user.id,
+              source_message_id: messageId.startsWith('msg-') ? null : messageId,
+              category: category || 'reframe',
+              title: (editedContent || msg.content).substring(0, 80),
+              content: editedContent || msg.content,
+              tension_type: identifiedTensionState?.primary || null,
+              topic_key: activeTopic,
+              auto_generated: false,
+              trigger_context: triggerContext || null,
+            }).select('id').single();
+            return data?.id || null;
+          }
+        } catch { /* non-critical */ }
       }
     } else if (msg) {
       setSavedInsights(prev => prev.filter(i => i.content !== msg.content));
     }
+    return null;
   }, [messages, identifiedTensionState, activeTopic]);
 
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {
