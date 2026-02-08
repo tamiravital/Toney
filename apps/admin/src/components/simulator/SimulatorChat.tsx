@@ -28,58 +28,87 @@ export default function SimulatorChat({
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [ticking, setTicking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef(false);
+  const tickingRef = useRef(false);
 
   // Auto-scroll on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  // Poll for new messages during automated runs
-  const poll = useCallback(async () => {
-    if (status !== 'running' || mode !== 'automated') return;
+  // ============================================================
+  // Automated mode: client-driven tick loop
+  // Each tick = one serverless call = one turn (user msg + coach response)
+  // Messages appear instantly after each turn completes (~5-10s per turn)
+  // ============================================================
+
+  const runTickLoop = useCallback(async () => {
+    if (tickingRef.current) return; // Already running
+    tickingRef.current = true;
+    abortRef.current = false;
+    setTicking(true);
 
     try {
-      const lastTurn = messages.length > 0
-        ? Math.max(...messages.map(m => m.turn_number))
-        : -1;
-
-      const res = await fetch(`/api/simulator/run/${runId}/poll?after=${lastTurn}`);
-      const data = await res.json();
-
-      if (data.messages && data.messages.length > 0) {
-        setMessages(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const newMsgs = data.messages.filter((m: SimulatorMessage) => !existingIds.has(m.id));
-          return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
+      while (!abortRef.current) {
+        const res = await fetch(`/api/simulator/run/${runId}/tick`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
         });
-      }
 
-      if (data.status !== status) {
-        setStatus(data.status);
-        if (data.status === 'completed' || data.status === 'failed') {
-          onRunComplete?.(data.card_evaluation ?? null);
-          return; // Stop polling
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          console.error('Tick failed:', errorData);
+
+          // If run is no longer active, stop
+          if (errorData.status && errorData.status !== 'running') {
+            setStatus(errorData.status);
+            break;
+          }
+
+          // Retry after a short delay on transient errors
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+
+        const data = await res.json();
+
+        // Add the two new messages
+        if (data.userMsg && data.assistantMsg) {
+          setMessages(prev => [...prev, data.userMsg, data.assistantMsg]);
+        }
+
+        // Check if conversation is done
+        if (data.done) {
+          setStatus('completed');
+          // Reload the page to show card evaluation results
+          window.location.reload();
+          return;
         }
       }
-
-      // Continue polling
-      pollRef.current = setTimeout(poll, 1500);
     } catch (err) {
-      console.error('Poll failed:', err);
-      pollRef.current = setTimeout(poll, 3000);
+      console.error('Tick loop error:', err);
+    } finally {
+      setTicking(false);
+      tickingRef.current = false;
     }
-  }, [runId, messages, status, mode, onRunComplete]);
+  }, [runId]);
 
+  // Start tick loop when component mounts for automated running runs
   useEffect(() => {
-    if (status === 'running' && mode === 'automated') {
-      pollRef.current = setTimeout(poll, 1500);
+    if (status === 'running' && mode === 'automated' && !tickingRef.current) {
+      runTickLoop();
     }
+
     return () => {
-      if (pollRef.current) clearTimeout(pollRef.current);
+      abortRef.current = true;
     };
-  }, [status, mode, poll]);
+  }, [status, mode, runTickLoop]);
+
+  // ============================================================
+  // Manual mode: single message send
+  // ============================================================
 
   const sendMessage = async () => {
     if (!input.trim() || sending) return;
@@ -150,7 +179,7 @@ export default function SimulatorChat({
         <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
           <span className="text-xs font-medium text-blue-700">
-            Simulation running — messages appear live
+            Simulation running — messages appear live ({messages.length} messages so far)
           </span>
         </div>
       )}
@@ -173,7 +202,7 @@ export default function SimulatorChat({
         ))}
 
         {/* Typing indicator during automated runs */}
-        {isRunning && (
+        {(isRunning && ticking) && (
           <div className="flex justify-start">
             <div className="bg-indigo-50 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1">

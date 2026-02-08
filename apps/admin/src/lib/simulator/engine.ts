@@ -6,6 +6,7 @@ import {
   getRunMessages,
   updateRun,
   type SimulatorPersona,
+  type SimulatorMessage,
 } from '@/lib/queries/simulator';
 import { quickCardCheck } from '@/lib/simulator/evaluate';
 
@@ -16,19 +17,36 @@ const anthropic = new Anthropic({
 const MODEL = 'claude-sonnet-4-5-20250929';
 
 // ============================================================
-// Automated Conversation
+// Single Turn (client-driven, Vercel-safe)
 // ============================================================
 
-export async function runAutomatedConversation(
+export interface TickResult {
+  userMsg: SimulatorMessage;
+  assistantMsg: SimulatorMessage;
+  done: boolean;
+  reason?: 'card_worthy' | 'max_turns';
+}
+
+/**
+ * Execute exactly one turn of the automated conversation.
+ * Called by the client in a loop — each call is a separate serverless invocation.
+ * Returns the two new messages + whether the conversation should stop.
+ */
+export async function runSingleTurn(
   runId: string,
   persona: SimulatorPersona,
   topicKey: string | null,
   numTurns: number
-): Promise<void> {
+): Promise<TickResult> {
   const profileConfig = persona.profile_config as Profile;
   const userPrompt = persona.user_prompt || buildDefaultUserPrompt(profileConfig);
 
-  // Build the coach's system prompt
+  // Load existing messages to build history
+  const existingMessages = await getRunMessages(runId);
+  const conversationHistory: { role: 'user' | 'assistant'; content: string }[] =
+    existingMessages.map(m => ({ role: m.role, content: m.content }));
+
+  // Build system prompt (same as before)
   const systemPrompt = buildSystemPrompt({
     profile: {
       ...profileConfig,
@@ -38,36 +56,49 @@ export async function runAutomatedConversation(
       onboarding_completed: true,
     } as Profile,
     behavioralIntel: persona.behavioral_intel_config as BehavioralIntel | null,
-    isFirstConversation: true,
+    isFirstConversation: conversationHistory.length === 0,
     topicKey,
-    isFirstTopicConversation: true,
+    isFirstTopicConversation: conversationHistory.length === 0,
   });
 
-  // Save the system prompt for inspection
-  await updateRun(runId, { system_prompt_used: systemPrompt, status: 'running' });
+  // Save system prompt on first turn
+  if (conversationHistory.length === 0) {
+    await updateRun(runId, { system_prompt_used: systemPrompt, status: 'running' });
+  }
 
-  const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [];
+  const turnIndex = Math.floor(existingMessages.length / 2); // 0-based turn number
+  const turnNumber = existingMessages.length;
 
-  for (let turn = 0; turn < numTurns; turn++) {
-    // Generate user message
-    const userMessage = await generateUserMessage(userPrompt, conversationHistory, topicKey);
-    conversationHistory.push({ role: 'user', content: userMessage });
-    await createMessage(runId, 'user', userMessage, turn * 2);
+  // Generate user message
+  const userMessage = await generateUserMessage(userPrompt, conversationHistory, topicKey);
+  conversationHistory.push({ role: 'user', content: userMessage });
+  const userMsg = await createMessage(runId, 'user', userMessage, turnNumber);
 
-    // Generate coach response
-    const coachResponse = await generateCoachResponse(systemPrompt, conversationHistory);
-    conversationHistory.push({ role: 'assistant', content: coachResponse });
-    await createMessage(runId, 'assistant', coachResponse, turn * 2 + 1);
+  // Generate coach response
+  const coachResponse = await generateCoachResponse(systemPrompt, conversationHistory);
+  conversationHistory.push({ role: 'assistant', content: coachResponse });
+  const assistantMsg = await createMessage(runId, 'assistant', coachResponse, turnNumber + 1);
 
-    // After at least 3 turns, check if coach delivered a "relief" (card-worthy insight)
-    // If so, stop early — the coaching reached its goal
-    if (turn >= 2) {
-      const isCardWorthy = await quickCardCheck(coachResponse);
-      if (isCardWorthy) {
-        break;
-      }
+  // Determine if we should stop
+  let done = false;
+  let reason: 'card_worthy' | 'max_turns' | undefined;
+
+  // Check if max turns reached (next turn would be turnIndex + 1)
+  if (turnIndex + 1 >= numTurns) {
+    done = true;
+    reason = 'max_turns';
+  }
+
+  // After 3+ turns, check for card-worthy early stop
+  if (!done && turnIndex >= 2) {
+    const isCardWorthy = await quickCardCheck(coachResponse);
+    if (isCardWorthy) {
+      done = true;
+      reason = 'card_worthy';
     }
   }
+
+  return { userMsg, assistantMsg, done, reason };
 }
 
 // ============================================================
