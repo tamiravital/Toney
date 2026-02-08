@@ -1,7 +1,7 @@
-import { Profile, BehavioralIntel, Win, CoachMemory, TensionType, LearningStyle, DepthLevel, StageOfChange } from '@toney/types';
+import { Profile, BehavioralIntel, Win, CoachMemory, TensionType, LearningStyle, DepthLevel, StageOfChange, SystemPromptBlock } from '@toney/types';
 import { topicDetails, TopicKey } from '@toney/constants';
 
-interface PromptContext {
+export interface PromptContext {
   profile: Profile;
   behavioralIntel?: BehavioralIntel | null;
   recentWins?: Win[];
@@ -394,7 +394,7 @@ function buildTopicSection(ctx: PromptContext): string | null {
 }
 
 // ────────────────────────────────────────────
-// Main builder
+// Main builder (legacy — returns string)
 // ────────────────────────────────────────────
 
 export function buildSystemPrompt(ctx: PromptContext): string {
@@ -417,6 +417,69 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   sections.push(buildConversationSection(ctx));
 
   return sections.join('\n\n');
+}
+
+// ────────────────────────────────────────────
+// v2: Cache-optimized block builders
+// ────────────────────────────────────────────
+
+/**
+ * Combines all v1 section builders (coaching style, person, topic,
+ * conversation) into one briefing-shaped text block.
+ * Used as Block 2 in the legacy cache path.
+ */
+export function buildLegacyBriefing(ctx: PromptContext): string {
+  const sections: string[] = [];
+  sections.push(buildCoachingStyle(ctx.profile));
+  sections.push(buildPersonSection(ctx.profile));
+  const topicSection = buildTopicSection(ctx);
+  if (topicSection) sections.push(topicSection);
+  sections.push(buildConversationSection(ctx));
+  return sections.join('\n\n');
+}
+
+/**
+ * Returns system prompt as cache-optimized block array.
+ * Block 1: Core principles (static, cached across all users).
+ * Block 2: Legacy briefing (per-user, cached within session).
+ *
+ * Use with Anthropic API: system: buildSystemPromptBlocks(ctx)
+ */
+export function buildSystemPromptBlocks(ctx: PromptContext): SystemPromptBlock[] {
+  return [
+    {
+      type: 'text',
+      text: CORE_PRINCIPLES,
+      cache_control: { type: 'ephemeral' },
+    },
+    {
+      type: 'text',
+      text: buildLegacyBriefing(ctx),
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+}
+
+/**
+ * Returns system prompt blocks using a pre-built Strategist briefing.
+ * Block 1: Core principles (static, cached across all users).
+ * Block 2: Strategist briefing (pre-built, cached within session).
+ *
+ * Use when a coaching_briefings row exists for the user.
+ */
+export function buildSystemPromptFromBriefing(briefingContent: string): SystemPromptBlock[] {
+  return [
+    {
+      type: 'text',
+      text: CORE_PRINCIPLES,
+      cache_control: { type: 'ephemeral' },
+    },
+    {
+      type: 'text',
+      text: briefingContent,
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
 }
 
 // ────────────────────────────────────────────

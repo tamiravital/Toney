@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Brain, RotateCcw, Lightbulb, ClipboardList, MessageCircle, Sparkles, Pencil, Trash2, X } from 'lucide-react';
+import { Brain, RotateCcw, Lightbulb, ClipboardList, MessageCircle, Sparkles, Pencil, Trash2, X, Target, CheckCircle2 } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { RewireCardCategory, Insight } from '@toney/types';
 import { ComponentType } from 'react';
@@ -201,6 +201,8 @@ function CardContent({ category, content }: { category: RewireCardCategory; cont
 
 interface CategorizedInsight extends Insight {
   category: RewireCardCategory;
+  is_focus?: boolean;
+  graduated_at?: string | null;
 }
 
 function RewireCard({
@@ -218,7 +220,7 @@ function RewireCard({
   const CatIcon = categories.find(c => c.id === insight.category)?.icon || Sparkles;
 
   return (
-    <div className={`rounded-2xl p-5 ${style.shell}`}>
+    <div className={`rounded-2xl p-5 ${style.shell} ${insight.is_focus ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -228,6 +230,18 @@ function RewireCard({
           <span className={`text-xs font-semibold ${style.accent} uppercase tracking-wide`}>
             {categoryLabels[insight.category]}
           </span>
+          {insight.is_focus && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wide">
+              <Target className="w-3 h-3" />
+              Focus
+            </span>
+          )}
+          {insight.graduated_at && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              <CheckCircle2 className="w-3 h-3" />
+              Graduated
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <span className="text-[11px] text-gray-300 mr-1">

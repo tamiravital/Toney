@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
-import { buildSystemPrompt } from '@toney/coaching';
-import { Profile, BehavioralIntel, Win, CoachMemory } from '@toney/types';
+import { buildSystemPromptBlocks, buildSystemPromptFromBriefing } from '@toney/coaching';
+import { Profile, BehavioralIntel, Win, CoachMemory, SystemPromptBlock, CoachingBriefing } from '@toney/types';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, topicKey } = body;
+    const { message } = body;
     let { conversationId } = body;
 
     if (!message || !conversationId) {
@@ -37,53 +37,156 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Load behavioral intel (non-critical — may not exist yet)
-    let behavioralIntel = null;
+    // ── v2: Try to load Strategist briefing first ──
+    let briefing: CoachingBriefing | null = null;
     try {
       const { data } = await supabase
-        .from('behavioral_intel')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      behavioralIntel = data;
-    } catch { /* table may not exist or no data yet */ }
-
-    // Load recent wins (non-critical)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let recentWins: any[] = [];
-    try {
-      const { data } = await supabase
-        .from('wins')
+        .from('coaching_briefings')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(5);
-      recentWins = data || [];
-    } catch { /* table may not exist */ }
+        .limit(1)
+        .single();
+      briefing = data as CoachingBriefing | null;
+    } catch { /* no briefing yet — will use legacy path */ }
 
-    // Load rewire card titles (non-critical — table may not exist)
-    let rewireCards: { title: string }[] = [];
+    // ── v2: Session boundary detection ──
+    // Check if this is a new session (>12h gap since last message)
+    let lastMessageTime: Date | null = null;
     try {
-      const { data } = await supabase
-        .from('rewire_cards')
-        .select('title')
+      const { data: lastMsg } = await supabase
+        .from('messages')
+        .select('created_at')
         .eq('user_id', user.id)
-        .limit(10);
-      rewireCards = data || [];
-    } catch { /* table may not exist */ }
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (lastMsg) {
+        lastMessageTime = new Date(lastMsg.created_at);
+      }
+    } catch { /* no messages yet */ }
 
-    // Load active coach memories (non-critical)
-    let coachMemories: CoachMemory[] = [];
-    try {
-      const { data } = await supabase
-        .from('coach_memories')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('active', true)
-        .order('importance', { ascending: true }) // high first (alphabetical: h < l < m)
-        .limit(30);
-      coachMemories = (data || []) as CoachMemory[];
-    } catch { /* table may not exist yet */ }
+    const hoursSinceLastMessage = lastMessageTime
+      ? (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60)
+      : Infinity;
+    const isNewSession = hoursSinceLastMessage > 12;
+
+    // If new session and we have a briefing, trigger Strategist for session boundary
+    if (isNewSession && briefing) {
+      try {
+        await triggerStrategist(user.id, conversationId, 'session_start');
+        // Reload briefing after Strategist runs
+        const { data: freshBriefing } = await supabase
+          .from('coaching_briefings')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (freshBriefing) briefing = freshBriefing as CoachingBriefing;
+      } catch { /* Strategist failed — use existing briefing */ }
+    }
+
+    // If first-ever message and no briefing, trigger initial briefing
+    if (!briefing) {
+      const { count: conversationCount } = await supabase
+        .from('conversations')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      if ((conversationCount || 0) <= 1) {
+        try {
+          await triggerStrategist(user.id, null, 'onboarding');
+          // Reload briefing
+          const { data: freshBriefing } = await supabase
+            .from('coaching_briefings')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (freshBriefing) briefing = freshBriefing as CoachingBriefing;
+        } catch { /* Strategist failed — fall through to legacy */ }
+      }
+    }
+
+    // ── Build system prompt ──
+    let systemPromptBlocks: SystemPromptBlock[];
+
+    if (briefing) {
+      // v2 path: use Strategist briefing
+      systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
+    } else {
+      // Legacy fallback: load raw data and build prompt
+      let behavioralIntel = null;
+      try {
+        const { data } = await supabase
+          .from('behavioral_intel')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        behavioralIntel = data;
+      } catch { /* no data yet */ }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let recentWins: any[] = [];
+      try {
+        const { data } = await supabase
+          .from('wins')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        recentWins = data || [];
+      } catch { /* no wins */ }
+
+      let rewireCards: { title: string }[] = [];
+      try {
+        const { data } = await supabase
+          .from('rewire_cards')
+          .select('title')
+          .eq('user_id', user.id)
+          .limit(10);
+        rewireCards = data || [];
+      } catch { /* no cards */ }
+
+      let coachMemories: CoachMemory[] = [];
+      try {
+        const { data } = await supabase
+          .from('coach_memories')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('active', true)
+          .order('importance', { ascending: true })
+          .limit(30);
+        coachMemories = (data || []) as CoachMemory[];
+      } catch { /* no memories */ }
+
+      const { count: conversationCount } = await supabase
+        .from('conversations')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      const isFirstConversation = (conversationCount || 0) <= 1;
+
+      systemPromptBlocks = buildSystemPromptBlocks({
+        profile: profile as Profile,
+        behavioralIntel: behavioralIntel as BehavioralIntel | null,
+        recentWins: (recentWins || []).map(w => ({
+          id: w.id,
+          text: w.text,
+          tension_type: w.tension_type,
+          date: new Date(w.created_at),
+        })) as Win[],
+        rewireCardTitles: (rewireCards || []).map(c => c.title),
+        coachMemories,
+        isFirstConversation,
+        messageCount: 0,
+        topicKey: null,
+        isFirstTopicConversation: false,
+        otherTopics: [],
+      });
+    }
 
     // Load conversation history (last 50 messages)
     const { data: historyRows } = await supabase
@@ -93,85 +196,43 @@ export async function POST(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(50);
 
-    // Check if this is the first conversation overall
-    const { count: conversationCount } = await supabase
-      .from('conversations')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+    // Save user message
+    await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'user',
+        content: message,
+      });
 
-    const isFirstConversation = (conversationCount || 0) <= 1;
-
-    // Detect if this is the first time in this topic (no messages yet)
-    const isFirstTopicConversation = (historyRows || []).length === 0;
-
-    // Load cross-topic conversation counts for prompt context
-    let otherTopics: { topicKey: string; messageCount: number }[] = [];
-    if (topicKey) {
-      try {
-        const { data: topicConvs } = await supabase
-          .from('conversations')
-          .select('topic_key, message_count')
-          .eq('user_id', user.id)
-          .not('topic_key', 'is', null)
-          .neq('topic_key', topicKey);
-
-        otherTopics = (topicConvs || [])
-          .filter((c: { topic_key: string | null; message_count: number | null }) => c.topic_key && (c.message_count || 0) > 0)
-          .map((c: { topic_key: string; message_count: number | null }) => ({
-            topicKey: c.topic_key,
-            messageCount: c.message_count || 0,
-          }));
-      } catch { /* non-critical */ }
-    }
-
-    // Build system prompt
-    const systemPrompt = buildSystemPrompt({
-      profile: profile as Profile,
-      behavioralIntel: behavioralIntel as BehavioralIntel | null,
-      recentWins: (recentWins || []).map(w => ({
-        id: w.id,
-        text: w.text,
-        tension_type: w.tension_type,
-        date: new Date(w.created_at),
-      })) as Win[],
-      rewireCardTitles: (rewireCards || []).map(c => c.title),
-      coachMemories,
-      isFirstConversation,
-      messageCount: (historyRows || []).length,
-      topicKey: topicKey || null,
-      isFirstTopicConversation,
-      otherTopics,
-    });
-
-    const isTopicOpener = message.startsWith('[TOPIC_OPENER]');
-
-    // Save user message (skip for topic openers — they're internal instructions)
-    if (!isTopicOpener) {
-      await supabase
-        .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          user_id: user.id,
-          role: 'user',
-          content: message,
-        });
-    }
-
-    // Build message history for Claude
-    const messageHistory: { role: 'user' | 'assistant'; content: string }[] = (historyRows || []).map(m => ({
+    // Build message history for Claude with incremental caching
+    const rawHistory = (historyRows || []).map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
 
-    // Add current message (topic openers are sent as user instructions to Claude but not persisted)
-    messageHistory.push({ role: 'user', content: message });
+    // Add current message
+    rawHistory.push({ role: 'user', content: message });
 
-    // Call Claude
+    // Apply cache_control to the second-to-last message for incremental conversation caching
+    // This ensures conversation history up to that point is cached across turns
+    const messageHistory = rawHistory.map((m, i) => {
+      if (i === rawHistory.length - 2 && rawHistory.length >= 2) {
+        return {
+          role: m.role,
+          content: [{ type: 'text' as const, text: m.content, cache_control: { type: 'ephemeral' as const } }],
+        };
+      }
+      return m;
+    });
+
+    // Call Claude with cache-optimized system prompt blocks
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1500,
       temperature: 0.7,
-      system: systemPrompt,
+      system: systemPromptBlocks,
       messages: messageHistory,
     });
 
@@ -205,18 +266,14 @@ export async function POST(request: NextRequest) {
 
       await supabase
         .from('conversations')
-        .update({ message_count: (conv?.message_count || 0) + (isTopicOpener ? 1 : 2) })
+        .update({ message_count: (conv?.message_count || 0) + 2 })
         .eq('id', conversationId);
     } catch { /* non-critical */ }
 
-    // Trigger behavioral intel extraction every 5th user message
-    const userMessageCount = messageHistory.filter(m => m.role === 'user').length;
-    if (userMessageCount > 0 && userMessageCount % 5 === 0) {
-      // Fire-and-forget extraction
-      triggerExtraction(conversationId, user.id).catch(() => {
-        // Silent fail — extraction is non-critical
-      });
-    }
+    // Trigger Observer on every turn (fire-and-forget, replaces every-5th extraction)
+    triggerObserver(conversationId, user.id).catch(() => {
+      // Silent fail — Observer is non-critical
+    });
 
     return NextResponse.json({
       message: {
@@ -249,15 +306,30 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function triggerExtraction(conversationId: string, userId: string) {
-  // Call the extraction API endpoint
+async function triggerObserver(conversationId: string, userId: string) {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000';
 
-  await fetch(`${baseUrl}/api/extract-intel`, {
+  await fetch(`${baseUrl}/api/observer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ conversationId, userId }),
   });
+}
+
+async function triggerStrategist(userId: string, sessionId: string | null, trigger: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000';
+
+  const response = await fetch(`${baseUrl}/api/strategist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, sessionId, trigger }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Strategist returned ${response.status}`);
+  }
 }

@@ -22,6 +22,10 @@ export interface BehavioralIntel {
   coaching_notes: string[];
   stage_of_change: StageOfChange;
   updated_at: string;
+  // v2 fields (Strategist-managed)
+  journey_narrative?: string | null;
+  growth_edges?: Record<string, unknown> | null;
+  last_strategist_run?: string | null;
 }
 
 export type RewireCardCategory = 'reframe' | 'truth' | 'plan' | 'practice' | 'conversation_kit';
@@ -41,6 +45,13 @@ export interface RewireCard {
   usefulness_score?: number | null;
   auto_generated: boolean;
   created_at: string;
+  // v2 fields (Focus card lifecycle)
+  is_focus?: boolean;
+  focus_set_at?: string | null;
+  graduated_at?: string | null;
+  times_completed?: number;
+  last_completed_at?: string | null;
+  prescribed_by?: 'coach' | 'strategist' | 'user';
 }
 
 export interface Win {

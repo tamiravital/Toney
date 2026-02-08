@@ -24,4 +24,8 @@ export interface Conversation {
   title?: string | null;
   is_active?: boolean;
   message_count?: number;
+  // v2 fields (session model)
+  session_number?: number | null;
+  session_notes?: string | null;
+  session_status?: 'active' | 'completed' | 'abandoned';
 }

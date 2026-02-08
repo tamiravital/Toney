@@ -1,5 +1,12 @@
-export { buildSystemPrompt } from './prompts/systemPromptBuilder';
+export { buildSystemPrompt, buildSystemPromptBlocks, buildSystemPromptFromBriefing, buildLegacyBriefing } from './prompts/systemPromptBuilder';
+export type { PromptContext } from './prompts/systemPromptBuilder';
 export { extractBehavioralIntel, mergeIntel } from './extraction/intelExtractor';
 export type { ExtractionResult } from './extraction/intelExtractor';
 export { analyzeBetaConversation } from './extraction/betaAnalyzer';
 export type { BetaAnalysis } from './extraction/betaAnalyzer';
+export { analyzeExchange } from './observer';
+export type { ObserverInput, ObserverOutput, ObserverOutputSignal } from './observer';
+export { runStrategist, generateInitialBriefing } from './strategist';
+export type { StrategistContext, StrategistOutput, FocusCardPrescription } from './strategist';
+export { detectSessionBoundary } from './session';
+export type { SessionBoundary } from './session';

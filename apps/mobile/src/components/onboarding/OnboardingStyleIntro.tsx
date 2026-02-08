@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 
 export default function OnboardingStyleIntro() {
-  const { setQuizStep, setOnboardingStep } = useToney();
+  const { setQuizStep, setOnboardingStep, finishOnboarding } = useToney();
 
   return (
     <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-12 text-center overflow-y-auto hide-scrollbar">
@@ -36,7 +36,7 @@ export default function OnboardingStyleIntro() {
           <ArrowRight className="w-5 h-5" />
         </button>
         <button
-          onClick={() => setOnboardingStep('topic_picker')}
+          onClick={() => finishOnboarding()}
           className="w-full bg-gray-100 text-gray-600 py-4 rounded-2xl font-semibold hover:bg-gray-200 transition-all"
         >
           Skip for Now

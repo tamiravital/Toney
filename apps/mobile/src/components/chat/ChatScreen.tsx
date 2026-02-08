@@ -1,22 +1,11 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback, ComponentType, ComponentPropsWithoutRef } from 'react';
-import { Send, Bookmark, BookmarkCheck, ChevronLeft, ChevronDown, Shield, MessageSquare, Clock, CreditCard, TrendingUp, Rocket, Target } from 'lucide-react';
+import { useRef, useEffect, useState, useCallback, ComponentPropsWithoutRef } from 'react';
+import { Send, Bookmark, BookmarkCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import { useRewireCards } from '@/hooks/useRewireCards';
-import { ALL_TOPICS, topicDetails, topicColor, TopicKey } from '@toney/constants';
 import SaveInsightSheet from './SaveInsightSheet';
-
-const iconMap: Record<string, ComponentType<{ className?: string }>> = {
-  Shield,
-  MessageSquare,
-  Clock,
-  CreditCard,
-  TrendingUp,
-  Rocket,
-  Target,
-};
 
 // Custom markdown components for chat bubble styling
 const markdownComponents = {
@@ -41,58 +30,15 @@ function extractInsight(assistantContent: string, userContent?: string): string 
   return assistantContent.trim();
 }
 
-// ── Topic List View ──
-function TopicListView() {
-  const { selectTopic, topicConversations } = useToney();
+// ── Conversation starters for empty chat ──
+const conversationStarters = [
+  "Something's been on my mind about money...",
+  "I want to understand why I do what I do with money",
+  "I had a money moment today",
+  "I want to talk about a money decision",
+];
 
-  return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-2 hide-scrollbar">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Topics</h1>
-        <p className="text-sm text-gray-500 mt-1">Pick a topic to explore with Toney</p>
-      </div>
-
-      <div className="space-y-2.5">
-        {ALL_TOPICS.map((key) => {
-          const topic = topicDetails[key];
-          const colors = topicColor(key);
-          const Icon = iconMap[topic.icon];
-          const hasConversation = !!topicConversations[key];
-
-          return (
-            <button
-              key={key}
-              onClick={() => selectTopic(key)}
-              className={`w-full text-left p-4 rounded-2xl border transition-all active:scale-[0.98] ${
-                hasConversation
-                  ? `${colors.border} ${colors.bg} border-2`
-                  : 'border-gray-100 bg-white hover:border-gray-200'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  hasConversation ? colors.accent : 'bg-gray-100'
-                }`}>
-                  {Icon && <Icon className={`w-5 h-5 ${hasConversation ? 'text-white' : 'text-gray-500'}`} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 text-sm">{topic.name}</div>
-                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{topic.description}</p>
-                </div>
-                {hasConversation && (
-                  <span className={`text-xs font-medium ${colors.text}`}>Continue</span>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Active Chat View ──
-function ActiveChatView() {
+export default function ChatScreen() {
   const {
     messages,
     chatInput,
@@ -100,9 +46,7 @@ function ActiveChatView() {
     isTyping,
     handleSendMessage,
     handleSaveInsight,
-    activeTopic,
-    leaveTopic,
-    loadingTopic,
+    loadingChat,
   } = useToney();
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -111,18 +55,11 @@ function ActiveChatView() {
     content: string;
   } | null>(null);
   const [lastSavedCardId, setLastSavedCardId] = useState<string | null>(null);
-  const [showTopicSwitcher, setShowTopicSwitcher] = useState(false);
   const { setScore } = useRewireCards();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
-
-  if (!activeTopic) return null;
-
-  const topic = topicDetails[activeTopic];
-  const colors = topicColor(activeTopic);
-  const Icon = iconMap[topic.icon];
 
   const handleSaveClick = (messageId: string) => {
     const msg = messages.find(m => m.id === messageId);
@@ -161,45 +98,41 @@ function ActiveChatView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Chat header with topic switcher */}
-      <div className="relative px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={leaveTopic}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-all flex-shrink-0"
-          >
-            <ChevronLeft className="w-5 h-5 text-gray-500" />
-          </button>
-
-          <button
-            onClick={() => setShowTopicSwitcher(!showTopicSwitcher)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${colors.bg} ${colors.text} transition-all`}
-          >
-            {Icon && <Icon className="w-4 h-4" />}
-            <span className="text-sm font-semibold">{topic.name}</span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTopicSwitcher ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
-        {/* Topic switcher dropdown — absolute overlay */}
-        {showTopicSwitcher && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setShowTopicSwitcher(false)} />
-            <div className="absolute left-4 right-4 top-full mt-1 z-20">
-              <TopicSwitcherDropdown onClose={() => setShowTopicSwitcher(false)} />
-            </div>
-          </>
-        )}
+      {/* Simple header */}
+      <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
+        <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
       </div>
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 hide-scrollbar">
-        {loadingTopic && messages.length === 0 && (
+        {loadingChat && messages.length === 0 && (
           <div className="flex justify-center py-8">
             <div className="flex gap-1.5">
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        )}
+
+        {/* Empty state with conversation starters */}
+        {!loadingChat && messages.length === 0 && !isTyping && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-4xl mb-4">{"\uD83D\uDCAC"}</div>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">What&apos;s on your mind?</h2>
+            <p className="text-sm text-gray-500 mb-8 max-w-[280px]">
+              Start a conversation about anything money-related. Toney&apos;s here to listen and coach.
+            </p>
+            <div className="w-full space-y-2">
+              {conversationStarters.map((starter) => (
+                <button
+                  key={starter}
+                  onClick={() => handleSendMessage(starter)}
+                  className="w-full text-left p-3.5 rounded-2xl border border-gray-100 bg-white text-sm text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all active:scale-[0.98]"
+                >
+                  {starter}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -325,54 +258,4 @@ function ActiveChatView() {
       )}
     </div>
   );
-}
-
-// ── Topic Switcher Dropdown ──
-function TopicSwitcherDropdown({ onClose }: { onClose: () => void }) {
-  const { activeTopic, selectTopic, topicConversations } = useToney();
-
-  return (
-    <div className="mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden">
-      {ALL_TOPICS.map((key) => {
-        const topic = topicDetails[key];
-        const colors = topicColor(key);
-        const Icon = iconMap[topic.icon];
-        const isActive = key === activeTopic;
-        const hasConversation = !!topicConversations[key];
-
-        return (
-          <button
-            key={key}
-            onClick={() => {
-              if (!isActive) selectTopic(key);
-              onClose();
-            }}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-all ${
-              isActive ? `${colors.bg}` : 'hover:bg-gray-50'
-            }`}
-          >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              isActive ? colors.accent : hasConversation ? colors.light : 'bg-gray-100'
-            }`}>
-              {Icon && <Icon className={`w-4 h-4 ${isActive ? 'text-white' : hasConversation ? colors.text : 'text-gray-400'}`} />}
-            </div>
-            <span className={`text-sm font-medium ${isActive ? colors.text : 'text-gray-700'}`}>
-              {topic.name}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Main ChatScreen ──
-export default function ChatScreen() {
-  const { activeTopic } = useToney();
-
-  if (activeTopic) {
-    return <ActiveChatView />;
-  }
-
-  return <TopicListView />;
 }

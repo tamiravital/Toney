@@ -3,10 +3,10 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win } from '@toney/types';
 import { identifyTension, tensionDetails } from '@toney/constants';
-import { questions, TopicKey, ALL_TOPICS, topicDetails } from '@toney/constants';
+import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
-type OnboardingStep = 'welcome' | 'questions' | 'pattern' | 'style_intro' | 'style_quiz' | 'topic_picker';
+type OnboardingStep = 'welcome' | 'questions' | 'pattern' | 'style_intro' | 'style_quiz';
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
 type ActiveTab = 'home' | 'chat' | 'rewire' | 'wins';
 
@@ -104,13 +104,8 @@ interface ToneyContextValue {
   tempLifeContext: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string };
   setTempLifeContext: (ctx: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string } | ((prev: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string }) => { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string })) => void;
 
-  // Topics
-  activeTopic: TopicKey | null;
-  topicConversations: Record<string, string>; // topicKey -> conversationId
-  selectTopic: (topicKey: TopicKey) => void;
-  leaveTopic: () => void;
-
-  // Chat
+  // Chat — session-based (v2)
+  currentConversationId: string | null;
   messages: Message[];
   setMessages: (msgs: Message[] | ((prev: Message[]) => Message[])) => void;
   chatInput: string;
@@ -119,7 +114,7 @@ interface ToneyContextValue {
   setIsTyping: (typing: boolean) => void;
   handleSendMessage: (overrideText?: string) => void;
   handleSaveInsight: (messageId: string, editedContent?: string, category?: string) => Promise<string | null>;
-  loadingTopic: boolean;
+  loadingChat: boolean;
 
   // Rewire
   savedInsights: Insight[];
@@ -137,7 +132,7 @@ interface ToneyContextValue {
   signOut: () => void;
 
   // Onboarding completion
-  finishOnboarding: (topicKey: TopicKey) => void;
+  finishOnboarding: () => void;
 
   // Reset
   resetAll: () => void;
@@ -169,15 +164,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [tempStyle, setTempStyle] = useState<StyleProfile>({ ...defaultStyle });
   const [tempLifeContext, setTempLifeContext] = useState({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
 
-  // Topics
-  const [activeTopic, setActiveTopic] = useState<TopicKey | null>(null);
-  const [topicConversations, setTopicConversations] = useState<Record<string, string>>({});
-
-  // Chat
+  // Chat — session-based (v2, no topics)
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [loadingTopic, setLoadingTopic] = useState(false);
+  const [loadingChat, setLoadingChat] = useState(false);
 
   // Rewire
   const [savedInsights, setSavedInsights] = useState<Insight[]>([]);
@@ -281,28 +273,26 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       if (savedWins.length > 0) setWins(savedWins);
       if (savedStreak) setStreak(savedStreak);
 
-      // Restore topic conversations from Supabase
+      // Restore most recent active conversation from Supabase
       if (hasOnboarded && isSupabaseConfigured()) {
         try {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const { data: topicConvs } = await supabase
+            const { data: recentConv } = await supabase
               .from('conversations')
-              .select('id, topic_key')
+              .select('id')
               .eq('user_id', user.id)
-              .not('topic_key', 'is', null);
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
 
-            if (topicConvs && topicConvs.length > 0) {
-              const map: Record<string, string> = {};
-              for (const conv of topicConvs) {
-                if (conv.topic_key) map[conv.topic_key] = conv.id;
-              }
-              setTopicConversations(map);
+            if (recentConv) {
+              setCurrentConversationId(recentConv.id);
             }
           }
         } catch {
-          // Non-critical — topic conversations will be created on demand
+          // Non-critical — conversation will be created on first message
         }
       }
 
@@ -314,18 +304,21 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           if (user) {
             const { data: dbCards } = await supabase
               .from('rewire_cards')
-              .select('id, title, content, category, created_at')
+              .select('id, title, content, category, created_at, is_focus, graduated_at')
               .eq('user_id', user.id)
               .order('created_at', { ascending: false });
 
             if (dbCards && dbCards.length > 0) {
-              const insights: Insight[] = dbCards.map(card => ({
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const insights: Insight[] = dbCards.map((card: any) => ({
                 id: card.id,
                 content: card.content,
                 category: card.category as Insight['category'],
                 savedAt: new Date(card.created_at),
                 fromChat: true,
                 tags: [],
+                is_focus: card.is_focus || false,
+                graduated_at: card.graduated_at || null,
               }));
               setSavedInsights(insights);
               saveJSON('toney_insights', insights);
@@ -338,24 +331,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
       if (hasOnboarded) {
         setAppPhase('main');
-        // Parse URL hash for topic-based navigation
+        // Parse URL hash for navigation
         const hash = window.location.hash.replace('#', '');
-        if (hash.startsWith('chat/')) {
-          const topicKey = hash.replace('chat/', '') as TopicKey;
-          if (ALL_TOPICS.includes(topicKey)) {
-            setActiveTab('chat');
-            setActiveTopic(topicKey);
-          } else {
-            setActiveTab('chat');
-          }
-        } else if (hash === 'chat') {
-          setActiveTab('chat');
-          // Restore last active topic so user lands in their last conversation
-          const lastTopic = localStorage.getItem('toney_active_topic') as TopicKey | null;
-          if (lastTopic && ALL_TOPICS.includes(lastTopic)) {
-            setActiveTopic(lastTopic);
-          }
-        } else if (VALID_TABS.has(hash as ActiveTab)) {
+        if (VALID_TABS.has(hash as ActiveTab)) {
           setActiveTab(hash as ActiveTab);
         } else {
           setActiveTab('home');
@@ -395,30 +373,20 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
   }, [identifiedTensionState]);
 
-  // Persist activeTopic to localStorage (only save, never remove — so Chat tab can restore it)
-  useEffect(() => {
-    if (appPhase === 'loading') return;
-    if (activeTopic) {
-      localStorage.setItem('toney_active_topic', activeTopic);
-    }
-  }, [activeTopic, appPhase]);
-
   // ── URL Hash Navigation ──
 
-  // Sync activeTab + activeTopic → URL hash
+  // Sync activeTab → URL hash
   useEffect(() => {
     if (appPhase !== 'main') return;
     if (showSettings) return;
-    const targetHash = activeTab === 'chat' && activeTopic
-      ? `chat/${activeTopic}`
-      : activeTab;
+    const targetHash = activeTab;
     const currentHash = window.location.hash.replace('#', '');
     if (currentHash !== targetHash) {
       window.history.pushState(null, '', `#${targetHash}`);
     }
-  }, [activeTab, activeTopic, appPhase, showSettings]);
+  }, [activeTab, appPhase, showSettings]);
 
-  // Sync URL hash → activeTab + activeTopic (browser back/forward)
+  // Sync URL hash → activeTab (browser back/forward)
   useEffect(() => {
     if (appPhase !== 'main') return;
 
@@ -426,23 +394,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       const hash = window.location.hash.replace('#', '');
       if (hash === 'settings') {
         if (!showSettings) setShowSettings(true);
-      } else if (hash.startsWith('chat/')) {
-        const topicKey = hash.replace('chat/', '') as TopicKey;
-        if (ALL_TOPICS.includes(topicKey)) {
-          if (showSettings) setShowSettings(false);
-          setActiveTab('chat');
-          setActiveTopic(topicKey);
-        }
-      } else if (hash === 'chat') {
-        if (showSettings) setShowSettings(false);
-        setActiveTab('chat');
-        // Restore last active topic
-        const lastTopic = localStorage.getItem('toney_active_topic') as TopicKey | null;
-        if (lastTopic && ALL_TOPICS.includes(lastTopic)) {
-          setActiveTopic(lastTopic);
-        } else {
-          setActiveTopic(null);
-        }
       } else if (VALID_TABS.has(hash as ActiveTab)) {
         if (showSettings) setShowSettings(false);
         if (hash !== activeTab) setActiveTab(hash as ActiveTab);
@@ -468,45 +419,33 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     } else {
       const currentHash = window.location.hash.replace('#', '');
       if (currentHash === 'settings') {
-        const targetHash = activeTab === 'chat' && activeTopic
-          ? `chat/${activeTopic}`
-          : activeTab;
-        window.history.pushState(null, '', `#${targetHash}`);
+        window.history.pushState(null, '', `#${activeTab}`);
       }
     }
-  }, [showSettings, appPhase, activeTab, activeTopic]);
+  }, [showSettings, appPhase, activeTab]);
 
-  // ── Load messages when activeTopic changes ──
+  // ── Load messages when currentConversationId changes ──
   useEffect(() => {
     if (appPhase !== 'main') return;
-    if (!activeTopic) {
+    if (!currentConversationId) {
       setMessages([]);
       return;
     }
 
-    const convId = topicConversations[activeTopic];
-    if (!convId) {
-      setMessages([]);
-      return;
-    }
-
-    // Load last 50 messages for this topic conversation
     const loadMessages = async () => {
       if (!isSupabaseConfigured()) return;
-      setLoadingTopic(true);
+      setLoadingChat(true);
       try {
         const supabase = createClient();
         const { data: dbMessages } = await supabase
           .from('messages')
           .select('id, role, content, created_at')
-          .eq('conversation_id', convId)
+          .eq('conversation_id', currentConversationId)
           .order('created_at', { ascending: false })
           .limit(50);
 
         if (dbMessages && dbMessages.length > 0) {
-          // Filter out [TOPIC_OPENER] instructions that may have been saved
-          const filtered = dbMessages.reverse().filter(m => !m.content.startsWith('[TOPIC_OPENER]'));
-          setMessages(filtered.map(m => ({
+          setMessages(dbMessages.reverse().map(m => ({
             id: m.id,
             role: m.role as 'user' | 'assistant',
             content: m.content,
@@ -520,23 +459,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       } catch {
         setMessages([]);
       } finally {
-        setLoadingTopic(false);
+        setLoadingChat(false);
       }
     };
 
     loadMessages();
-  }, [activeTopic, topicConversations, appPhase]);
-
-  // ── Wrapped setActiveTab: restore last topic when switching to chat ──
-  const setActiveTabWrapped = useCallback((tab: ActiveTab) => {
-    setActiveTab(tab);
-    if (tab === 'chat' && !activeTopic) {
-      const lastTopic = localStorage.getItem('toney_active_topic') as TopicKey | null;
-      if (lastTopic && ALL_TOPICS.includes(lastTopic)) {
-        setActiveTopic(lastTopic);
-      }
-    }
-  }, [activeTopic]);
+  }, [currentConversationId, appPhase]);
 
   // ── Handlers ──
 
@@ -560,71 +488,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
   }, [currentQuestionIndex]);
 
-  // ── Topic selection ──
-  const selectTopic = useCallback(async (topicKey: TopicKey) => {
-    setActiveTopic(topicKey);
-    setActiveTab('chat');
-
-    // If conversation exists, messages will be loaded by the effect
-    const existingConvId = topicConversations[topicKey];
-    if (existingConvId) return;
-
-    if (!isSupabaseConfigured()) return;
-
-    setLoadingTopic(true);
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Create conversation for this topic
-      const { data: conv } = await supabase
-        .from('conversations')
-        .insert({ user_id: user.id, topic_key: topicKey })
-        .select('id')
-        .single();
-
-      if (!conv) return;
-
-      setTopicConversations(prev => ({ ...prev, [topicKey]: conv.id }));
-
-      // Generate personalized first question via Claude
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `[TOPIC_OPENER] The user just opened the "${topicDetails[topicKey].name}" topic for the first time. Generate a warm, personalized opening question that invites them to share what's on their mind about this topic. Keep it 2-3 sentences max.`,
-          conversationId: conv.id,
-          topicKey,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.message) {
-        setMessages([{
-          id: data.message.id || `msg-${Date.now()}`,
-          role: 'assistant',
-          content: data.message.content,
-          timestamp: new Date(data.message.timestamp || Date.now()),
-          canSave: false,
-          saved: false,
-        }]);
-      }
-    } catch (err) {
-      console.error('[Toney] Topic creation failed:', err);
-    } finally {
-      setLoadingTopic(false);
-    }
-  }, [topicConversations]);
-
-  const leaveTopic = useCallback(() => {
-    setActiveTopic(null);
-    setMessages([]);
-  }, []);
-
   const handleSendMessage = useCallback(async (overrideText?: string) => {
     const text = overrideText || chatInput;
-    if (!text.trim() || !activeTopic) return;
+    if (!text.trim()) return;
 
     const userMsg: Message = {
       id: `msg-${Date.now()}`,
@@ -638,19 +504,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     if (isSupabaseConfigured()) {
       try {
-        let convId = topicConversations[activeTopic];
+        let convId = currentConversationId;
         if (!convId) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             const { data: conv } = await supabase
               .from('conversations')
-              .insert({ user_id: user.id, topic_key: activeTopic })
+              .insert({ user_id: user.id })
               .select('id')
               .single();
             if (conv) {
               convId = conv.id;
-              setTopicConversations(prev => ({ ...prev, [activeTopic]: conv.id }));
+              setCurrentConversationId(conv.id);
             }
           }
         }
@@ -662,7 +528,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({
               message: userMsg.content,
               conversationId: convId,
-              topicKey: activeTopic,
             }),
           });
           const data = await res.json();
@@ -696,7 +561,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       saved: false,
     }]);
     setIsTyping(false);
-  }, [chatInput, activeTopic, topicConversations]);
+  }, [chatInput, currentConversationId]);
 
   const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
     setMessages(prev =>
@@ -717,7 +582,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       ]);
 
       // Also save to Supabase
-      if (isSupabaseConfigured() && activeTopic) {
+      if (isSupabaseConfigured()) {
         // Build trigger_context from recent messages leading to this card
         const msgIndex = messages.findIndex(m => m.id === messageId);
         const recentMessages = messages.slice(Math.max(0, msgIndex - 5), msgIndex + 1);
@@ -736,7 +601,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               title: (editedContent || msg.content).substring(0, 80),
               content: editedContent || msg.content,
               tension_type: identifiedTensionState?.primary || null,
-              topic_key: activeTopic,
               auto_generated: false,
               trigger_context: triggerContext || null,
             }).select('id').single();
@@ -748,7 +612,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       setSavedInsights(prev => prev.filter(i => i.content !== msg.content));
     }
     return null;
-  }, [messages, identifiedTensionState, activeTopic]);
+  }, [messages, identifiedTensionState]);
 
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {
     setSavedInsights(prev =>
@@ -796,15 +660,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       setStreak(savedStreak);
       setAppPhase('main');
       const hash = window.location.hash.replace('#', '');
-      if (hash.startsWith('chat/')) {
-        const topicKey = hash.replace('chat/', '') as TopicKey;
-        if (ALL_TOPICS.includes(topicKey)) {
-          setActiveTab('chat');
-          setActiveTopic(topicKey);
-        } else {
-          setActiveTab('home');
-        }
-      } else if (VALID_TABS.has(hash as ActiveTab)) {
+      if (VALID_TABS.has(hash as ActiveTab)) {
         setActiveTab(hash as ActiveTab);
       } else {
         setActiveTab('home');
@@ -820,7 +676,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setShowSettings(false);
   }, []);
 
-  const finishOnboarding = useCallback(async (topicKey: TopicKey) => {
+  const finishOnboarding = useCallback(async () => {
     setStyleProfile({ ...tempStyle });
     localStorage.setItem('toney_onboarded', 'true');
 
@@ -850,80 +706,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Go to main app and select the chosen topic
+    // Go to main app — home screen (no topic selection)
     setAppPhase('main');
-    setActiveTopic(topicKey);
-    setActiveTab('chat');
-
-    // Create conversation and generate first question
-    if (isSupabaseConfigured()) {
-      setLoadingTopic(true);
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          // Check if conversation already exists (e.g. from B44 migration)
-          let convId = topicConversations[topicKey];
-
-          if (!convId) {
-            // Also check Supabase directly (migration may have created it)
-            const { data: existingConv } = await supabase
-              .from('conversations')
-              .select('id')
-              .eq('user_id', user.id)
-              .eq('topic_key', topicKey)
-              .maybeSingle();
-
-            if (existingConv) {
-              convId = existingConv.id;
-            }
-          }
-
-          if (!convId) {
-            const { data: conv } = await supabase
-              .from('conversations')
-              .insert({ user_id: user.id, topic_key: topicKey })
-              .select('id')
-              .single();
-
-            if (conv) {
-              convId = conv.id;
-            }
-          }
-
-          if (convId) {
-            setTopicConversations(prev => ({ ...prev, [topicKey]: convId }));
-
-            // Generate personalized first question
-            const res = await fetch('/api/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                message: `[TOPIC_OPENER] The user just completed onboarding and chose "${topicDetails[topicKey].name}" as their first topic. Generate a warm, personalized opening question that references what you know about them from their profile. Keep it 2-3 sentences max.`,
-                conversationId: convId,
-                topicKey,
-              }),
-            });
-
-            const data = await res.json();
-            if (data.message) {
-              setMessages([{
-                id: data.message.id || `msg-${Date.now()}`,
-                role: 'assistant',
-                content: data.message.content,
-                timestamp: new Date(data.message.timestamp || Date.now()),
-                canSave: false,
-                saved: false,
-              }]);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[Toney] Onboarding topic creation failed:', err);
-      } finally {
-        setLoadingTopic(false);
-      }
-    }
+    setActiveTab('home');
   }, [tempStyle, identifiedTensionState, answers, tempLifeContext]);
 
   const resetAll = useCallback(() => {
@@ -935,7 +720,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('toney_insights');
     localStorage.removeItem('toney_wins');
     localStorage.removeItem('toney_streak');
-    localStorage.removeItem('toney_active_topic');
 
     setAppPhase('signed_out');
     setOnboardingStep('questions');
@@ -951,8 +735,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStyleProfile({ ...defaultStyle });
     setTempStyle({ ...defaultStyle });
     setTempLifeContext({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
-    setActiveTopic(null);
-    setTopicConversations({});
+    setCurrentConversationId(null);
   }, []);
 
   const retakeQuiz = useCallback(() => {
@@ -975,7 +758,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         appPhase,
         setAppPhase,
         activeTab,
-        setActiveTab: setActiveTabWrapped,
+        setActiveTab,
         showSettings,
         setShowSettings,
         onboardingStep,
@@ -995,10 +778,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setTempStyle,
         tempLifeContext,
         setTempLifeContext,
-        activeTopic,
-        topicConversations,
-        selectTopic,
-        leaveTopic,
+        currentConversationId,
         messages,
         setMessages,
         chatInput,
@@ -1007,7 +787,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setIsTyping,
         handleSendMessage,
         handleSaveInsight,
-        loadingTopic,
+        loadingChat,
         savedInsights,
         setSavedInsights,
         updateInsight,
