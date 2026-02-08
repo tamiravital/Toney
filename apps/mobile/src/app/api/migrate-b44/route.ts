@@ -36,19 +36,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 4. Create the conversation
-    const firstMsgTime = B44_MESSAGES[0].created_at;
-    const lastMsgTime = B44_MESSAGES[B44_MESSAGES.length - 1].created_at;
-
+    // 4. Create the conversation (using live DB schema)
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .insert({
         user_id: user.id,
         topic_key: TOPIC_KEY,
-        started_at: firstMsgTime,
-        ended_at: lastMsgTime,
-        summary: 'Imported from B44 beta — exploring your emotional relationship with money',
-        message_count: B44_MESSAGES.length,
+        title: 'Imported from B44 beta',
+        is_active: true,
       })
       .select('id')
       .single();
@@ -91,11 +86,9 @@ export async function POST(request: NextRequest) {
     // 6. Insert rewire cards
     const cardInserts = B44_CARDS.map(card => ({
       user_id: user.id,
-      source_message_id: null,
       category: card.category,
       title: card.title,
       content: card.content,
-      tension_type: null,
       topic_key: TOPIC_KEY,
       auto_generated: false,
       created_at: card.created_at,
