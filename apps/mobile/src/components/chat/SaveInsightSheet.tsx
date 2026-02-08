@@ -18,12 +18,20 @@ const categoryOptions: CategoryOption[] = [
   { id: 'truth', label: 'Truth', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
   { id: 'plan', label: 'Plan', icon: ClipboardList, color: 'text-blue-600', bgColor: 'bg-blue-50' },
   { id: 'practice', label: 'Practice', icon: RotateCcw, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { id: 'conversation_kit', label: 'Conversation Kit', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
+  { id: 'conversation_kit', label: 'Kit', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
 ];
+
+const categoryHints: Record<RewireCardCategory, string> = {
+  reframe: 'Will display as a new perspective',
+  truth: 'First line will be highlighted as your truth',
+  plan: 'Numbered steps will be formatted automatically',
+  practice: 'Will display as an action to try',
+  conversation_kit: 'Will display as a conversation starter',
+};
 
 function guessCategory(content: string): RewireCardCategory {
   const lower = content.toLowerCase();
-  if (lower.includes('step 1') || lower.includes('step 2') || lower.includes('1)') || lower.includes('1.') && lower.includes('2.')) return 'plan';
+  if (lower.includes('step 1') || lower.includes('step 2') || lower.includes('1)') || (lower.includes('1.') && lower.includes('2.'))) return 'plan';
   if (lower.includes('every day') || lower.includes('each time') || lower.includes('before any') || lower.includes('when you') || lower.includes('one breath') || lower.includes('pause')) return 'practice';
   if (lower.includes('realize') || lower.includes('truth') || lower.includes('actually') || lower.includes('the real') || lower.includes('you just said')) return 'truth';
   if (lower.includes('conversation') || lower.includes('money talk') || lower.includes('approach') || lower.includes('start with') || lower.includes('lead with')) return 'conversation_kit';
@@ -97,7 +105,7 @@ export default function SaveInsightSheet({ initialContent, onSave, onClose, onSc
       <div className="w-full max-w-[430px] bg-white rounded-t-3xl p-6 pb-8 animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-gray-900">Save to Rewire</h3>
+          <h3 className="text-lg font-bold text-gray-900">Save to Your Toolkit</h3>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"
@@ -111,13 +119,13 @@ export default function SaveInsightSheet({ initialContent, onSave, onClose, onSc
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={4}
-          className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 resize-none outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-all mb-4"
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 resize-none outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-all mb-4"
           placeholder="Edit your insight..."
         />
 
         {/* Category picker */}
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Category</p>
-        <div className="flex gap-2 mb-6 flex-wrap">
+        <div className="flex gap-2 mb-1 flex-wrap">
           {categoryOptions.map((cat) => {
             const Icon = cat.icon;
             const isActive = category === cat.id;
@@ -125,10 +133,10 @@ export default function SaveInsightSheet({ initialContent, onSave, onClose, onSc
               <button
                 key={cat.id}
                 onClick={() => setCategory(cat.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                   isActive
-                    ? `${cat.bgColor} ${cat.color} ring-2 ring-offset-1 ring-current`
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    ? `${cat.bgColor} ${cat.color} shadow-sm`
+                    : 'bg-white text-gray-400 border border-gray-100 hover:text-gray-600'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -137,6 +145,9 @@ export default function SaveInsightSheet({ initialContent, onSave, onClose, onSc
             );
           })}
         </div>
+        <p className="text-[11px] text-gray-300 mt-1.5 mb-4">
+          {categoryHints[category]}
+        </p>
 
         {/* Actions */}
         <div className="flex gap-3">
