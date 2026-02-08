@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Badge from '@/components/Badge';
+import StopRunButton from '@/components/simulator/StopRunButton';
 import { MessageSquare, Sparkles, Clock, Bot, User } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format';
 import type { SimulatorRunWithPersona } from '@/lib/queries/simulator';
@@ -14,6 +15,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
 export default function RunCard({ run }: { run: SimulatorRunWithPersona }) {
   const status = STATUS_STYLES[run.status] ?? STATUS_STYLES.pending;
   const cardWorthyCount = run.card_evaluation?.card_worthy_count ?? 0;
+  const isStuck = run.status === 'running' || run.status === 'pending';
 
   return (
     <Link href={`/dashboard/simulator/runs/${run.id}`}>
@@ -27,7 +29,12 @@ export default function RunCard({ run }: { run: SimulatorRunWithPersona }) {
               </div>
             )}
           </div>
-          <Badge label={run.status} bg={status.bg} text={status.text} />
+          <div className="flex items-center gap-2">
+            {isStuck && (
+              <StopRunButton runId={run.id} hasMessages={run.message_count > 0} compact />
+            )}
+            <Badge label={run.status} bg={status.bg} text={status.text} />
+          </div>
         </div>
 
         <div className="flex items-center gap-4 text-xs text-gray-500">

@@ -4,6 +4,7 @@ import { ArrowLeft, Bot, User, ChevronDown, Sparkles } from 'lucide-react';
 import Badge from '@/components/Badge';
 import SimulatorChat from '@/components/simulator/SimulatorChat';
 import ReEvaluateButton from '@/components/simulator/ReEvaluateButton';
+import StopRunButton from '@/components/simulator/StopRunButton';
 import { getRun, getRunMessages } from '@/lib/queries/simulator';
 import { formatDateTime, tensionLabel, toneLabel, depthLabel } from '@/lib/format';
 import type { Profile } from '@toney/types';
@@ -66,6 +67,9 @@ export default async function RunDetailPage({
                 bg="bg-amber-100"
                 text="text-amber-700"
               />
+            )}
+            {isActive && (
+              <StopRunButton runId={runId} hasMessages={messages.length > 0} />
             )}
             <Badge label={run.status} bg={status.bg} text={status.text} />
           </div>
