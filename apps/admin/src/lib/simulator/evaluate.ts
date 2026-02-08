@@ -11,6 +11,7 @@ const anthropic = new Anthropic({
 });
 
 const MODEL = 'claude-sonnet-4-5-20250929';
+const FAST_MODEL = 'claude-3-5-haiku-20241022';
 
 interface CardEvaluation {
   card_worthy: boolean;
@@ -35,22 +36,54 @@ Categories: reframe, ritual, truth, mantra, play, conversation_kit
 Respond with ONLY valid JSON (no markdown, no backticks):
 {"card_worthy": true/false, "card_category": "category_name", "card_reason": "brief explanation"}`;
 
+// ============================================================
+// Quick card check — used during automated runs to detect early stop
+// Uses Haiku for speed (~1s instead of ~5s)
+// ============================================================
+
+export async function quickCardCheck(content: string): Promise<boolean> {
+  try {
+    const response = await anthropic.messages.create({
+      model: FAST_MODEL,
+      max_tokens: 50,
+      temperature: 0,
+      system: 'Does this coaching message contain a concrete reframe, ritual, truth, mantra, or actionable insight worth saving? Answer ONLY "yes" or "no".',
+      messages: [{ role: 'user', content }],
+    });
+
+    const block = response.content[0];
+    const text = block.type === 'text' ? block.text.toLowerCase().trim() : 'no';
+    return text.startsWith('yes');
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================
+// Full evaluation — runs in parallel after conversation completes
+// ============================================================
+
 export async function evaluateRun(runId: string): Promise<CardEvaluationSummary> {
   const messages = await getRunMessages(runId);
   const assistantMessages = messages.filter(m => m.role === 'assistant');
 
+  // Evaluate all messages in parallel (not sequentially)
+  const evaluations = await Promise.all(
+    assistantMessages.map(async (msg) => {
+      const evaluation = await evaluateMessage(msg.content);
+      await updateMessageCardEval(msg.id, {
+        card_worthy: evaluation.card_worthy,
+        card_category: evaluation.card_category,
+        card_reason: evaluation.card_reason,
+      });
+      return evaluation;
+    })
+  );
+
   const categories: Record<string, number> = {};
   let cardWorthyCount = 0;
 
-  for (const msg of assistantMessages) {
-    const evaluation = await evaluateMessage(msg.content);
-
-    await updateMessageCardEval(msg.id, {
-      card_worthy: evaluation.card_worthy,
-      card_category: evaluation.card_category,
-      card_reason: evaluation.card_reason,
-    });
-
+  for (const evaluation of evaluations) {
     if (evaluation.card_worthy && evaluation.card_category) {
       cardWorthyCount++;
       categories[evaluation.card_category] = (categories[evaluation.card_category] ?? 0) + 1;

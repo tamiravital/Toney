@@ -33,7 +33,7 @@ export default async function RunDetailPage({
   const status = STATUS_STYLES[run.status] ?? STATUS_STYLES.pending;
   const profileConfig = run.persona.profile_config as Partial<Profile>;
   const cardWorthyCount = run.card_evaluation?.card_worthy_count ?? 0;
-  const isActive = run.status === 'running' && run.mode === 'manual';
+  const isActive = run.status === 'running';
 
   return (
     <div className="max-w-4xl">
@@ -163,6 +163,8 @@ export default async function RunDetailPage({
           runId={runId}
           initialMessages={messages}
           isActive={isActive}
+          runStatus={run.status}
+          mode={run.mode as 'automated' | 'manual'}
         />
       </div>
     </div>

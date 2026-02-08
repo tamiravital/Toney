@@ -1,27 +1,85 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Square, Loader2 } from 'lucide-react';
 import MessageBubble from '@/components/MessageBubble';
 import CardBadge from '@/components/simulator/CardBadge';
-import type { SimulatorMessage } from '@/lib/queries/simulator';
+import type { SimulatorMessage, CardEvaluationSummary } from '@/lib/queries/simulator';
 
 interface SimulatorChatProps {
   runId: string;
   initialMessages: SimulatorMessage[];
   isActive: boolean;
+  runStatus: string;
+  mode: 'automated' | 'manual';
+  onRunComplete?: (evaluation: CardEvaluationSummary | null) => void;
 }
 
-export default function SimulatorChat({ runId, initialMessages, isActive }: SimulatorChatProps) {
+export default function SimulatorChat({
+  runId,
+  initialMessages,
+  isActive,
+  runStatus,
+  mode,
+  onRunComplete,
+}: SimulatorChatProps) {
   const [messages, setMessages] = useState<SimulatorMessage[]>(initialMessages);
+  const [status, setStatus] = useState(runStatus);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [ending, setEnding] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Auto-scroll on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
+
+  // Poll for new messages during automated runs
+  const poll = useCallback(async () => {
+    if (status !== 'running' || mode !== 'automated') return;
+
+    try {
+      const lastTurn = messages.length > 0
+        ? Math.max(...messages.map(m => m.turn_number))
+        : -1;
+
+      const res = await fetch(`/api/simulator/run/${runId}/poll?after=${lastTurn}`);
+      const data = await res.json();
+
+      if (data.messages && data.messages.length > 0) {
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newMsgs = data.messages.filter((m: SimulatorMessage) => !existingIds.has(m.id));
+          return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
+        });
+      }
+
+      if (data.status !== status) {
+        setStatus(data.status);
+        if (data.status === 'completed' || data.status === 'failed') {
+          onRunComplete?.(data.card_evaluation ?? null);
+          return; // Stop polling
+        }
+      }
+
+      // Continue polling
+      pollRef.current = setTimeout(poll, 1500);
+    } catch (err) {
+      console.error('Poll failed:', err);
+      pollRef.current = setTimeout(poll, 3000);
+    }
+  }, [runId, messages, status, mode, onRunComplete]);
+
+  useEffect(() => {
+    if (status === 'running' && mode === 'automated') {
+      pollRef.current = setTimeout(poll, 1500);
+    }
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
+  }, [status, mode, poll]);
 
   const sendMessage = async () => {
     if (!input.trim() || sending) return;
@@ -30,7 +88,6 @@ export default function SimulatorChat({ runId, initialMessages, isActive }: Simu
     setInput('');
     setSending(true);
 
-    // Optimistically add user message
     const tempUserMsg: SimulatorMessage = {
       id: `temp-${Date.now()}`,
       run_id: runId,
@@ -84,8 +141,20 @@ export default function SimulatorChat({ runId, initialMessages, isActive }: Simu
     }
   };
 
+  const isRunning = status === 'running' && mode === 'automated';
+
   return (
     <div className="flex flex-col h-full">
+      {/* Live indicator for automated runs */}
+      {isRunning && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-xs font-medium text-blue-700">
+            Simulation running — messages appear live
+          </span>
+        </div>
+      )}
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pb-4">
         {messages.map((msg) => (
@@ -102,6 +171,20 @@ export default function SimulatorChat({ runId, initialMessages, isActive }: Simu
             )}
           </div>
         ))}
+
+        {/* Typing indicator during automated runs */}
+        {isRunning && (
+          <div className="flex justify-start">
+            <div className="bg-indigo-50 rounded-2xl rounded-bl-md px-4 py-3">
+              <div className="flex gap-1">
+                <div className="h-2 w-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="h-2 w-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="h-2 w-2 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        )}
+
         {sending && (
           <div className="flex justify-start">
             <div className="bg-indigo-50 rounded-2xl rounded-bl-md px-4 py-3">
@@ -112,7 +195,7 @@ export default function SimulatorChat({ runId, initialMessages, isActive }: Simu
       </div>
 
       {/* Input (manual mode only) */}
-      {isActive && (
+      {isActive && mode === 'manual' && (
         <div className="border-t border-gray-200 pt-4 mt-4">
           <div className="flex items-center gap-2">
             <input

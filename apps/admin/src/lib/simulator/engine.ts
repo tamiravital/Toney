@@ -7,6 +7,7 @@ import {
   updateRun,
   type SimulatorPersona,
 } from '@/lib/queries/simulator';
+import { quickCardCheck } from '@/lib/simulator/evaluate';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -57,6 +58,15 @@ export async function runAutomatedConversation(
     const coachResponse = await generateCoachResponse(systemPrompt, conversationHistory);
     conversationHistory.push({ role: 'assistant', content: coachResponse });
     await createMessage(runId, 'assistant', coachResponse, turn * 2 + 1);
+
+    // After at least 3 turns, check if coach delivered a "relief" (card-worthy insight)
+    // If so, stop early — the coaching reached its goal
+    if (turn >= 2) {
+      const isCardWorthy = await quickCardCheck(coachResponse);
+      if (isCardWorthy) {
+        break;
+      }
+    }
   }
 }
 

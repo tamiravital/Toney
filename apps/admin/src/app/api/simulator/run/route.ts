@@ -22,45 +22,33 @@ export async function POST(request: NextRequest) {
       topic_key: topicKey || null,
       mode,
       num_turns: mode === 'automated' ? (numTurns || 8) : null,
-      status: mode === 'automated' ? 'running' : 'running',
+      status: 'running',
     });
 
     if (mode === 'automated') {
-      try {
-        await runAutomatedConversation(
-          run.id,
-          persona,
-          topicKey || null,
-          numTurns || 8
-        );
-
-        // Evaluate card-worthiness
-        const evaluation = await evaluateRun(run.id);
-
-        await updateRun(run.id, {
-          status: 'completed',
-          completed_at: new Date().toISOString(),
+      // Fire-and-forget: return immediately, run in background
+      runAutomatedConversation(
+        run.id,
+        persona,
+        topicKey || null,
+        numTurns || 8
+      )
+        .then(() => evaluateRun(run.id))
+        .then(() =>
+          updateRun(run.id, {
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+        )
+        .catch(async (error) => {
+          await updateRun(run.id, {
+            status: 'failed',
+            error_message: error instanceof Error ? error.message : 'Unknown error',
+          });
         });
-
-        return NextResponse.json({
-          runId: run.id,
-          status: 'completed',
-          evaluation,
-        });
-      } catch (error) {
-        await updateRun(run.id, {
-          status: 'failed',
-          error_message: error instanceof Error ? error.message : 'Unknown error',
-        });
-        return NextResponse.json({
-          runId: run.id,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        }, { status: 500 });
-      }
     }
 
-    // Manual mode — return the run ID for turn-by-turn interaction
+    // Return immediately with run ID — client navigates to live view
     return NextResponse.json({ runId: run.id, status: 'running' });
   } catch (error) {
     console.error('Simulator run error:', error);
