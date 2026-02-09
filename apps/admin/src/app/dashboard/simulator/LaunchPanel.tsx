@@ -3,19 +3,17 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Play, Bot, User, Loader2, Plus, Copy } from 'lucide-react';
-import { ALL_TOPICS, topicDetails } from '@toney/constants';
-import type { SimulatorPersona } from '@/lib/queries/simulator';
+import type { SimProfile } from '@/lib/queries/simulator';
 import type { TensionType } from '@toney/types';
 
 interface LaunchPanelProps {
-  personas: SimulatorPersona[];
+  profiles: SimProfile[];
   users: { id: string; display_name?: string | null; tension_type?: TensionType | null }[];
 }
 
-export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
+export default function LaunchPanel({ profiles, users }: LaunchPanelProps) {
   const router = useRouter();
-  const [personaId, setPersonaId] = useState(personas[0]?.id ?? '');
-  const [topicKey, setTopicKey] = useState('');
+  const [profileId, setProfileId] = useState(profiles[0]?.id ?? '');
   const [mode, setMode] = useState<'automated' | 'manual'>('automated');
   const [numTurns, setNumTurns] = useState(50);
   const [running, setRunning] = useState(false);
@@ -23,7 +21,7 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
   const [cloneUserId, setCloneUserId] = useState('');
 
   const handleRun = async () => {
-    if (!personaId) return;
+    if (!profileId) return;
     setRunning(true);
 
     try {
@@ -31,8 +29,7 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          personaId,
-          topicKey: topicKey || null,
+          simProfileId: profileId,
           mode,
           numTurns: mode === 'automated' ? numTurns : undefined,
         }),
@@ -59,7 +56,7 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
       const res = await fetch('/api/simulator/personas/clone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: cloneUserId, name: `Clone: ${name}` }),
+        body: JSON.stringify({ userId: cloneUserId, name }),
       });
 
       if (res.ok) {
@@ -80,24 +77,24 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
       <div className="grid grid-cols-2 gap-6">
         {/* Left: Config */}
         <div className="space-y-4">
-          {/* Persona */}
+          {/* Profile */}
           <div>
-            <label className={labelClass}>Persona</label>
+            <label className={labelClass}>Profile</label>
             <div className="flex gap-2">
               <select
-                value={personaId}
-                onChange={(e) => setPersonaId(e.target.value)}
+                value={profileId}
+                onChange={(e) => setProfileId(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {personas.length === 0 && <option value="">No personas — seed presets first</option>}
-                {personas.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {profiles.length === 0 && <option value="">No profiles — seed presets first</option>}
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.display_name || p.id.slice(0, 8)}</option>
                 ))}
               </select>
               <a
                 href="/dashboard/simulator/personas"
                 className="p-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
-                title="Manage personas"
+                title="Manage profiles"
               >
                 <Plus className="h-4 w-4" />
               </a>
@@ -124,26 +121,11 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
                 onClick={handleCloneUser}
                 disabled={!cloneUserId || cloning}
                 className="p-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                title="Clone user as persona"
+                title="Clone user as profile"
               >
                 {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
-          </div>
-
-          {/* Topic */}
-          <div>
-            <label className={labelClass}>Topic</label>
-            <select
-              value={topicKey}
-              onChange={(e) => setTopicKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">No topic (general)</option>
-              {ALL_TOPICS.map(key => (
-                <option key={key} value={key}>{topicDetails[key].name}</option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -209,7 +191,7 @@ export default function LaunchPanel({ personas, users }: LaunchPanelProps) {
           {/* Launch Button */}
           <button
             onClick={handleRun}
-            disabled={!personaId || running}
+            disabled={!profileId || running}
             className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {running ? (

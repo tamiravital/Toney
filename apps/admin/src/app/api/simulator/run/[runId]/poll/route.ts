@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRun, getRunMessages } from '@/lib/queries/simulator';
+import { getRun, getSimConversationMessages } from '@/lib/queries/simulator';
 
 export async function GET(
   request: NextRequest,
@@ -14,11 +14,14 @@ export async function GET(
     if (!run) {
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
     }
+    if (!run.conversation_id) {
+      return NextResponse.json({ error: 'Run has no conversation_id' }, { status: 400 });
+    }
 
-    const allMessages = await getRunMessages(runId);
+    const allMessages = await getSimConversationMessages(run.conversation_id, 200);
 
-    // Only return messages newer than what the client already has
-    const newMessages = allMessages.filter(m => m.turn_number > after);
+    // Only return messages newer than what the client already has (by index)
+    const newMessages = allMessages.slice(after + 1);
 
     return NextResponse.json({
       status: run.status,

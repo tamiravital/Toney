@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
-  getRunMessages,
-  updateMessageCardEval,
+  getSimConversationMessages,
   updateRun,
   type CardEvaluationSummary,
 } from '@/lib/queries/simulator';
@@ -59,23 +58,27 @@ export async function quickCardCheck(content: string): Promise<boolean> {
 }
 
 // ============================================================
-// Full evaluation — runs in parallel after conversation completes
+// Full evaluation — runs after conversation completes
+// Reads from sim_messages (by conversationId)
 // ============================================================
 
-export async function evaluateRun(runId: string): Promise<CardEvaluationSummary> {
-  const messages = await getRunMessages(runId);
-  const assistantMessages = messages.filter(m => m.role === 'assistant');
+export async function evaluateRun(
+  runId: string,
+  conversationId?: string | null,
+): Promise<CardEvaluationSummary> {
+  if (!conversationId) {
+    return { total_messages: 0, card_worthy_count: 0, categories: {} };
+  }
 
-  // Evaluate all messages in parallel (not sequentially)
+  const simMessages = await getSimConversationMessages(conversationId, 200);
+  const assistantMsgs = simMessages
+    .filter(m => m.role === 'assistant')
+    .map(m => ({ id: m.id, content: m.content }));
+
+  // Evaluate all messages in parallel
   const evaluations = await Promise.all(
-    assistantMessages.map(async (msg) => {
-      const evaluation = await evaluateMessage(msg.content);
-      await updateMessageCardEval(msg.id, {
-        card_worthy: evaluation.card_worthy,
-        card_category: evaluation.card_category,
-        card_reason: evaluation.card_reason,
-      });
-      return evaluation;
+    assistantMsgs.map(async (msg) => {
+      return evaluateMessage(msg.content);
     })
   );
 
@@ -90,7 +93,7 @@ export async function evaluateRun(runId: string): Promise<CardEvaluationSummary>
   }
 
   const summary: CardEvaluationSummary = {
-    total_messages: assistantMessages.length,
+    total_messages: assistantMsgs.length,
     card_worthy_count: cardWorthyCount,
     categories,
   };

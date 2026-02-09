@@ -1,49 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPersona, createRun } from '@/lib/queries/simulator';
-import { buildSystemPrompt } from '@toney/coaching';
-import type { Profile, BehavioralIntel } from '@toney/types';
+import { getSimProfile, createRun, createSimConversation } from '@/lib/queries/simulator';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { personaId, topicKey, mode, numTurns } = body;
+    const { simProfileId, mode, numTurns } = body;
 
-    if (!personaId || !mode) {
-      return NextResponse.json({ error: 'Missing personaId or mode' }, { status: 400 });
+    if (!simProfileId || !mode) {
+      return NextResponse.json({ error: 'Missing simProfileId or mode' }, { status: 400 });
     }
 
-    const persona = await getPersona(personaId);
-    if (!persona) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
+    // Load the sim profile directly — no persona indirection
+    const profile = await getSimProfile(simProfileId);
+    if (!profile) {
+      return NextResponse.json({ error: 'Sim profile not found' }, { status: 404 });
     }
 
-    // Pre-build the system prompt so the run detail page can show it immediately
-    const profileConfig = persona.profile_config as Profile;
-    const systemPrompt = buildSystemPrompt({
-      profile: {
-        ...profileConfig,
-        id: 'simulator',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        onboarding_completed: true,
-      } as Profile,
-      behavioralIntel: persona.behavioral_intel_config as BehavioralIntel | null,
-      isFirstConversation: true,
-      topicKey: topicKey || null,
-      isFirstTopicConversation: true,
-    });
+    // Create a sim_conversation for this profile
+    const conversation = await createSimConversation(simProfileId);
 
+    // Create the simulator run
     const run = await createRun({
-      persona_id: personaId,
-      topic_key: topicKey || null,
+      sim_profile_id: simProfileId,
       mode,
       num_turns: mode === 'automated' ? (numTurns || 50) : null,
       status: 'running',
-      system_prompt_used: systemPrompt,
+      engine_version: 'v2',
+      conversation_id: conversation.id,
     });
 
-    // No execution here — the client drives the conversation via /tick calls
-    return NextResponse.json({ runId: run.id, status: 'running' });
+    return NextResponse.json({ runId: run.id, conversationId: conversation.id, status: 'running' });
   } catch (error) {
     console.error('Simulator run error:', error);
     return NextResponse.json(

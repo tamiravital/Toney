@@ -3,12 +3,47 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Square, Loader2, Sparkles } from 'lucide-react';
 import MessageBubble from '@/components/MessageBubble';
-import CardBadge from '@/components/simulator/CardBadge';
-import type { SimulatorMessage, CardEvaluationSummary } from '@/lib/queries/simulator';
+import type { CardEvaluationSummary } from '@/lib/queries/simulator';
+
+// ============================================================
+// Observer Signal Types & Colors
+// ============================================================
+
+interface ObserverSignal {
+  signal_type: string;
+  content: string;
+  urgency_flag: boolean;
+}
+
+const SIGNAL_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  deflection: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  breakthrough: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-400' },
+  emotional: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-400' },
+  practice_checkin: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
+  topic_shift: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
+};
+
+function SignalPill({ signal }: { signal: ObserverSignal }) {
+  const colors = SIGNAL_COLORS[signal.signal_type] || SIGNAL_COLORS.topic_shift;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs ${colors.bg} ${colors.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
+      <span className="font-medium">{signal.signal_type.replace(/_/g, ' ')}</span>
+      <span className="opacity-75 truncate max-w-[200px]">&mdash; {signal.content}</span>
+    </span>
+  );
+}
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
 
 interface SimulatorChatProps {
   runId: string;
-  initialMessages: SimulatorMessage[];
+  initialMessages: ChatMessage[];
   isActive: boolean;
   runStatus: string;
   mode: 'automated' | 'manual';
@@ -23,13 +58,15 @@ export default function SimulatorChat({
   mode,
   onRunComplete,
 }: SimulatorChatProps) {
-  const [messages, setMessages] = useState<SimulatorMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [status, setStatus] = useState(runStatus);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [ending, setEnding] = useState(false);
   const [ticking, setTicking] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // Observer signals keyed by assistant message ID
+  const [signalsByMsgId, setSignalsByMsgId] = useState<Record<string, ObserverSignal[]>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef(false);
@@ -73,7 +110,27 @@ export default function SimulatorChat({
         const data = await res.json();
 
         if (data.userMsg && data.assistantMsg) {
-          setMessages(prev => [...prev, data.userMsg, data.assistantMsg]);
+          const userMsg: ChatMessage = {
+            id: data.userMsg.id,
+            role: 'user',
+            content: data.userMsg.content,
+            created_at: data.userMsg.created_at || new Date().toISOString(),
+          };
+          const assistantMsg: ChatMessage = {
+            id: data.assistantMsg.id,
+            role: 'assistant',
+            content: data.assistantMsg.content,
+            created_at: data.assistantMsg.created_at || new Date().toISOString(),
+          };
+          setMessages(prev => [...prev, userMsg, assistantMsg]);
+
+          // Store observer signals for this assistant message
+          if (data.observerSignals?.length) {
+            setSignalsByMsgId(prev => ({
+              ...prev,
+              [assistantMsg.id]: data.observerSignals,
+            }));
+          }
         }
 
         if (data.done) {
@@ -135,15 +192,10 @@ export default function SimulatorChat({
     setInput('');
     setSending(true);
 
-    const tempUserMsg: SimulatorMessage = {
+    const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
-      run_id: runId,
       role: 'user',
       content: userMessage,
-      turn_number: messages.length,
-      card_worthy: false,
-      card_category: null,
-      card_reason: null,
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, tempUserMsg]);
@@ -157,18 +209,21 @@ export default function SimulatorChat({
 
       const data = await res.json();
       if (data.message) {
-        const assistantMsg: SimulatorMessage = {
-          id: `temp-${Date.now()}-a`,
-          run_id: runId,
+        const assistantMsg: ChatMessage = {
+          id: data.message.id || `temp-${Date.now()}-a`,
           role: 'assistant',
           content: data.message.content,
-          turn_number: messages.length + 1,
-          card_worthy: false,
-          card_category: null,
-          card_reason: null,
-          created_at: new Date().toISOString(),
+          created_at: data.message.timestamp || new Date().toISOString(),
         };
         setMessages(prev => [...prev, assistantMsg]);
+
+        // Store observer signals
+        if (data.observerSignals?.length) {
+          setSignalsByMsgId(prev => ({
+            ...prev,
+            [assistantMsg.id]: data.observerSignals,
+          }));
+        }
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -218,9 +273,12 @@ export default function SimulatorChat({
               content={msg.content}
               createdAt={msg.created_at}
             />
-            {msg.card_worthy && msg.card_category && (
-              <div className={`mt-1 ${msg.role === 'assistant' ? 'ml-0 max-w-[75%]' : 'ml-auto max-w-[75%]'}`}>
-                <CardBadge category={msg.card_category} reason={msg.card_reason} />
+            {/* Observer signal pills */}
+            {msg.role === 'assistant' && signalsByMsgId[msg.id]?.length > 0 && (
+              <div className="mt-1.5 ml-0 flex flex-wrap gap-1.5">
+                {signalsByMsgId[msg.id].map((signal, i) => (
+                  <SignalPill key={i} signal={signal} />
+                ))}
               </div>
             )}
           </div>

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRun, getPersona, updateRun } from '@/lib/queries/simulator';
-import { runSingleTurn } from '@/lib/simulator/engine';
-import { evaluateRun } from '@/lib/simulator/evaluate';
+import { getRun, updateRun, getSimConversationMessages } from '@/lib/queries/simulator';
+import { generateUserMessage, buildDefaultUserPrompt } from '@/lib/simulator/engine';
+import { quickCardCheck } from '@/lib/simulator/evaluate';
+import type { Profile } from '@toney/types';
 
-export const maxDuration = 60; // Allow up to 60s for Claude API calls
+export const maxDuration = 120; // Chat route may run Strategist + Coach + Observer
 
 export async function POST(
   request: NextRequest,
@@ -16,58 +17,86 @@ export async function POST(
     if (!run) {
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
     }
-
     if (run.status !== 'running') {
       return NextResponse.json({ error: 'Run is not active', status: run.status }, { status: 400 });
     }
-
-    const persona = await getPersona(run.persona_id);
-    if (!persona) {
-      return NextResponse.json({ error: 'Persona not found' }, { status: 404 });
+    if (!run.conversation_id) {
+      return NextResponse.json({ error: 'Run has no conversation_id (v1 run?)' }, { status: 400 });
     }
 
-    // Use the system prompt stored on the run (built at creation).
-    // This matches the mobile app: the prompt stays consistent for the
-    // entire conversation (isFirstConversation doesn't flip mid-session).
-    if (!run.system_prompt_used) {
-      return NextResponse.json({ error: 'Run has no system prompt' }, { status: 500 });
+    const simProfile = run.simProfile;
+    const profileConfig = simProfile as unknown as Profile;
+    const userPrompt = simProfile.user_prompt || buildDefaultUserPrompt(profileConfig);
+
+    // Load existing messages to build history for User Agent
+    const existingMessages = await getSimConversationMessages(run.conversation_id);
+    const conversationHistory = existingMessages.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+    const turnIndex = Math.floor(existingMessages.length / 2);
+
+    // 1. Generate user message via User Agent
+    const userMessage = await generateUserMessage(userPrompt, conversationHistory);
+
+    // 2. Send to admin chat route (internal call)
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3001');
+
+    const chatResponse = await fetch(`${baseUrl}/api/simulator/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: simProfile.id,
+        message: userMessage,
+        conversationId: run.conversation_id,
+      }),
+    });
+
+    if (!chatResponse.ok) {
+      const errorData = await chatResponse.json().catch(() => ({}));
+      throw new Error(`Chat route failed: ${errorData.error || chatResponse.status}`);
     }
 
-    // Execute exactly one turn
-    const result = await runSingleTurn(
-      runId,
-      persona,
-      run.system_prompt_used,
-      run.topic_key,
-      run.num_turns || 50
-    );
+    const chatData = await chatResponse.json();
 
-    // If done, mark run as completed and evaluate cards
-    if (result.done) {
+    // 3. Determine if we should stop
+    let done = false;
+    let reason: 'card_worthy' | 'max_turns' | undefined;
+
+    if (turnIndex + 1 >= (run.num_turns || 50)) {
+      done = true;
+      reason = 'max_turns';
+    }
+
+    // After 3+ turns, check for card-worthy early stop
+    if (!done && turnIndex >= 2) {
+      const isCardWorthy = await quickCardCheck(chatData.message.content);
+      if (isCardWorthy) {
+        done = true;
+        reason = 'card_worthy';
+      }
+    }
+
+    // If done, mark run as completed
+    if (done) {
       await updateRun(runId, {
         status: 'completed',
         completed_at: new Date().toISOString(),
       });
-
-      // Evaluate cards — runs within this same request
-      try {
-        await evaluateRun(runId);
-      } catch (evalError) {
-        console.error('Card evaluation failed (non-fatal):', evalError);
-      }
     }
 
     return NextResponse.json({
-      userMsg: result.userMsg,
-      assistantMsg: result.assistantMsg,
-      done: result.done,
-      reason: result.reason,
-      status: result.done ? 'completed' : 'running',
+      userMsg: chatData.userMessage,
+      assistantMsg: chatData.message,
+      observerSignals: chatData.observerSignals || [],
+      done,
+      reason,
+      status: done ? 'completed' : 'running',
     });
   } catch (error) {
     console.error('Tick error:', error);
 
-    // Try to mark run as failed
     try {
       await updateRun(runId, {
         status: 'failed',

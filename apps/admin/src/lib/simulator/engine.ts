@@ -1,12 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Profile } from '@toney/types';
-import {
-  createMessage,
-  getRunMessages,
-  type SimulatorPersona,
-  type SimulatorMessage,
-} from '@/lib/queries/simulator';
-import { quickCardCheck } from '@/lib/simulator/evaluate';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -15,117 +8,15 @@ const anthropic = new Anthropic({
 const MODEL = 'claude-sonnet-4-5-20250929';
 
 // ============================================================
-// Single Turn (client-driven, Vercel-safe)
+// User Agent — generates persona messages
 // ============================================================
-
-export interface TickResult {
-  userMsg: SimulatorMessage;
-  assistantMsg: SimulatorMessage;
-  done: boolean;
-  reason?: 'card_worthy' | 'max_turns';
-}
-
-/**
- * Execute exactly one turn of the automated conversation.
- * Called by the client in a loop — each call is a separate serverless invocation.
- * Returns the two new messages + whether the conversation should stop.
- *
- * The system prompt is passed in (built once at run creation and stored on the run).
- * This matches the mobile app where isFirstConversation stays true for the entire
- * first conversation — the prompt doesn't change mid-conversation.
- */
-export async function runSingleTurn(
-  runId: string,
-  persona: SimulatorPersona,
-  systemPrompt: string,
-  topicKey: string | null,
-  numTurns: number
-): Promise<TickResult> {
-  const profileConfig = persona.profile_config as Profile;
-  const userPrompt = persona.user_prompt || buildDefaultUserPrompt(profileConfig);
-
-  // Load existing messages to build history
-  const existingMessages = await getRunMessages(runId);
-  const conversationHistory: { role: 'user' | 'assistant'; content: string }[] =
-    existingMessages.map(m => ({ role: m.role, content: m.content }));
-
-  const turnIndex = Math.floor(existingMessages.length / 2); // 0-based turn number
-  const turnNumber = existingMessages.length;
-
-  // Generate user message
-  const userMessage = await generateUserMessage(userPrompt, conversationHistory, topicKey);
-  conversationHistory.push({ role: 'user', content: userMessage });
-  const userMsg = await createMessage(runId, 'user', userMessage, turnNumber);
-
-  // Generate coach response
-  const coachResponse = await generateCoachResponse(systemPrompt, conversationHistory);
-  conversationHistory.push({ role: 'assistant', content: coachResponse });
-  const assistantMsg = await createMessage(runId, 'assistant', coachResponse, turnNumber + 1);
-
-  // Determine if we should stop
-  let done = false;
-  let reason: 'card_worthy' | 'max_turns' | undefined;
-
-  // Check if max turns reached (next turn would be turnIndex + 1)
-  if (turnIndex + 1 >= numTurns) {
-    done = true;
-    reason = 'max_turns';
-  }
-
-  // After 3+ turns, check for card-worthy early stop
-  if (!done && turnIndex >= 2) {
-    const isCardWorthy = await quickCardCheck(coachResponse);
-    if (isCardWorthy) {
-      done = true;
-      reason = 'card_worthy';
-    }
-  }
-
-  return { userMsg, assistantMsg, done, reason };
-}
-
-// ============================================================
-// Manual Turn
-// ============================================================
-
-/**
- * Manual turn: takes a user message (typed or edited by admin),
- * generates the coach response, and saves both.
- * Uses the stored system prompt from the run (same as automated mode).
- */
-export async function runManualTurn(
-  runId: string,
-  persona: SimulatorPersona,
-  systemPrompt: string,
-  userMessage: string,
-): Promise<string> {
-  // Load existing messages to build history
-  const existingMessages = await getRunMessages(runId);
-  const conversationHistory: { role: 'user' | 'assistant'; content: string }[] =
-    existingMessages.map(m => ({ role: m.role, content: m.content }));
-
-  // Add user message to history
-  conversationHistory.push({ role: 'user', content: userMessage });
-
-  // Generate coach response
-  const coachResponse = await generateCoachResponse(systemPrompt, conversationHistory);
-
-  // Save both messages
-  const turnNumber = existingMessages.length;
-  await createMessage(runId, 'user', userMessage, turnNumber);
-  await createMessage(runId, 'assistant', coachResponse, turnNumber + 1);
-
-  return coachResponse;
-}
-
-// ============================================================
-// Claude API Calls
-// ============================================================
+// This is a "4th agent" — an LLM that pretends to be a real person
+// texting a money coaching app. The coaching logic itself runs
+// through the admin chat route (same pipeline as mobile /api/chat).
 
 export async function generateUserMessage(
   userPrompt: string,
   history: { role: 'user' | 'assistant'; content: string }[],
-  topicKey: string | null
 ): Promise<string> {
   const turnNumber = Math.floor(history.length / 2);
 
@@ -133,9 +24,7 @@ export async function generateUserMessage(
 
   if (history.length === 0) {
     // First message — short, casual opener
-    instruction = topicKey
-      ? `Start the conversation. The topic is "${topicKey.replace(/_/g, ' ')}". Write a SHORT first message (1 sentence max) like someone opening a chat app. Examples of tone: "hey so I have a question about something", "ugh ok so this money thing has been bugging me", "hi.. not sure where to start with this". Be casual, imperfect, human.`
-      : `Start the conversation. Write a SHORT first message (1 sentence max) like someone opening a chat app for the first time. Examples of tone: "hey", "so I signed up for this thing and idk", "hi... not really sure what to say lol". Be casual, imperfect, human.`;
+    instruction = `Start the conversation. Write a SHORT first message (1 sentence max) like someone opening a chat app for the first time. Examples of tone: "hey", "so I signed up for this thing and idk", "hi... not really sure what to say lol". Be casual, imperfect, human.`;
   } else if (turnNumber <= 2) {
     // Early turns — still guarded, short replies
     instruction = `Continue the conversation. You're still warming up — keep it SHORT (1-2 sentences max). You might:
@@ -172,22 +61,6 @@ Vary your length. Not every message needs to be deep. Sometimes just "yeah" is t
     temperature: 1.0, // Higher temp for more natural variance
     system: userPrompt,
     messages,
-  });
-
-  const block = response.content[0];
-  return block.type === 'text' ? block.text : '';
-}
-
-async function generateCoachResponse(
-  systemPrompt: string,
-  history: { role: 'user' | 'assistant'; content: string }[]
-): Promise<string> {
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1500,
-    temperature: 0.7,
-    system: systemPrompt,
-    messages: history,
   });
 
   const block = response.content[0];

@@ -1,5 +1,5 @@
 import { FlaskConical } from 'lucide-react';
-import { getRuns, getPersonas } from '@/lib/queries/simulator';
+import { getRuns, getSimProfiles } from '@/lib/queries/simulator';
 import { getAllUsers } from '@/lib/queries/users';
 import EmptyState from '@/components/EmptyState';
 import RunCard from '@/components/simulator/RunCard';
@@ -8,9 +8,9 @@ import LaunchPanel from './LaunchPanel';
 export const dynamic = 'force-dynamic';
 
 export default async function SimulatorPage() {
-  const [runs, personas, users] = await Promise.all([
+  const [runs, profiles, users] = await Promise.all([
     getRuns(30),
-    getPersonas(),
+    getSimProfiles(),
     getAllUsers(),
   ]);
 
@@ -25,7 +25,7 @@ export default async function SimulatorPage() {
 
       {/* Launch Panel */}
       <LaunchPanel
-        personas={personas}
+        profiles={profiles}
         users={users.map(u => ({ id: u.id, display_name: u.display_name, tension_type: u.tension_type }))}
       />
 

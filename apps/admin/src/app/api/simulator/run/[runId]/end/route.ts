@@ -17,8 +17,8 @@ export async function POST(
       return NextResponse.json({ error: 'Run is not active' }, { status: 400 });
     }
 
-    // Evaluate card-worthiness
-    const evaluation = await evaluateRun(runId);
+    // Evaluate card-worthiness (reads from sim_messages via conversation_id)
+    const evaluation = await evaluateRun(runId, run.conversation_id);
 
     // Mark as completed
     await updateRun(runId, {

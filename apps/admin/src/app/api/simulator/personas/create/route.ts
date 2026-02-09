@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPersona } from '@/lib/queries/simulator';
+import { createSimProfile } from '@/lib/queries/simulator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,15 +10,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing name or profile_config' }, { status: 400 });
     }
 
-    const persona = await createPersona({
-      name,
-      profile_config,
+    // Create sim_profile directly — no persona layer
+    const simProfile = await createSimProfile({
+      display_name: name,
       user_prompt: user_prompt || null,
+      ...profile_config,
     });
 
-    return NextResponse.json({ persona });
+    return NextResponse.json({ simProfile });
   } catch (error) {
-    console.error('Create persona error:', error);
+    console.error('Create profile error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }

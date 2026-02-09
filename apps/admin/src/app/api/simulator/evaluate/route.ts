@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Run not found' }, { status: 404 });
     }
 
-    const evaluation = await evaluateRun(runId);
+    const evaluation = await evaluateRun(runId, run.conversation_id);
 
     return NextResponse.json({ evaluation });
   } catch (error) {

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRun, getRunMessages } from '@/lib/queries/simulator';
+import { getRun, getSimConversationMessages } from '@/lib/queries/simulator';
 import { generateUserMessage, buildDefaultUserPrompt } from '@/lib/simulator/engine';
 import type { Profile } from '@toney/types';
 
 export const maxDuration = 30;
 
 /**
- * Generate a suggested user message based on the persona.
+ * Generate a suggested user message based on the sim profile.
  * Used in manual mode — admin can edit before sending.
  */
 export async function POST(request: NextRequest) {
@@ -25,22 +25,23 @@ export async function POST(request: NextRequest) {
     if (run.status !== 'running') {
       return NextResponse.json({ error: 'Run is not active' }, { status: 400 });
     }
+    if (!run.conversation_id) {
+      return NextResponse.json({ error: 'Run has no conversation_id' }, { status: 400 });
+    }
 
-    const persona = run.persona;
-    const profileConfig = persona.profile_config as Profile;
-    const userPrompt = persona.user_prompt || buildDefaultUserPrompt(profileConfig);
+    const simProfile = run.simProfile;
+    const profileConfig = simProfile as unknown as Profile;
+    const userPrompt = simProfile.user_prompt || buildDefaultUserPrompt(profileConfig);
 
-    // Load existing messages to build conversation history
-    const existingMessages = await getRunMessages(runId);
-    const conversationHistory: { role: 'user' | 'assistant'; content: string }[] =
-      existingMessages.map(m => ({ role: m.role, content: m.content }));
+    // Load existing messages from sim_messages
+    const existingMessages = await getSimConversationMessages(run.conversation_id);
+    const conversationHistory = existingMessages.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
 
     // Generate a suggested user message
-    const suggestion = await generateUserMessage(
-      userPrompt,
-      conversationHistory,
-      run.topic_key,
-    );
+    const suggestion = await generateUserMessage(userPrompt, conversationHistory);
 
     return NextResponse.json({ suggestion });
   } catch (error) {

@@ -81,31 +81,33 @@ toney/
 
 ## Coaching Engine v2 — 3-Agent Architecture
 
-The coaching engine uses three AI agents working in concert. All logic lives in `packages/coaching/`. API routes in `apps/mobile/src/app/api/` are thin orchestration layers (auth + data loading + save results).
+The coaching engine uses three AI agents working in concert. All agent logic lives in `packages/coaching/`. API routes in `apps/mobile/src/app/api/` are thin orchestration layers (auth + data loading + save results).
 
 ### The Three Agents
 
 | Agent | Model | Temp | When it runs | What it does |
 |-------|-------|------|-------------|--------------|
-| **Coach** | Sonnet | 0.7 | Every user message | Reads the Strategist's briefing (not raw data). Responds to the user. Prompt-cached. |
-| **Observer** | Haiku | 0 | Fire-and-forget after each Coach response | Detects deflections, breakthroughs, emotional signals, practice check-ins. Writes signals to `observer_signals` table. |
-| **Strategist** | Sonnet | 0.3 | On session boundaries (>12h gap) + after onboarding | Reads Observer signals + all user data. Produces a "Coach Briefing" — a narrative coaching document the Coach reads instead of raw data dumps. Handles clinical sequencing, journey narrative, Focus card prescription. |
+| **Coach** | Sonnet | 0.7 | Every user message | The main chat endpoint (`/api/chat`). This is the original Sonnet call that was always there — not a new agent. What changed in v2 is what it reads: when a Strategist briefing exists, it reads the briefing instead of raw data dumps. When no briefing exists (first conversation, simulator), it falls back to the legacy prompt path (`buildSystemPromptBlocks`). Prompt-cached. |
+| **Observer** | Haiku | 0 | Fire-and-forget after each Coach response | New in v2. Lightweight per-turn analysis. Detects deflections, breakthroughs, emotional signals, practice check-ins. Writes signals to `observer_signals` table. Replaced the old "every 5th message" Sonnet extraction. |
+| **Strategist** | Sonnet | 0.3 | On session boundaries (>12h gap) + after onboarding | New in v2. Reads Observer signals + all user data. Produces a "Coach Briefing" — a narrative coaching document the Coach reads instead of raw data dumps. Handles clinical sequencing, journey narrative, Focus card prescription. |
+
+**The Coach is the existing chat endpoint, not a separate new system.** The Observer and Strategist are new agents that wrap around it — the Observer watches what the Coach produces, the Strategist prepares what the Coach reads. The Coach itself is the same Sonnet call with the same 10 prompt modules, just with a better input (briefing instead of raw arrays) when one is available.
 
 ### Data Flow (NOT real-time)
 ```
-User message → Coach (reads static briefing) → Response
-                                                  ↓
-                                           Observer (async, fire-and-forget)
-                                                  ↓
-                                           observer_signals table
-                                                  ↓
-                              [next session boundary: >12h gap]
-                                                  ↓
-                                           Strategist runs
-                                                  ↓
-                                           New coaching_briefings row
-                                                  ↓
-                              [next message: Coach reads fresh briefing]
+User message → Coach (/api/chat, reads static briefing) → Response
+                                                              ↓
+                                                       Observer (async, fire-and-forget)
+                                                              ↓
+                                                       observer_signals table
+                                                              ↓
+                                          [next session boundary: >12h gap]
+                                                              ↓
+                                                       Strategist runs
+                                                              ↓
+                                                       New coaching_briefings row
+                                                              ↓
+                                          [next message: Coach reads fresh briefing]
 ```
 
 The Observer and Strategist do NOT feed the Coach in real-time. The Coach reads a static briefing for the entire session. Observer signals accumulate in the DB and are consumed by the Strategist between sessions.

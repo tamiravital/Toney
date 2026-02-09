@@ -1,13 +1,18 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Bot, User, ChevronDown, Sparkles } from 'lucide-react';
+import { ArrowLeft, Bot, User, ChevronDown, Sparkles, Brain, Eye } from 'lucide-react';
 import Badge from '@/components/Badge';
 import SimulatorChat from '@/components/simulator/SimulatorChat';
 import ReEvaluateButton from '@/components/simulator/ReEvaluateButton';
 import StopRunButton from '@/components/simulator/StopRunButton';
-import { getRun, getRunMessages } from '@/lib/queries/simulator';
+import {
+  getRun,
+  getSimConversationMessages,
+  getLatestSimBriefing,
+  getSimObserverSignals,
+} from '@/lib/queries/simulator';
 import { formatDateTime, tensionLabel, toneLabel, depthLabel } from '@/lib/format';
-import type { Profile } from '@toney/types';
+import type { TensionType } from '@toney/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,23 +23,54 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   failed: { bg: 'bg-red-100', text: 'text-red-700' },
 };
 
+const SIGNAL_TYPE_LABELS: Record<string, string> = {
+  deflection: 'Deflections',
+  breakthrough: 'Breakthroughs',
+  emotional: 'Emotional',
+  practice_checkin: 'Practice Check-ins',
+  topic_shift: 'Topic Shifts',
+};
+
 export default async function RunDetailPage({
   params,
 }: {
   params: Promise<{ runId: string }>;
 }) {
   const { runId } = await params;
-  const [run, messages] = await Promise.all([
-    getRun(runId),
-    getRunMessages(runId),
-  ]);
-
+  const run = await getRun(runId);
   if (!run) notFound();
 
+  const simProfile = run.simProfile;
+
+  // Load messages from sim_messages
+  const chatMessages = run.conversation_id
+    ? await getSimConversationMessages(run.conversation_id, 200)
+    : [];
+
+  // Load coaching briefing + observer signals
+  let briefing: { briefing_content: string; hypothesis?: string | null; session_strategy?: string | null } | null = null;
+  let signalCounts: Record<string, number> = {};
+
+  if (simProfile.id) {
+    const [latestBriefing, signals] = await Promise.all([
+      getLatestSimBriefing(simProfile.id),
+      run.conversation_id
+        ? getSimObserverSignals(simProfile.id, run.conversation_id)
+        : Promise.resolve([]),
+    ]);
+
+    briefing = latestBriefing;
+
+    // Count signals by type
+    for (const signal of signals) {
+      signalCounts[signal.signal_type] = (signalCounts[signal.signal_type] || 0) + 1;
+    }
+  }
+
   const status = STATUS_STYLES[run.status] ?? STATUS_STYLES.pending;
-  const profileConfig = run.persona.profile_config as Partial<Profile>;
   const cardWorthyCount = run.card_evaluation?.card_worthy_count ?? 0;
   const isActive = run.status === 'running';
+  const totalSignals = Object.values(signalCounts).reduce((a, b) => a + b, 0);
 
   return (
     <div className="max-w-4xl">
@@ -50,13 +86,14 @@ export default async function RunDetailPage({
 
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">{run.persona.name}</h1>
+            <h1 className="text-xl font-semibold text-gray-900">
+              {simProfile.display_name || simProfile.id.slice(0, 8)}
+            </h1>
             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
               <span className="flex items-center gap-1">
                 {run.mode === 'automated' ? <Bot className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
                 {run.mode}
               </span>
-              {run.topic_key && <span>{run.topic_key.replace(/_/g, ' ')}</span>}
               <span>{formatDateTime(run.created_at)}</span>
             </div>
           </div>
@@ -69,60 +106,96 @@ export default async function RunDetailPage({
               />
             )}
             {isActive && (
-              <StopRunButton runId={runId} hasMessages={messages.length > 0} />
+              <StopRunButton runId={runId} hasMessages={chatMessages.length > 0} />
             )}
             <Badge label={run.status} bg={status.bg} text={status.text} />
           </div>
         </div>
       </div>
 
-      {/* Persona Config (collapsible) */}
+      {/* Profile Config (collapsible) */}
       <details className="mb-4 border border-gray-200 rounded-xl">
         <summary className="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2 hover:bg-gray-50 rounded-xl">
           <ChevronDown className="h-4 w-4" />
-          Persona Configuration
+          Profile Configuration
         </summary>
         <div className="px-4 pb-4 grid grid-cols-3 gap-3 text-sm">
           <div>
             <span className="text-gray-500">Tension:</span>{' '}
-            <span className="font-medium">{tensionLabel(profileConfig.tension_type)}</span>
+            <span className="font-medium">{tensionLabel(simProfile.tension_type as TensionType | null)}</span>
           </div>
           <div>
             <span className="text-gray-500">Tone:</span>{' '}
-            <span className="font-medium">{toneLabel(profileConfig.tone ?? 5)}</span>
+            <span className="font-medium">{toneLabel(simProfile.tone ?? 5)}</span>
           </div>
           <div>
             <span className="text-gray-500">Depth:</span>{' '}
-            <span className="font-medium">{depthLabel(profileConfig.depth)}</span>
+            <span className="font-medium">{depthLabel(simProfile.depth)}</span>
           </div>
-          {profileConfig.learning_styles && (
+          {simProfile.learning_styles?.length > 0 && (
             <div>
               <span className="text-gray-500">Learning:</span>{' '}
-              <span className="font-medium">{profileConfig.learning_styles.join(', ')}</span>
+              <span className="font-medium">{simProfile.learning_styles.join(', ')}</span>
             </div>
           )}
-          {profileConfig.emotional_why && (
+          {simProfile.emotional_why && (
             <div className="col-span-3">
               <span className="text-gray-500">Why:</span>{' '}
-              <span className="font-medium">{profileConfig.emotional_why}</span>
+              <span className="font-medium">{simProfile.emotional_why}</span>
             </div>
           )}
         </div>
       </details>
 
-      {/* System Prompt (collapsible) */}
-      {run.system_prompt_used && (
-        <details className="mb-6 border border-gray-200 rounded-xl">
-          <summary className="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2 hover:bg-gray-50 rounded-xl">
-            <ChevronDown className="h-4 w-4" />
-            System Prompt ({run.system_prompt_used.length.toLocaleString()} chars)
+      {/* Coaching Briefing (collapsible) */}
+      {briefing && (
+        <details className="mb-4 border border-indigo-200 rounded-xl">
+          <summary className="px-4 py-3 text-sm font-medium text-indigo-700 cursor-pointer flex items-center gap-2 hover:bg-indigo-50 rounded-xl">
+            <Brain className="h-4 w-4" />
+            Coaching Briefing
+            {briefing.hypothesis && (
+              <span className="ml-2 text-xs font-normal text-indigo-500 truncate max-w-[300px]">
+                — {briefing.hypothesis}
+              </span>
+            )}
           </summary>
-          <div className="px-4 pb-4">
-            <pre className="text-xs text-gray-600 whitespace-pre-wrap bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-              {run.system_prompt_used}
-            </pre>
+          <div className="px-4 pb-4 space-y-3">
+            {briefing.session_strategy && (
+              <div>
+                <span className="text-xs font-medium text-indigo-600">Session Strategy:</span>
+                <p className="text-sm text-gray-700 mt-1">{briefing.session_strategy}</p>
+              </div>
+            )}
+            <div>
+              <span className="text-xs font-medium text-indigo-600">Full Briefing:</span>
+              <pre className="text-xs text-gray-600 whitespace-pre-wrap bg-indigo-50/50 rounded-lg p-4 mt-1 max-h-96 overflow-y-auto">
+                {briefing.briefing_content}
+              </pre>
+            </div>
           </div>
         </details>
+      )}
+
+      {/* Observer Signals Summary */}
+      {totalSignals > 0 && (
+        <div className="mb-4 border border-purple-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Eye className="h-4 w-4 text-purple-500" />
+            <span className="text-sm font-medium text-purple-800">
+              Observer Signals ({totalSignals})
+            </span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(signalCounts).map(([type, count]) => (
+              <Badge
+                key={type}
+                label={`${SIGNAL_TYPE_LABELS[type] || type}: ${count}`}
+                bg={type === 'breakthrough' ? 'bg-green-100' : type === 'deflection' ? 'bg-amber-100' : type === 'emotional' ? 'bg-purple-100' : 'bg-gray-100'}
+                text={type === 'breakthrough' ? 'text-green-700' : type === 'deflection' ? 'text-amber-700' : type === 'emotional' ? 'text-purple-700' : 'text-gray-600'}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Error message */}
@@ -165,7 +238,7 @@ export default async function RunDetailPage({
       <div className="border border-gray-200 rounded-xl p-6 min-h-[400px]">
         <SimulatorChat
           runId={runId}
-          initialMessages={messages}
+          initialMessages={chatMessages}
           isActive={isActive}
           runStatus={run.status}
           mode={run.mode as 'automated' | 'manual'}
