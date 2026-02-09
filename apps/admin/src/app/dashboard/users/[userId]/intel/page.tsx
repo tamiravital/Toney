@@ -25,10 +25,17 @@ export default async function IntelPage({
 }) {
   const { userId } = await params;
 
-  const [intel, briefing] = await Promise.all([
-    getUserIntel(userId),
-    getLatestBriefing(userId),
-  ]);
+  let intel: Awaited<ReturnType<typeof getUserIntel>> = null;
+  let briefing: Awaited<ReturnType<typeof getLatestBriefing>> = null;
+
+  try {
+    [intel, briefing] = await Promise.all([
+      getUserIntel(userId),
+      getLatestBriefing(userId),
+    ]);
+  } catch (err) {
+    console.error('Intel page data load error:', err);
+  }
 
   const hasAnyIntel = !!(intel || briefing);
 
