@@ -92,33 +92,11 @@ export async function summarizeMessagesByDay(
 
 // ────────────────────────────────────────────
 // Step 2: Run full intel pipeline
+// Each day = one session. Summarize → Strategist → save → next day.
+// Intel accumulates day by day, like the real coaching flow.
 // ────────────────────────────────────────────
 
-export async function runFullIntel(
-  userId: string,
-  onProgress: (msg: string) => void,
-): Promise<StrategistOutput> {
-  // Step 1: Summarize by day
-  const dailySummaries = await summarizeMessagesByDay(userId, onProgress);
-
-  // Format summaries as a single document
-  const summaryDocument = dailySummaries
-    .map(s => `=== ${s.date} (${s.messageCount} messages) ===\n${s.summary}`)
-    .join('\n\n---\n\n');
-
-  onProgress('Loading profile and existing data...');
-  const supabase = createAdminClient();
-
-  // Load profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (!profile) throw new Error('Profile not found');
-
-  // Load existing data (likely empty for imported users)
+async function loadCurrentIntel(supabase: ReturnType<typeof createAdminClient>, userId: string) {
   let behavioralIntel: BehavioralIntel | null = null;
   try {
     const { data } = await supabase
@@ -175,32 +153,71 @@ export async function runFullIntel(
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    previousBriefing = data as CoachingBriefing | null;
+      .limit(1);
+    previousBriefing = (data && data.length > 0) ? data[0] as CoachingBriefing : null;
   } catch { /* none */ }
 
-  // Step 2: Run Strategist with daily summaries as transcript
-  onProgress('Running Strategist analysis...');
-  const result = await runStrategist({
-    profile: profile as Profile,
-    behavioralIntel,
-    coachMemories,
-    wins,
-    rewireCards,
-    previousBriefing,
-    observerSignals: [],
-    sessionTranscript: [{ role: 'user', content: summaryDocument }],
-    isFirstBriefing: !previousBriefing,
-  });
+  return { behavioralIntel, coachMemories, wins, rewireCards, previousBriefing };
+}
 
-  // Step 3: Save everything to production tables
-  onProgress('Saving intel...');
-  await saveProdBriefing(userId, null, result);
-  await applyProdIntelUpdates(userId, result);
-  await applyProdFocusCardPrescription(userId, result);
-  await updateProdJourneyNarrative(userId, result);
+export async function runFullIntel(
+  userId: string,
+  onProgress: (msg: string) => void,
+): Promise<StrategistOutput> {
+  // Step 1: Summarize all days
+  const dailySummaries = await summarizeMessagesByDay(userId, onProgress);
+
+  const supabase = createAdminClient();
+
+  // Load profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (!profile) throw new Error('Profile not found');
+
+  // Step 2: Process each day as a session
+  // Summarize → run Strategist → save → reload fresh intel → next day
+  let lastResult: StrategistOutput | null = null;
+  const totalDays = dailySummaries.length;
+
+  for (let i = 0; i < totalDays; i++) {
+    const daySummary = dailySummaries[i];
+    onProgress(`Running Strategist for session ${i + 1} of ${totalDays} (${daySummary.date})...`);
+
+    // Reload current intel from DB (includes everything saved from previous days)
+    const { behavioralIntel, coachMemories, wins, rewireCards, previousBriefing } =
+      await loadCurrentIntel(supabase, userId);
+
+    // Run Strategist with this day's summary as session transcript
+    const result = await runStrategist({
+      profile: profile as Profile,
+      behavioralIntel,
+      coachMemories,
+      wins,
+      rewireCards,
+      previousBriefing,
+      observerSignals: [],
+      sessionTranscript: [{
+        role: 'user',
+        content: `=== Session on ${daySummary.date} (${daySummary.messageCount} messages) ===\n${daySummary.summary}`,
+      }],
+      isFirstBriefing: !previousBriefing,
+    });
+
+    // Save this session's outputs — next iteration will read the updated data
+    await saveProdBriefing(userId, null, result);
+    await applyProdIntelUpdates(userId, result);
+    await applyProdFocusCardPrescription(userId, result);
+    await updateProdJourneyNarrative(userId, result);
+
+    lastResult = result;
+  }
+
+  if (!lastResult) throw new Error('No sessions processed');
 
   onProgress('Complete!');
-  return result;
+  return lastResult;
 }
