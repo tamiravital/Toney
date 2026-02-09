@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, type LucideIcon } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 export default function CollapsibleSection({
   title,
-  icon: Icon,
+  iconNode,
   children,
   defaultOpen = false,
 }: {
   title: string;
-  icon: LucideIcon;
+  iconNode?: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
@@ -23,7 +23,7 @@ export default function CollapsibleSection({
         className="flex items-center justify-between w-full p-5 text-left"
       >
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-gray-400" />
+          {iconNode}
           <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
         </div>
         <ChevronDown

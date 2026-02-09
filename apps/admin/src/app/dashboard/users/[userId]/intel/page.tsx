@@ -185,7 +185,7 @@ export default async function IntelPage({
       </div>
 
       {/* Full Briefing (collapsed) */}
-      <CollapsibleSection title="Full Coaching Briefing" icon={FileText}>
+      <CollapsibleSection title="Full Coaching Briefing" iconNode={<FileText className="h-4 w-4 text-gray-400" />}>
         {briefing?.briefing_content ? (
           <pre className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed font-sans">
             {briefing.briefing_content}
