@@ -38,18 +38,13 @@ export async function getUserWins(userId: string): Promise<Win[]> {
 
 export async function getLatestBriefing(userId: string): Promise<CoachingBriefing | null> {
   const supabase = createAdminClient();
-  try {
-    const { data } = await supabase
-      .from('coaching_briefings')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    return data as CoachingBriefing | null;
-  } catch {
-    return null;
-  }
+  const { data } = await supabase
+    .from('coaching_briefings')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  return (data && data.length > 0) ? data[0] as CoachingBriefing : null;
 }
 
 export async function getAllUserMessages(userId: string): Promise<{ role: string; content: string; created_at: string }[]> {
