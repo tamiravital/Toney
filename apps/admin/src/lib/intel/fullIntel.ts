@@ -1,10 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runStrategist } from '@toney/coaching';
 import type { Profile, BehavioralIntel, CoachMemory, Win, RewireCard, CoachingBriefing } from '@toney/types';
 import type { StrategistOutput } from '@toney/coaching';
 import {
-  getAllUserMessages,
   saveProdBriefing,
   applyProdIntelUpdates,
   applyProdFocusCardPrescription,
@@ -12,88 +10,7 @@ import {
 } from '@/lib/queries/intel';
 
 // ────────────────────────────────────────────
-// Daily summary prompt
-// ────────────────────────────────────────────
-
-const DAILY_SUMMARY_SYSTEM_PROMPT = `You are a coaching supervisor reviewing a day's worth of conversation between a money coaching AI and a user. Extract coaching-relevant observations.
-
-Output a structured summary covering:
-- THEMES: What money topics came up today
-- EMOTIONAL MOMENTS: When did the user show genuine emotion, vulnerability, or energy?
-- RESISTANCE: Where did the user deflect, minimize, change subject, or push back?
-- BREAKTHROUGHS: Any "aha" moments, new self-awareness, or shifts?
-- COACHING APPROACHES: What the coach tried — what landed, what didn't
-- LIFE DETAILS: Specific facts revealed (people, amounts, situations, events)
-- LANGUAGE: Notable phrases, vocabulary, emotional words the user used
-
-Be specific and use direct quotes where meaningful. Keep each section to 2-4 bullet points.
-If a section has nothing notable, write "None observed."
-Aim for 200-400 words total.`;
-
-// ────────────────────────────────────────────
-// Step 1: Summarize messages by day
-// ────────────────────────────────────────────
-
-interface DaySummary {
-  date: string;
-  messageCount: number;
-  summary: string;
-}
-
-export async function summarizeMessagesByDay(
-  userId: string,
-  onProgress: (msg: string) => void,
-): Promise<DaySummary[]> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  onProgress('Loading conversation history...');
-  const messages = await getAllUserMessages(userId);
-
-  if (messages.length === 0) {
-    throw new Error('No messages found for this user');
-  }
-
-  // Group messages by calendar day
-  const messagesByDay = new Map<string, typeof messages>();
-  for (const msg of messages) {
-    const day = msg.created_at.split('T')[0];
-    if (!messagesByDay.has(day)) messagesByDay.set(day, []);
-    messagesByDay.get(day)!.push(msg);
-  }
-
-  const days = Array.from(messagesByDay.entries()).sort(([a], [b]) => a.localeCompare(b));
-  onProgress(`Found ${messages.length} messages across ${days.length} days`);
-
-  const summaries: DaySummary[] = [];
-
-  for (let i = 0; i < days.length; i++) {
-    const [date, dayMessages] = days[i];
-    onProgress(`Summarizing day ${i + 1} of ${days.length} (${date})...`);
-
-    // Format messages for the prompt
-    const transcript = dayMessages
-      .map(m => `${m.role === 'user' ? 'USER' : 'COACH'}: ${m.content}`)
-      .join('\n\n');
-
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 600,
-      temperature: 0.3,
-      system: DAILY_SUMMARY_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Date: ${date}\n\n${transcript}` }],
-    });
-
-    const summary = response.content[0].type === 'text' ? response.content[0].text : '';
-    summaries.push({ date, messageCount: dayMessages.length, summary });
-  }
-
-  return summaries;
-}
-
-// ────────────────────────────────────────────
-// Step 2: Run full intel pipeline
-// Each day = one session. Summarize → Strategist → save → next day.
-// Intel accumulates day by day, like the real coaching flow.
+// Load current intel state from DB
 // ────────────────────────────────────────────
 
 async function loadCurrentIntel(supabase: ReturnType<typeof createAdminClient>, userId: string) {
@@ -103,8 +20,8 @@ async function loadCurrentIntel(supabase: ReturnType<typeof createAdminClient>, 
       .from('behavioral_intel')
       .select('*')
       .eq('user_id', userId)
-      .single();
-    behavioralIntel = data as BehavioralIntel | null;
+      .limit(1);
+    behavioralIntel = (data && data.length > 0) ? data[0] as BehavioralIntel : null;
   } catch { /* none yet */ }
 
   let coachMemories: CoachMemory[] = [];
@@ -160,16 +77,20 @@ async function loadCurrentIntel(supabase: ReturnType<typeof createAdminClient>, 
   return { behavioralIntel, coachMemories, wins, rewireCards, previousBriefing };
 }
 
+// ────────────────────────────────────────────
+// Run full intel pipeline — session by session
+// Uses real session transcripts (no summarization step).
+// Intel accumulates session by session, like the real coaching flow.
+// ────────────────────────────────────────────
+
 export async function runFullIntel(
   userId: string,
   onProgress: (msg: string) => void,
 ): Promise<StrategistOutput> {
-  // Step 1: Summarize all days
-  const dailySummaries = await summarizeMessagesByDay(userId, onProgress);
-
   const supabase = createAdminClient();
 
   // Load profile
+  onProgress('Loading profile...');
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
@@ -178,20 +99,49 @@ export async function runFullIntel(
 
   if (!profile) throw new Error('Profile not found');
 
-  // Step 2: Process each day as a session
-  // Summarize → run Strategist → save → reload fresh intel → next day
+  // Load all sessions ordered chronologically
+  onProgress('Loading sessions...');
+  const { data: sessions } = await supabase
+    .from('sessions')
+    .select('id, created_at, session_notes')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (!sessions || sessions.length === 0) {
+    throw new Error('No sessions found. Run "Split into Sessions" first.');
+  }
+
+  onProgress(`Found ${sessions.length} sessions. Processing...`);
+
   let lastResult: StrategistOutput | null = null;
-  const totalDays = dailySummaries.length;
 
-  for (let i = 0; i < totalDays; i++) {
-    const daySummary = dailySummaries[i];
-    onProgress(`Running Strategist for session ${i + 1} of ${totalDays} (${daySummary.date})...`);
+  for (let i = 0; i < sessions.length; i++) {
+    const session = sessions[i];
+    const dateStr = session.created_at.split('T')[0];
 
-    // Reload current intel from DB (includes everything saved from previous days)
+    onProgress(`Session ${i + 1} of ${sessions.length} (${dateStr}) — loading messages...`);
+
+    // Load messages for this session
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('role, content')
+      .eq('session_id', session.id)
+      .order('created_at', { ascending: true });
+
+    const sessionMessages = (messages || []) as { role: 'user' | 'assistant'; content: string }[];
+
+    if (sessionMessages.length === 0) {
+      onProgress(`Session ${i + 1} has no messages, skipping...`);
+      continue;
+    }
+
+    onProgress(`Session ${i + 1} of ${sessions.length} (${dateStr}, ${sessionMessages.length} msgs) — running Strategist...`);
+
+    // Reload current intel from DB (includes everything saved from previous sessions)
     const { behavioralIntel, coachMemories, wins, rewireCards, previousBriefing } =
       await loadCurrentIntel(supabase, userId);
 
-    // Run Strategist with this day's summary as session transcript
+    // Run Strategist with real session transcript
     const result = await runStrategist({
       profile: profile as Profile,
       behavioralIntel,
@@ -200,23 +150,21 @@ export async function runFullIntel(
       rewireCards,
       previousBriefing,
       observerSignals: [],
-      sessionTranscript: [{
-        role: 'user',
-        content: `=== Session on ${daySummary.date} (${daySummary.messageCount} messages) ===\n${daySummary.summary}`,
-      }],
+      sessionTranscript: sessionMessages,
       isFirstBriefing: !previousBriefing,
     });
 
     // Save this session's outputs — next iteration will read the updated data
-    await saveProdBriefing(userId, null, result);
+    await saveProdBriefing(userId, session.id, result);
     await applyProdIntelUpdates(userId, result);
     await applyProdFocusCardPrescription(userId, result);
     await updateProdJourneyNarrative(userId, result);
 
     lastResult = result;
+    onProgress(`Session ${i + 1} of ${sessions.length} complete.`);
   }
 
-  if (!lastResult) throw new Error('No sessions processed');
+  if (!lastResult) throw new Error('No sessions with messages found');
 
   onProgress('Complete!');
   return lastResult;
