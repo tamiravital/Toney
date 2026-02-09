@@ -62,8 +62,8 @@ export default async function OverviewPage() {
           iconBg="bg-amber-50"
         />
         <StatCard
-          title="Conversations"
-          value={formatNumber(stats.totalConversations)}
+          title="Sessions"
+          value={formatNumber(stats.totalSessions)}
           icon={MessageSquare}
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
@@ -76,8 +76,8 @@ export default async function OverviewPage() {
           iconBg="bg-purple-50"
         />
         <StatCard
-          title="Avg Msgs/Convo"
-          value={stats.avgMessagesPerConversation}
+          title="Avg Msgs/Session"
+          value={stats.avgMessagesPerSession}
           icon={TrendingUp}
           iconColor="text-teal-600"
           iconBg="bg-teal-50"
@@ -151,9 +151,9 @@ export default async function OverviewPage() {
 
       {/* Recent activity */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">Recent Conversations</h2>
+        <h2 className="text-sm font-semibold text-gray-900 mb-4">Recent Sessions</h2>
         {recent.length === 0 ? (
-          <p className="text-sm text-gray-400">No conversations yet</p>
+          <p className="text-sm text-gray-400">No sessions yet</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

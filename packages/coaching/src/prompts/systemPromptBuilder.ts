@@ -1,5 +1,4 @@
 import { Profile, BehavioralIntel, Win, CoachMemory, TensionType, LearningStyle, DepthLevel, StageOfChange, SystemPromptBlock } from '@toney/types';
-import { topicDetails, TopicKey } from '@toney/constants';
 
 export interface PromptContext {
   profile: Profile;
@@ -7,12 +6,8 @@ export interface PromptContext {
   recentWins?: Win[];
   rewireCardTitles?: string[];
   coachMemories?: CoachMemory[];
-  isFirstConversation?: boolean;
+  isFirstSession?: boolean;
   messageCount?: number;
-  topicKey?: string | null;
-  isFirstTopicConversation?: boolean;
-  /** Other topics user has engaged with: { topicKey, messageCount } */
-  otherTopics?: { topicKey: string; messageCount: number }[];
 }
 
 // ────────────────────────────────────────────
@@ -276,7 +271,7 @@ function buildPersonSection(profile: Profile): string {
 }
 
 // ────────────────────────────────────────────
-// Section 4: The Conversation (accumulated intelligence)
+// Section 4: The Session (accumulated intelligence)
 // ────────────────────────────────────────────
 
 const stageLines: Record<StageOfChange, string> = {
@@ -288,13 +283,13 @@ const stageLines: Record<StageOfChange, string> = {
   relapse: 'relapse — they fell back. Normalize immediately. "You didn\'t lose everything you learned." Find the learning. Small restart.',
 };
 
-function buildConversationSection(ctx: PromptContext): string {
-  const { behavioralIntel, coachMemories, recentWins, rewireCardTitles, isFirstConversation } = ctx;
-  const lines: string[] = ['THE CONVERSATION:'];
+function buildSessionSection(ctx: PromptContext): string {
+  const { behavioralIntel, coachMemories, recentWins, rewireCardTitles, isFirstSession } = ctx;
+  const lines: string[] = ['THE SESSION:'];
 
-  // First conversation
-  if (isFirstConversation) {
-    lines.push('This is their first conversation after onboarding. Make them feel seen — reference their quiz answers naturally, as curiosity not diagnosis. Be interested in what brought them here today.');
+  // First session
+  if (isFirstSession) {
+    lines.push('This is their first session after onboarding. Make them feel seen — reference their quiz answers naturally, as curiosity not diagnosis. Be interested in what brought them here today.');
     return lines.join('\n');
   }
 
@@ -359,41 +354,6 @@ function buildConversationSection(ctx: PromptContext): string {
 }
 
 // ────────────────────────────────────────────
-// Section 3.5: This Topic (scope guidance)
-// ────────────────────────────────────────────
-
-function buildTopicSection(ctx: PromptContext): string | null {
-  if (!ctx.topicKey) return null;
-
-  const topic = topicDetails[ctx.topicKey as TopicKey];
-  if (!topic) return null;
-
-  const lines: string[] = [`THIS TOPIC: ${topic.name}`];
-  lines.push(topic.scope_guidance);
-
-  if (ctx.isFirstTopicConversation) {
-    lines.push("This is their first time exploring this topic. Start with genuine curiosity about what brought them here. Don't assume — ask.");
-  } else {
-    lines.push("They've been here before. Pick up where you left off. Reference what you remember from previous sessions on this topic.");
-  }
-
-  lines.push('If they bring up something that belongs in a different topic, acknowledge it briefly and gently suggest they explore it there: "That sounds like something worth digging into — you could explore that in [topic name]."');
-
-  // Cross-topic awareness
-  if (ctx.otherTopics && ctx.otherTopics.length > 0) {
-    const otherNames = ctx.otherTopics.map(t => {
-      const def = topicDetails[t.topicKey as TopicKey];
-      return def ? `${def.name} (${t.messageCount} messages)` : null;
-    }).filter(Boolean);
-    if (otherNames.length > 0) {
-      lines.push(`Other topics they've explored: ${otherNames.join(', ')}`);
-    }
-  }
-
-  return lines.join('\n');
-}
-
-// ────────────────────────────────────────────
 // Main builder (legacy — returns string)
 // ────────────────────────────────────────────
 
@@ -409,12 +369,8 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   // Section 3: This Person
   sections.push(buildPersonSection(ctx.profile));
 
-  // Section 3.5: This Topic (if topic-based conversation)
-  const topicSection = buildTopicSection(ctx);
-  if (topicSection) sections.push(topicSection);
-
-  // Section 4: The Conversation
-  sections.push(buildConversationSection(ctx));
+  // Section 4: The Session
+  sections.push(buildSessionSection(ctx));
 
   return sections.join('\n\n');
 }
@@ -424,17 +380,15 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 // ────────────────────────────────────────────
 
 /**
- * Combines all v1 section builders (coaching style, person, topic,
- * conversation) into one briefing-shaped text block.
+ * Combines all legacy section builders (coaching style, person,
+ * session) into one briefing-shaped text block.
  * Used as Block 2 in the legacy cache path.
  */
 export function buildLegacyBriefing(ctx: PromptContext): string {
   const sections: string[] = [];
   sections.push(buildCoachingStyle(ctx.profile));
   sections.push(buildPersonSection(ctx.profile));
-  const topicSection = buildTopicSection(ctx);
-  if (topicSection) sections.push(topicSection);
-  sections.push(buildConversationSection(ctx));
+  sections.push(buildSessionSection(ctx));
   return sections.join('\n\n');
 }
 

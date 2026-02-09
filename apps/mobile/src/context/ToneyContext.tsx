@@ -105,7 +105,7 @@ interface ToneyContextValue {
   setTempLifeContext: (ctx: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string } | ((prev: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string }) => { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string })) => void;
 
   // Chat — session-based (v2)
-  currentConversationId: string | null;
+  currentSessionId: string | null;
   messages: Message[];
   setMessages: (msgs: Message[] | ((prev: Message[]) => Message[])) => void;
   chatInput: string;
@@ -165,7 +165,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [tempLifeContext, setTempLifeContext] = useState({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
 
   // Chat — session-based (v2, no topics)
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -279,20 +279,20 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const { data: recentConv } = await supabase
-              .from('conversations')
+            const { data: recentSession } = await supabase
+              .from('sessions')
               .select('id')
               .eq('user_id', user.id)
               .order('created_at', { ascending: false })
               .limit(1)
               .single();
 
-            if (recentConv) {
-              setCurrentConversationId(recentConv.id);
+            if (recentSession) {
+              setCurrentSessionId(recentSession.id);
             }
           }
         } catch {
-          // Non-critical — conversation will be created on first message
+          // Non-critical — session will be created on first message
         }
       }
 
@@ -424,10 +424,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
   }, [showSettings, appPhase, activeTab]);
 
-  // ── Load messages when currentConversationId changes ──
+  // ── Load messages when currentSessionId changes ──
   useEffect(() => {
     if (appPhase !== 'main') return;
-    if (!currentConversationId) {
+    if (!currentSessionId) {
       setMessages([]);
       return;
     }
@@ -440,7 +440,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         const { data: dbMessages } = await supabase
           .from('messages')
           .select('id, role, content, created_at')
-          .eq('conversation_id', currentConversationId)
+          .eq('session_id', currentSessionId)
           .order('created_at', { ascending: false })
           .limit(50);
 
@@ -464,7 +464,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     };
 
     loadMessages();
-  }, [currentConversationId, appPhase]);
+  }, [currentSessionId, appPhase]);
 
   // ── Handlers ──
 
@@ -504,30 +504,30 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     if (isSupabaseConfigured()) {
       try {
-        let convId = currentConversationId;
-        if (!convId) {
+        let sessId = currentSessionId;
+        if (!sessId) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const { data: conv } = await supabase
-              .from('conversations')
+            const { data: sess } = await supabase
+              .from('sessions')
               .insert({ user_id: user.id })
               .select('id')
               .single();
-            if (conv) {
-              convId = conv.id;
-              setCurrentConversationId(conv.id);
+            if (sess) {
+              sessId = sess.id;
+              setCurrentSessionId(sess.id);
             }
           }
         }
 
-        if (convId) {
+        if (sessId) {
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               message: userMsg.content,
-              conversationId: convId,
+              sessionId: sessId,
             }),
           });
           const data = await res.json();
@@ -561,7 +561,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       saved: false,
     }]);
     setIsTyping(false);
-  }, [chatInput, currentConversationId]);
+  }, [chatInput, currentSessionId]);
 
   const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
     setMessages(prev =>
@@ -735,7 +735,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStyleProfile({ ...defaultStyle });
     setTempStyle({ ...defaultStyle });
     setTempLifeContext({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
-    setCurrentConversationId(null);
+    setCurrentSessionId(null);
   }, []);
 
   const retakeQuiz = useCallback(() => {
@@ -778,7 +778,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setTempStyle,
         tempLifeContext,
         setTempLifeContext,
-        currentConversationId,
+        currentSessionId,
         messages,
         setMessages,
         chatInput,

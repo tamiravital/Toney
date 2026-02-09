@@ -7,7 +7,7 @@ import ReEvaluateButton from '@/components/simulator/ReEvaluateButton';
 import StopRunButton from '@/components/simulator/StopRunButton';
 import {
   getRun,
-  getSimConversationMessages,
+  getSimSessionMessages,
   getLatestSimBriefing,
   getSimObserverSignals,
 } from '@/lib/queries/simulator';
@@ -43,8 +43,8 @@ export default async function RunDetailPage({
   const simProfile = run.simProfile;
 
   // Load messages from sim_messages
-  const chatMessages = run.conversation_id
-    ? await getSimConversationMessages(run.conversation_id, 200)
+  const chatMessages = run.session_id
+    ? await getSimSessionMessages(run.session_id, 200)
     : [];
 
   // Load coaching briefing + observer signals
@@ -54,8 +54,8 @@ export default async function RunDetailPage({
   if (simProfile.id) {
     const [latestBriefing, signals] = await Promise.all([
       getLatestSimBriefing(simProfile.id),
-      run.conversation_id
-        ? getSimObserverSignals(simProfile.id, run.conversation_id)
+      run.session_id
+        ? getSimObserverSignals(simProfile.id, run.session_id)
         : Promise.resolve([]),
     ]);
 

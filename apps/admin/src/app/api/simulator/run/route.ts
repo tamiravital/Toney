@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSimProfile, createRun, createSimConversation } from '@/lib/queries/simulator';
+import { getSimProfile, createRun, createSimSession } from '@/lib/queries/simulator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sim profile not found' }, { status: 404 });
     }
 
-    // Create a sim_conversation for this profile
-    const conversation = await createSimConversation(simProfileId);
+    // Create a sim_session for this profile
+    const session = await createSimSession(simProfileId);
 
     // Create the simulator run
     const run = await createRun({
@@ -25,11 +25,10 @@ export async function POST(request: NextRequest) {
       mode,
       num_turns: mode === 'automated' ? (numTurns || 50) : null,
       status: 'running',
-      engine_version: 'v2',
-      conversation_id: conversation.id,
+      session_id: session.id,
     });
 
-    return NextResponse.json({ runId: run.id, conversationId: conversation.id, status: 'running' });
+    return NextResponse.json({ runId: run.id, sessionId: session.id, status: 'running' });
   } catch (error) {
     console.error('Simulator run error:', error);
     return NextResponse.json(

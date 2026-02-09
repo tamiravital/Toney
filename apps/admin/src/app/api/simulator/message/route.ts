@@ -20,12 +20,12 @@ export async function POST(request: NextRequest) {
     if (run.status !== 'running') {
       return NextResponse.json({ error: 'Run is not active' }, { status: 400 });
     }
-    if (!run.conversation_id || !run.sim_profile_id) {
-      return NextResponse.json({ error: 'Run missing conversation_id or sim_profile_id' }, { status: 400 });
+    if (!run.session_id || !run.sim_profile_id) {
+      return NextResponse.json({ error: 'Run missing session_id or sim_profile_id' }, { status: 400 });
     }
 
     // Process chat directly (no HTTP self-call)
-    const chatData = await processSimChat(run.sim_profile_id, userMessage, run.conversation_id);
+    const chatData = await processSimChat(run.sim_profile_id, userMessage, run.session_id);
 
     return NextResponse.json({
       message: chatData.message,

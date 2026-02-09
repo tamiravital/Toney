@@ -46,7 +46,7 @@ export default async function UsersPage({
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">User</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Tension</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Tone</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Convos</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Sessions</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Messages</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Joined</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Last Active</th>
@@ -98,7 +98,7 @@ export default async function UsersPage({
                       {toneLabel(user.tone)}
                     </td>
                     <td className="py-3 px-4 text-gray-600">
-                      {user.conversation_count}
+                      {user.session_count}
                     </td>
                     <td className="py-3 px-4 text-gray-600">
                       {user.total_messages}

@@ -20,10 +20,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { message } = body;
-    let { conversationId } = body;
+    let { sessionId } = body;
 
-    if (!message || !conversationId) {
-      return NextResponse.json({ error: 'Missing message or conversationId' }, { status: 400 });
+    if (!message || !sessionId) {
+      return NextResponse.json({ error: 'Missing message or sessionId' }, { status: 400 });
     }
 
     // Load profile
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     // If new session and we have a briefing, trigger Strategist for session boundary
     if (isNewSession && briefing) {
       try {
-        await triggerStrategist(user.id, conversationId, 'session_start');
+        await triggerStrategist(user.id, sessionId, 'session_start');
         // Reload briefing after Strategist runs
         const { data: freshBriefing } = await supabase
           .from('coaching_briefings')
@@ -89,12 +89,12 @@ export async function POST(request: NextRequest) {
 
     // If first-ever message and no briefing, trigger initial briefing
     if (!briefing) {
-      const { count: conversationCount } = await supabase
-        .from('conversations')
+      const { count: sessionCount } = await supabase
+        .from('sessions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
-      if ((conversationCount || 0) <= 1) {
+      if ((sessionCount || 0) <= 1) {
         try {
           await triggerStrategist(user.id, null, 'onboarding');
           // Reload briefing
@@ -162,12 +162,12 @@ export async function POST(request: NextRequest) {
         coachMemories = (data || []) as CoachMemory[];
       } catch { /* no memories */ }
 
-      const { count: conversationCount } = await supabase
-        .from('conversations')
+      const { count: sessionCount } = await supabase
+        .from('sessions')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
-      const isFirstConversation = (conversationCount || 0) <= 1;
+      const isFirstSession = (sessionCount || 0) <= 1;
 
       systemPromptBlocks = buildSystemPromptBlocks({
         profile: profile as Profile,
@@ -180,19 +180,16 @@ export async function POST(request: NextRequest) {
         })) as Win[],
         rewireCardTitles: (rewireCards || []).map(c => c.title),
         coachMemories,
-        isFirstConversation,
+        isFirstSession,
         messageCount: 0,
-        topicKey: null,
-        isFirstTopicConversation: false,
-        otherTopics: [],
       });
     }
 
-    // Load conversation history (last 50 messages)
+    // Load session history (last 50 messages)
     const { data: historyRows } = await supabase
       .from('messages')
       .select('role, content')
-      .eq('conversation_id', conversationId)
+      .eq('session_id', sessionId)
       .order('created_at', { ascending: true })
       .limit(50);
 
@@ -200,7 +197,7 @@ export async function POST(request: NextRequest) {
     await supabase
       .from('messages')
       .insert({
-        conversation_id: conversationId,
+        session_id: sessionId,
         user_id: user.id,
         role: 'user',
         content: message,
@@ -215,8 +212,7 @@ export async function POST(request: NextRequest) {
     // Add current message
     rawHistory.push({ role: 'user', content: message });
 
-    // Apply cache_control to the second-to-last message for incremental conversation caching
-    // This ensures conversation history up to that point is cached across turns
+    // Apply cache_control to the second-to-last message for incremental caching
     const messageHistory = rawHistory.map((m, i) => {
       if (i === rawHistory.length - 2 && rawHistory.length >= 2) {
         return {
@@ -246,7 +242,7 @@ export async function POST(request: NextRequest) {
       const { data } = await supabase
         .from('messages')
         .insert({
-          conversation_id: conversationId,
+          session_id: sessionId,
           user_id: user.id,
           role: 'assistant',
           content: assistantContent,
@@ -256,22 +252,22 @@ export async function POST(request: NextRequest) {
       savedMessage = data;
     } catch { /* message save failed — non-critical */ }
 
-    // Update conversation message count (non-critical)
+    // Update session message count (non-critical)
     try {
-      const { data: conv } = await supabase
-        .from('conversations')
+      const { data: sess } = await supabase
+        .from('sessions')
         .select('message_count')
-        .eq('id', conversationId)
+        .eq('id', sessionId)
         .single();
 
       await supabase
-        .from('conversations')
-        .update({ message_count: (conv?.message_count || 0) + 2 })
-        .eq('id', conversationId);
+        .from('sessions')
+        .update({ message_count: (sess?.message_count || 0) + 2 })
+        .eq('id', sessionId);
     } catch { /* non-critical */ }
 
-    // Trigger Observer on every turn (fire-and-forget, replaces every-5th extraction)
-    triggerObserver(conversationId, user.id).catch(() => {
+    // Trigger Observer on every turn (fire-and-forget)
+    triggerObserver(sessionId, user.id).catch(() => {
       // Silent fail — Observer is non-critical
     });
 
@@ -306,7 +302,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function triggerObserver(conversationId: string, userId: string) {
+async function triggerObserver(sessionId: string, userId: string) {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000';
@@ -314,7 +310,7 @@ async function triggerObserver(conversationId: string, userId: string) {
   await fetch(`${baseUrl}/api/observer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversationId, userId }),
+    body: JSON.stringify({ sessionId, userId }),
   });
 }
 

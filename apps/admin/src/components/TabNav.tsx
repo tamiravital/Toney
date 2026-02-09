@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, MessageSquare, Brain, BarChart3 } from 'lucide-react';
+import { User, MessageSquare, Brain, BarChart3, Layers, Trophy } from 'lucide-react';
 
 interface TabNavProps {
   userId: string;
@@ -10,8 +10,10 @@ interface TabNavProps {
 
 const tabs = [
   { segment: 'profile', label: 'Profile', icon: User },
-  { segment: 'conversations', label: 'Conversations', icon: MessageSquare },
+  { segment: 'sessions', label: 'Sessions', icon: MessageSquare },
   { segment: 'intel', label: 'Intel', icon: Brain },
+  { segment: 'rewire-cards', label: 'Rewire Cards', icon: Layers },
+  { segment: 'wins', label: 'Wins', icon: Trophy },
   { segment: 'metrics', label: 'Metrics', icon: BarChart3 },
 ];
 

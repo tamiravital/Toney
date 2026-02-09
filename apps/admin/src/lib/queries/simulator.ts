@@ -28,17 +28,14 @@ export interface SimProfile {
 
 export interface SimulatorRun {
   id: string;
-  persona_id: string;
   sim_profile_id: string | null;
-  topic_key: string | null;
   mode: 'automated' | 'manual';
   num_turns: number | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   system_prompt_used: string | null;
   card_evaluation: CardEvaluationSummary | null;
   error_message: string | null;
-  engine_version: 'v1' | 'v2';
-  conversation_id: string | null;
+  session_id: string | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -71,23 +68,19 @@ export async function deleteSimProfile(id: string): Promise<void> {
   const supabase = createAdminClient();
 
   // Delete all related sim_* data first (no FK cascades in DB)
-  // Get conversation IDs for this profile to delete messages and runs
-  const { data: convos } = await supabase
-    .from('sim_conversations')
+  const { data: sessions } = await supabase
+    .from('sim_sessions')
     .select('id')
     .eq('user_id', id);
-  const convoIds = (convos ?? []).map(c => c.id);
+  const sessionIds = (sessions ?? []).map(s => s.id);
 
-  if (convoIds.length > 0) {
-    await supabase.from('sim_messages').delete().in('conversation_id', convoIds);
-    await supabase.from('sim_runs').delete().in('conversation_id', convoIds);
+  if (sessionIds.length > 0) {
+    await supabase.from('sim_messages').delete().in('session_id', sessionIds);
+    await supabase.from('sim_runs').delete().in('session_id', sessionIds);
   }
 
-  // Delete remaining runs that may not have a conversation_id
   await supabase.from('sim_runs').delete().eq('sim_profile_id', id);
-
-  // Delete all user-scoped sim_* data
-  await supabase.from('sim_conversations').delete().eq('user_id', id);
+  await supabase.from('sim_sessions').delete().eq('user_id', id);
   await supabase.from('sim_observer_signals').delete().eq('user_id', id);
   await supabase.from('sim_coaching_briefings').delete().eq('user_id', id);
   await supabase.from('sim_behavioral_intel').delete().eq('user_id', id);
@@ -95,11 +88,7 @@ export async function deleteSimProfile(id: string): Promise<void> {
   await supabase.from('sim_rewire_cards').delete().eq('user_id', id);
   await supabase.from('sim_wins').delete().eq('user_id', id);
 
-  // Finally delete the profile itself
-  const { error } = await supabase
-    .from('sim_profiles')
-    .delete()
-    .eq('id', id);
+  const { error } = await supabase.from('sim_profiles').delete().eq('id', id);
   if (error) throw new Error(`Failed to delete sim profile: ${error.message}`);
 }
 
@@ -118,7 +107,6 @@ export async function getRuns(limit = 20): Promise<SimulatorRunWithProfile[]> {
 
   if (!runs || runs.length === 0) return [];
 
-  // Get profile names from sim_profiles
   const profileIds = [...new Set(runs.map(r => r.sim_profile_id).filter(Boolean))];
   const profileMap = new Map<string, string>();
   if (profileIds.length > 0) {
@@ -131,22 +119,23 @@ export async function getRuns(limit = 20): Promise<SimulatorRunWithProfile[]> {
     }
   }
 
-  // Get message counts per run
-  const runIds = runs.map(r => r.id);
-  const { data: messages } = await supabase
-    .from('sim_run_messages')
-    .select('run_id')
-    .in('run_id', runIds);
-
+  // Get message counts via session_id
+  const sessionIds = [...new Set(runs.map(r => r.session_id).filter(Boolean))];
   const msgCounts = new Map<string, number>();
-  for (const m of messages ?? []) {
-    msgCounts.set(m.run_id, (msgCounts.get(m.run_id) ?? 0) + 1);
+  if (sessionIds.length > 0) {
+    const { data: messages } = await supabase
+      .from('sim_messages')
+      .select('session_id')
+      .in('session_id', sessionIds);
+    for (const m of messages ?? []) {
+      msgCounts.set(m.session_id, (msgCounts.get(m.session_id) ?? 0) + 1);
+    }
   }
 
   return runs.map(r => ({
     ...r,
     profile_name: (r.sim_profile_id ? profileMap.get(r.sim_profile_id) : null) ?? 'Unknown',
-    message_count: msgCounts.get(r.id) ?? 0,
+    message_count: (r.session_id ? msgCounts.get(r.session_id) : null) ?? 0,
   }));
 }
 
@@ -161,7 +150,6 @@ export async function getRun(id: string): Promise<(SimulatorRun & { simProfile: 
 
   if (!run) return null;
 
-  // Load sim_profile directly (sim_profile_id on the run, or fall back to persona's sim_profile_id)
   const simProfileId = run.sim_profile_id;
   if (!simProfileId) return null;
 
@@ -178,26 +166,22 @@ export async function getRun(id: string): Promise<(SimulatorRun & { simProfile: 
 
 export async function createRun(run: {
   sim_profile_id: string;
-  topic_key?: string | null;
   mode: 'automated' | 'manual';
   num_turns: number | null;
   status?: string;
   system_prompt_used?: string | null;
-  engine_version?: string;
-  conversation_id?: string | null;
+  session_id?: string | null;
 }): Promise<SimulatorRun> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('sim_runs')
     .insert({
       sim_profile_id: run.sim_profile_id,
-      topic_key: run.topic_key ?? null,
       mode: run.mode,
       num_turns: run.num_turns,
       status: run.status ?? 'pending',
       system_prompt_used: run.system_prompt_used ?? null,
-      engine_version: run.engine_version ?? 'v1',
-      conversation_id: run.conversation_id ?? null,
+      session_id: run.session_id ?? null,
     })
     .select()
     .single();
@@ -216,15 +200,12 @@ export async function updateRun(
   }>
 ): Promise<void> {
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from('sim_runs')
-    .update(updates)
-    .eq('id', id);
+  const { error } = await supabase.from('sim_runs').update(updates).eq('id', id);
   if (error) throw new Error(`Failed to update run: ${error.message}`);
 }
 
 // ============================================================
-// Sim Profile Create / Get (isolated from production)
+// Sim Profile Create / Get
 // ============================================================
 
 export async function createSimProfile(config: Partial<Profile> & {
@@ -266,53 +247,49 @@ export async function getSimProfile(simProfileId: string): Promise<Profile> {
     .eq('id', simProfileId)
     .single();
   if (error) throw new Error(`Failed to load sim profile: ${error.message}`);
-  // Cast to Profile shape — sim_profiles mirrors the production schema
-  return {
-    ...data,
-    onboarding_completed: data.onboarding_completed ?? true,
-  } as Profile;
+  return { ...data, onboarding_completed: data.onboarding_completed ?? true } as Profile;
 }
 
 // ============================================================
-// Sim Conversation Queries
+// Sim Session Queries
 // ============================================================
 
-export async function createSimConversation(userId: string): Promise<{ id: string }> {
+export async function createSimSession(userId: string): Promise<{ id: string }> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
-    .from('sim_conversations')
+    .from('sim_sessions')
     .insert({ user_id: userId })
     .select('id')
     .single();
-  if (error) throw new Error(`Failed to create sim conversation: ${error.message}`);
+  if (error) throw new Error(`Failed to create sim session: ${error.message}`);
   return data;
 }
 
-export async function countSimConversations(userId: string): Promise<number> {
+export async function countSimSessions(userId: string): Promise<number> {
   const supabase = createAdminClient();
   const { count } = await supabase
-    .from('sim_conversations')
+    .from('sim_sessions')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId);
   return count || 0;
 }
 
-export async function getSimConversationMessages(
-  conversationId: string,
+export async function getSimSessionMessages(
+  sessionId: string,
   limit = 50
 ): Promise<{ id: string; role: 'user' | 'assistant'; content: string; created_at: string }[]> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from('sim_messages')
     .select('id, role, content, created_at')
-    .eq('conversation_id', conversationId)
+    .eq('session_id', sessionId)
     .order('created_at', { ascending: true })
     .limit(limit);
   return (data ?? []) as { id: string; role: 'user' | 'assistant'; content: string; created_at: string }[];
 }
 
 export async function saveSimMessage(
-  conversationId: string,
+  sessionId: string,
   userId: string,
   role: 'user' | 'assistant',
   content: string
@@ -320,25 +297,25 @@ export async function saveSimMessage(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('sim_messages')
-    .insert({ conversation_id: conversationId, user_id: userId, role, content })
+    .insert({ session_id: sessionId, user_id: userId, role, content })
     .select('id, role, content, created_at')
     .single();
   if (error) throw new Error(`Failed to save sim message: ${error.message}`);
   return data;
 }
 
-export async function updateSimConversationMessageCount(conversationId: string, increment: number): Promise<void> {
+export async function updateSimSessionMessageCount(sessionId: string, increment: number): Promise<void> {
   const supabase = createAdminClient();
   try {
-    const { data: conv } = await supabase
-      .from('sim_conversations')
+    const { data: sess } = await supabase
+      .from('sim_sessions')
       .select('message_count')
-      .eq('id', conversationId)
+      .eq('id', sessionId)
       .single();
     await supabase
-      .from('sim_conversations')
-      .update({ message_count: (conv?.message_count || 0) + increment })
-      .eq('id', conversationId);
+      .from('sim_sessions')
+      .update({ message_count: (sess?.message_count || 0) + increment })
+      .eq('id', sessionId);
   } catch { /* non-critical */ }
 }
 
@@ -363,36 +340,19 @@ export async function getLastSimMessageTime(userId: string): Promise<Date | null
 export async function getSimBehavioralIntel(userId: string): Promise<BehavioralIntel | null> {
   const supabase = createAdminClient();
   try {
-    const { data } = await supabase
-      .from('sim_behavioral_intel')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    const { data } = await supabase.from('sim_behavioral_intel').select('*').eq('user_id', userId).single();
     return data as BehavioralIntel | null;
   } catch { return null; }
 }
 
-export async function upsertSimBehavioralIntel(
-  userId: string,
-  updates: Record<string, unknown>
-): Promise<void> {
+export async function upsertSimBehavioralIntel(userId: string, updates: Record<string, unknown>): Promise<void> {
   const supabase = createAdminClient();
   try {
-    const { data: existing } = await supabase
-      .from('sim_behavioral_intel')
-      .select('id')
-      .eq('user_id', userId)
-      .single();
-
+    const { data: existing } = await supabase.from('sim_behavioral_intel').select('id').eq('user_id', userId).single();
     if (existing) {
-      await supabase
-        .from('sim_behavioral_intel')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
+      await supabase.from('sim_behavioral_intel').update({ ...updates, updated_at: new Date().toISOString() }).eq('user_id', userId);
     } else {
-      await supabase
-        .from('sim_behavioral_intel')
-        .insert({ user_id: userId, ...updates });
+      await supabase.from('sim_behavioral_intel').insert({ user_id: userId, ...updates });
     }
   } catch { /* non-critical */ }
 }
@@ -425,49 +385,31 @@ export async function getSimBriefings(userId: string): Promise<CoachingBriefing[
   return (data ?? []) as CoachingBriefing[];
 }
 
-export async function saveSimBriefing(
-  userId: string,
-  sessionId: string | null,
-  result: StrategistOutput
-): Promise<void> {
+export async function saveSimBriefing(userId: string, sessionId: string | null, result: StrategistOutput): Promise<void> {
   const supabase = createAdminClient();
-
-  // Get current version number
   let version = 1;
   try {
-    const { data: latest } = await supabase
-      .from('sim_coaching_briefings')
-      .select('version')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data: latest } = await supabase.from('sim_coaching_briefings').select('version').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single();
     if (latest) version = (latest.version || 0) + 1;
   } catch { /* first briefing */ }
 
-  await supabase
-    .from('sim_coaching_briefings')
-    .insert({
-      user_id: userId,
-      session_id: sessionId,
-      briefing_content: result.briefing_content,
-      hypothesis: result.hypothesis,
-      session_strategy: result.session_strategy,
-      journey_narrative: result.journey_narrative,
-      growth_edges: result.growth_edges,
-      version,
-    });
+  await supabase.from('sim_coaching_briefings').insert({
+    user_id: userId,
+    session_id: sessionId,
+    briefing_content: result.briefing_content,
+    hypothesis: result.hypothesis,
+    session_strategy: result.session_strategy,
+    journey_narrative: result.journey_narrative,
+    growth_edges: result.growth_edges,
+    version,
+  });
 }
 
 // ============================================================
 // Sim Observer Signal Queries
 // ============================================================
 
-export async function saveSimObserverSignals(
-  userId: string,
-  sessionId: string | null,
-  signals: ObserverOutputSignal[]
-): Promise<void> {
+export async function saveSimObserverSignals(userId: string, sessionId: string | null, signals: ObserverOutputSignal[]): Promise<void> {
   if (signals.length === 0) return;
   const supabase = createAdminClient();
   const rows = signals.map(s => ({
@@ -480,54 +422,30 @@ export async function saveSimObserverSignals(
   await supabase.from('sim_observer_signals').insert(rows);
 }
 
-export async function getSimObserverSignals(
-  userId: string,
-  sessionId?: string
-): Promise<ObserverSignal[]> {
+export async function getSimObserverSignals(userId: string, sessionId?: string): Promise<ObserverSignal[]> {
   const supabase = createAdminClient();
-  let query = supabase
-    .from('sim_observer_signals')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true });
-  if (sessionId) {
-    query = query.eq('session_id', sessionId);
-  }
+  let query = supabase.from('sim_observer_signals').select('*').eq('user_id', userId).order('created_at', { ascending: true });
+  if (sessionId) query = query.eq('session_id', sessionId);
   const { data } = await query;
   return (data ?? []) as ObserverSignal[];
 }
 
 // ============================================================
-// Sim Coach Memories Queries
+// Sim Coach Memories / Rewire Cards / Wins / Focus Card
 // ============================================================
 
 export async function getSimCoachMemories(userId: string, limit = 30): Promise<CoachMemory[]> {
   const supabase = createAdminClient();
   try {
-    const { data } = await supabase
-      .from('sim_coach_memories')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('active', true)
-      .order('importance', { ascending: true })
-      .limit(limit);
+    const { data } = await supabase.from('sim_coach_memories').select('*').eq('user_id', userId).eq('active', true).order('importance', { ascending: true }).limit(limit);
     return (data || []) as CoachMemory[];
   } catch { return []; }
 }
 
-// ============================================================
-// Sim Rewire Cards Queries
-// ============================================================
-
 export async function getSimRewireCards(userId: string, limit = 20): Promise<RewireCard[]> {
   const supabase = createAdminClient();
   try {
-    const { data } = await supabase
-      .from('sim_rewire_cards')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    const { data } = await supabase.from('sim_rewire_cards').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit);
     return (data || []) as RewireCard[];
   } catch { return []; }
 }
@@ -535,29 +453,15 @@ export async function getSimRewireCards(userId: string, limit = 20): Promise<Rew
 export async function getSimFocusCard(userId: string): Promise<{ title: string; content: string } | null> {
   const supabase = createAdminClient();
   try {
-    const { data } = await supabase
-      .from('sim_rewire_cards')
-      .select('title, content')
-      .eq('user_id', userId)
-      .eq('is_focus', true)
-      .single();
+    const { data } = await supabase.from('sim_rewire_cards').select('title, content').eq('user_id', userId).eq('is_focus', true).single();
     return data;
   } catch { return null; }
 }
 
-// ============================================================
-// Sim Wins Queries
-// ============================================================
-
 export async function getSimWins(userId: string, limit = 10): Promise<Win[]> {
   const supabase = createAdminClient();
   try {
-    const { data } = await supabase
-      .from('sim_wins')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    const { data } = await supabase.from('sim_wins').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit);
     return (data || []).map((w: Record<string, unknown>) => ({
       id: w.id as string,
       text: (w.text || w.content) as string,
@@ -568,66 +472,33 @@ export async function getSimWins(userId: string, limit = 10): Promise<Win[]> {
 }
 
 // ============================================================
-// Sim Strategist Helpers (mirror mobile strategist route logic)
+// Sim Strategist Helpers
 // ============================================================
 
 export async function applySimIntelUpdates(userId: string, result: StrategistOutput): Promise<void> {
   if (!result.intel_updates) return;
   const supabase = createAdminClient();
-
   try {
-    const { data: current } = await supabase
-      .from('sim_behavioral_intel')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
+    const { data: current } = await supabase.from('sim_behavioral_intel').select('*').eq('user_id', userId).single();
     if (current) {
       const updates = result.intel_updates;
       const merged: Record<string, unknown> = {};
-
-      if (updates.triggers?.length) {
-        const existing = current.triggers || [];
-        merged.triggers = [...new Set([...existing, ...updates.triggers])];
-      }
-      if (updates.breakthroughs?.length) {
-        const existing = current.breakthroughs || [];
-        merged.breakthroughs = [...new Set([...existing, ...updates.breakthroughs])];
-      }
-      if (updates.coaching_notes?.length) {
-        const existing = current.coaching_notes || [];
-        merged.coaching_notes = [...new Set([...existing, ...updates.coaching_notes])];
-      }
-      if (updates.resistance_patterns?.length) {
-        const existing = current.resistance_patterns || [];
-        merged.resistance_patterns = [...new Set([...existing, ...updates.resistance_patterns])];
-      }
-      if (updates.stage_of_change) {
-        merged.stage_of_change = updates.stage_of_change;
-      }
+      if (updates.triggers?.length) merged.triggers = [...new Set([...(current.triggers || []), ...updates.triggers])];
+      if (updates.breakthroughs?.length) merged.breakthroughs = [...new Set([...(current.breakthroughs || []), ...updates.breakthroughs])];
+      if (updates.coaching_notes?.length) merged.coaching_notes = [...new Set([...(current.coaching_notes || []), ...updates.coaching_notes])];
+      if (updates.resistance_patterns?.length) merged.resistance_patterns = [...new Set([...(current.resistance_patterns || []), ...updates.resistance_patterns])];
+      if (updates.stage_of_change) merged.stage_of_change = updates.stage_of_change;
       if (updates.emotional_vocabulary) {
-        const existingEv = (current.emotional_vocabulary || { used_words: [], avoided_words: [], deflection_phrases: [] }) as {
-          used_words?: string[];
-          avoided_words?: string[];
-          deflection_phrases?: string[];
-        };
+        const ev = (current.emotional_vocabulary || { used_words: [], avoided_words: [], deflection_phrases: [] }) as { used_words?: string[]; avoided_words?: string[]; deflection_phrases?: string[] };
         merged.emotional_vocabulary = {
-          used_words: [...new Set([...(existingEv.used_words || []), ...(updates.emotional_vocabulary.used_words || [])])],
-          avoided_words: [...new Set([...(existingEv.avoided_words || []), ...(updates.emotional_vocabulary.avoided_words || [])])],
-          deflection_phrases: [...new Set([...(existingEv.deflection_phrases || []), ...(updates.emotional_vocabulary.deflection_phrases || [])])],
+          used_words: [...new Set([...(ev.used_words || []), ...(updates.emotional_vocabulary.used_words || [])])],
+          avoided_words: [...new Set([...(ev.avoided_words || []), ...(updates.emotional_vocabulary.avoided_words || [])])],
+          deflection_phrases: [...new Set([...(ev.deflection_phrases || []), ...(updates.emotional_vocabulary.deflection_phrases || [])])],
         };
       }
-
-      if (Object.keys(merged).length > 0) {
-        await supabase
-          .from('sim_behavioral_intel')
-          .update(merged)
-          .eq('user_id', userId);
-      }
+      if (Object.keys(merged).length > 0) await supabase.from('sim_behavioral_intel').update(merged).eq('user_id', userId);
     } else {
-      await supabase
-        .from('sim_behavioral_intel')
-        .insert({ user_id: userId, ...result.intel_updates });
+      await supabase.from('sim_behavioral_intel').insert({ user_id: userId, ...result.intel_updates });
     }
   } catch { /* non-critical */ }
 }
@@ -636,48 +507,21 @@ export async function applySimFocusCardPrescription(userId: string, result: Stra
   const prescription = result.focus_card_prescription;
   if (!prescription) return;
   const supabase = createAdminClient();
-
   try {
     if (prescription.action === 'keep_current') return;
-
     if (prescription.action === 'graduate') {
-      await supabase
-        .from('sim_rewire_cards')
-        .update({ is_focus: false, graduated_at: new Date().toISOString() })
-        .eq('user_id', userId)
-        .eq('is_focus', true);
+      await supabase.from('sim_rewire_cards').update({ is_focus: false, graduated_at: new Date().toISOString() }).eq('user_id', userId).eq('is_focus', true);
     }
-
     if ((prescription.action === 'create_new' || prescription.action === 'graduate') && prescription.card) {
-      await supabase
-        .from('sim_rewire_cards')
-        .update({ is_focus: false })
-        .eq('user_id', userId)
-        .eq('is_focus', true);
-
+      await supabase.from('sim_rewire_cards').update({ is_focus: false }).eq('user_id', userId).eq('is_focus', true);
       await supabase.from('sim_rewire_cards').insert({
-        user_id: userId,
-        category: prescription.card.category,
-        title: prescription.card.title,
-        content: prescription.card.content,
-        is_focus: true,
-        focus_set_at: new Date().toISOString(),
-        prescribed_by: 'strategist',
-        auto_generated: true,
+        user_id: userId, category: prescription.card.category, title: prescription.card.title, content: prescription.card.content,
+        is_focus: true, focus_set_at: new Date().toISOString(), prescribed_by: 'strategist', auto_generated: true,
       });
     }
-
     if (prescription.action === 'set_existing' && prescription.existing_card_id) {
-      await supabase
-        .from('sim_rewire_cards')
-        .update({ is_focus: false })
-        .eq('user_id', userId)
-        .eq('is_focus', true);
-
-      await supabase
-        .from('sim_rewire_cards')
-        .update({ is_focus: true, focus_set_at: new Date().toISOString(), prescribed_by: 'strategist' })
-        .eq('id', prescription.existing_card_id);
+      await supabase.from('sim_rewire_cards').update({ is_focus: false }).eq('user_id', userId).eq('is_focus', true);
+      await supabase.from('sim_rewire_cards').update({ is_focus: true, focus_set_at: new Date().toISOString(), prescribed_by: 'strategist' }).eq('id', prescription.existing_card_id);
     }
   } catch { /* non-critical */ }
 }
@@ -686,14 +530,9 @@ export async function updateSimJourneyNarrative(userId: string, result: Strategi
   if (!result.journey_narrative) return;
   const supabase = createAdminClient();
   try {
-    await supabase
-      .from('sim_behavioral_intel')
-      .update({
-        journey_narrative: result.journey_narrative,
-        growth_edges: result.growth_edges,
-        last_strategist_run: new Date().toISOString(),
-      })
-      .eq('user_id', userId);
+    await supabase.from('sim_behavioral_intel').update({
+      journey_narrative: result.journey_narrative, growth_edges: result.growth_edges, last_strategist_run: new Date().toISOString(),
+    }).eq('user_id', userId);
   } catch { /* non-critical */ }
 }
 
@@ -705,158 +544,47 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
   const { synthesizeCharacterProfile } = await import('@/lib/simulator/engine');
   const supabase = createAdminClient();
 
-  // 1. Load real user's profile
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
   if (!profile) throw new Error('User not found');
 
-  // 2. Load real user's messages for character synthesis
   let userMessages: string[] = [];
   try {
-    const { data: convos } = await supabase
-      .from('conversations')
-      .select('id')
-      .eq('user_id', userId);
-    const convoIds = (convos ?? []).map(c => c.id);
-
-    if (convoIds.length > 0) {
-      const { data: msgs } = await supabase
-        .from('messages')
-        .select('content')
-        .in('conversation_id', convoIds)
-        .eq('role', 'user')
-        .order('created_at', { ascending: true })
-        .limit(100);
+    const { data: sessions } = await supabase.from('sessions').select('id').eq('user_id', userId);
+    const sessionIds = (sessions ?? []).map(s => s.id);
+    if (sessionIds.length > 0) {
+      const { data: msgs } = await supabase.from('messages').select('content').in('session_id', sessionIds).eq('role', 'user').order('created_at', { ascending: true }).limit(100);
       userMessages = (msgs ?? []).map(m => m.content);
     }
   } catch { /* no messages */ }
 
-  // 3. Load behavioral intel + coach memories (needed for synthesis AND for copying)
   let intel: Record<string, unknown> | null = null;
-  try {
-    const { data } = await supabase.from('behavioral_intel').select('*').eq('user_id', userId).single();
-    intel = data;
-  } catch { /* no intel */ }
+  try { const { data } = await supabase.from('behavioral_intel').select('*').eq('user_id', userId).single(); intel = data; } catch { /* no intel */ }
 
   let memories: { content: string; importance: number; active: boolean }[] = [];
-  try {
-    const { data } = await supabase
-      .from('coach_memories')
-      .select('content, importance, active')
-      .eq('user_id', userId)
-      .eq('active', true)
-      .limit(50);
-    memories = data ?? [];
-  } catch { /* no memories */ }
+  try { const { data } = await supabase.from('coach_memories').select('content, importance, active').eq('user_id', userId).eq('active', true).limit(50); memories = data ?? []; } catch { /* no memories */ }
 
-  // 4. Synthesize rich character profile via Claude
   let userPrompt: string;
   try {
-    userPrompt = await synthesizeCharacterProfile(
-      profile,
-      userMessages,
-      intel as BehavioralIntel | null,
-      memories as unknown as CoachMemory[],
-    );
+    userPrompt = await synthesizeCharacterProfile(profile, userMessages, intel as BehavioralIntel | null, memories as unknown as CoachMemory[]);
   } catch {
-    // Fallback to generic prompt if synthesis fails
-    userPrompt = `You are roleplaying as a real user of Toney, a money coaching app. Based on your profile, your primary money tension is "${profile.tension_type || 'unknown'}". ${profile.emotional_why ? `You said: "${profile.emotional_why}"` : ''}
-
-Respond naturally as this person would. Keep responses 1-3 sentences. Be authentic — show resistance, vulnerability, deflection, or openness. Don't be overly cooperative.`;
+    userPrompt = `You are roleplaying as a real user of Toney, a money coaching app. Based on your profile, your primary money tension is "${profile.tension_type || 'unknown'}". ${profile.emotional_why ? `You said: "${profile.emotional_why}"` : ''}\n\nRespond naturally as this person would. Keep responses 1-3 sentences. Be authentic — show resistance, vulnerability, deflection, or openness. Don't be overly cooperative.`;
   }
 
-  // 5. Create sim_profile (with synthesized user_prompt and source_user_id)
   const simProfile = await createSimProfile({
     display_name: name.startsWith('Clone:') ? name : `Clone: ${name}`,
-    tension_type: profile.tension_type,
-    secondary_tension_type: profile.secondary_tension_type,
-    tension_score: profile.tension_score,
-    tone: profile.tone,
-    depth: profile.depth,
-    learning_styles: profile.learning_styles,
-    life_stage: profile.life_stage,
-    income_type: profile.income_type,
-    relationship_status: profile.relationship_status,
-    emotional_why: profile.emotional_why,
-    onboarding_answers: profile.onboarding_answers,
-    user_prompt: userPrompt,
-    source_user_id: userId,
+    tension_type: profile.tension_type, secondary_tension_type: profile.secondary_tension_type,
+    tension_score: profile.tension_score, tone: profile.tone, depth: profile.depth,
+    learning_styles: profile.learning_styles, life_stage: profile.life_stage,
+    income_type: profile.income_type, relationship_status: profile.relationship_status,
+    emotional_why: profile.emotional_why, onboarding_answers: profile.onboarding_answers,
+    user_prompt: userPrompt, source_user_id: userId,
   });
 
-  // 6. Copy behavioral intel
-  if (intel) {
-    try {
-      await supabase.from('sim_behavioral_intel').insert({
-        user_id: simProfile.id,
-        triggers: intel.triggers,
-        emotional_vocabulary: intel.emotional_vocabulary,
-        resistance_patterns: intel.resistance_patterns,
-        breakthroughs: intel.breakthroughs,
-        coaching_notes: intel.coaching_notes,
-        stage_of_change: intel.stage_of_change,
-        journey_narrative: intel.journey_narrative,
-        growth_edges: intel.growth_edges,
-      });
-    } catch { /* non-critical */ }
-  }
-
-  // 7. Copy coach memories
-  if (memories.length > 0) {
-    try {
-      await supabase.from('sim_coach_memories').insert(
-        memories.map(m => ({ user_id: simProfile.id, content: m.content, importance: m.importance, active: m.active }))
-      );
-    } catch { /* non-critical */ }
-  }
-
-  // 8. Copy latest coaching briefing
-  try {
-    const { data: briefing } = await supabase
-      .from('coaching_briefings')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    if (briefing) {
-      await supabase.from('sim_coaching_briefings').insert({
-        user_id: simProfile.id,
-        briefing_content: briefing.briefing_content,
-        hypothesis: briefing.hypothesis,
-        session_strategy: briefing.session_strategy,
-        journey_narrative: briefing.journey_narrative,
-        growth_edges: briefing.growth_edges,
-        version: briefing.version,
-      });
-    }
-  } catch { /* no briefing */ }
-
-  // 9. Copy rewire cards
-  try {
-    const { data: cards } = await supabase
-      .from('rewire_cards')
-      .select('category, title, content, is_focus, graduated_at, times_completed, prescribed_by, focus_set_at, auto_generated')
-      .eq('user_id', userId)
-      .limit(30);
-    if (cards?.length) {
-      await supabase.from('sim_rewire_cards').insert(
-        cards.map(c => ({ user_id: simProfile.id, ...c }))
-      );
-    }
-  } catch { /* no cards */ }
-
-  // 10. Copy wins
-  try {
-    const { data: wins } = await supabase
-      .from('wins')
-      .select('content, text, tension_type')
-      .eq('user_id', userId)
-      .limit(20);
-    if (wins?.length) {
-      await supabase.from('sim_wins').insert(
-        wins.map(w => ({ user_id: simProfile.id, content: w.content || w.text, text: w.text, tension_type: w.tension_type }))
-      );
-    }
-  } catch { /* no wins */ }
+  if (intel) { try { await supabase.from('sim_behavioral_intel').insert({ user_id: simProfile.id, triggers: intel.triggers, emotional_vocabulary: intel.emotional_vocabulary, resistance_patterns: intel.resistance_patterns, breakthroughs: intel.breakthroughs, coaching_notes: intel.coaching_notes, stage_of_change: intel.stage_of_change, journey_narrative: intel.journey_narrative, growth_edges: intel.growth_edges }); } catch { /* non-critical */ } }
+  if (memories.length > 0) { try { await supabase.from('sim_coach_memories').insert(memories.map(m => ({ user_id: simProfile.id, content: m.content, importance: m.importance, active: m.active }))); } catch { /* non-critical */ } }
+  try { const { data: briefing } = await supabase.from('coaching_briefings').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single(); if (briefing) { await supabase.from('sim_coaching_briefings').insert({ user_id: simProfile.id, briefing_content: briefing.briefing_content, hypothesis: briefing.hypothesis, session_strategy: briefing.session_strategy, journey_narrative: briefing.journey_narrative, growth_edges: briefing.growth_edges, version: briefing.version }); } } catch { /* no briefing */ }
+  try { const { data: cards } = await supabase.from('rewire_cards').select('category, title, content, is_focus, graduated_at, times_completed, prescribed_by, focus_set_at, auto_generated').eq('user_id', userId).limit(30); if (cards?.length) { await supabase.from('sim_rewire_cards').insert(cards.map(c => ({ user_id: simProfile.id, ...c }))); } } catch { /* no cards */ }
+  try { const { data: wins } = await supabase.from('wins').select('content, text, tension_type').eq('user_id', userId).limit(20); if (wins?.length) { await supabase.from('sim_wins').insert(wins.map(w => ({ user_id: simProfile.id, content: w.content || w.text, text: w.text, tension_type: w.tension_type }))); } } catch { /* no wins */ }
 
   return { simProfileId: simProfile.id };
 }

@@ -50,21 +50,21 @@ export async function getLatestBriefing(userId: string): Promise<CoachingBriefin
 export async function getAllUserMessages(userId: string): Promise<{ role: string; content: string; created_at: string }[]> {
   const supabase = createAdminClient();
 
-  // Get all conversation IDs for this user
-  const { data: convos } = await supabase
-    .from('conversations')
+  // Get all session IDs for this user
+  const { data: sessions } = await supabase
+    .from('sessions')
     .select('id')
     .eq('user_id', userId);
 
-  if (!convos || convos.length === 0) return [];
+  if (!sessions || sessions.length === 0) return [];
 
-  const convoIds = convos.map((c: { id: string }) => c.id);
+  const sessionIds = sessions.map((s: { id: string }) => s.id);
 
-  // Get all messages across all conversations
+  // Get all messages across all sessions
   const { data: messages } = await supabase
     .from('messages')
     .select('role, content, created_at')
-    .in('conversation_id', convoIds)
+    .in('session_id', sessionIds)
     .order('created_at', { ascending: true });
 
   return (messages ?? []) as { role: string; content: string; created_at: string }[];
@@ -154,7 +154,6 @@ export async function applyProdIntelUpdates(userId: string, result: StrategistOu
           .eq('user_id', userId);
       }
     } else {
-      // Create initial intel
       await supabase
         .from('behavioral_intel')
         .insert({
@@ -226,7 +225,6 @@ export async function updateProdJourneyNarrative(userId: string, result: Strateg
   const supabase = createAdminClient();
 
   try {
-    // Check if behavioral_intel row exists
     const { data: existing } = await supabase
       .from('behavioral_intel')
       .select('id')

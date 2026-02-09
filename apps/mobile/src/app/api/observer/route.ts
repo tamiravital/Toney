@@ -6,17 +6,17 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    const { conversationId, userId } = await request.json();
+    const { sessionId, userId } = await request.json();
 
-    if (!conversationId || !userId) {
-      return NextResponse.json({ error: 'Missing conversationId or userId' }, { status: 400 });
+    if (!sessionId || !userId) {
+      return NextResponse.json({ error: 'Missing sessionId or userId' }, { status: 400 });
     }
 
     // Load recent messages (last 6 for Observer context)
     const { data: recentMessages } = await supabase
       .from('messages')
       .select('role, content')
-      .eq('conversation_id', conversationId)
+      .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
       .limit(6);
 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     if (result.signals.length > 0) {
       const signalRows = result.signals.map(signal => ({
         user_id: userId,
-        session_id: conversationId,
+        session_id: sessionId,
         signal_type: signal.signal_type,
         content: signal.content,
         urgency_flag: signal.urgency_flag,

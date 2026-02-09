@@ -8,6 +8,13 @@
 - Removed all v1 backward-compat code (evaluate.ts, poll route, run detail page)
 - Chat logic extracted to lib/simulator/chat.ts — direct function calls instead of HTTP self-calls
 - Coach greeting for cloned personas (Coach speaks first)
+- DB rename: `conversations` → `sessions`, `conversation_id` → `session_id` across entire codebase (~40 files)
+- Types renamed: `Conversation` → `Session`, `ConversationWithMessageCount` → `SessionWithMessageCount`
+- Hooks renamed: `useConversation` → `useSession`, `currentConversationId` → `currentSessionId`
+- Dead v1 fields removed from PromptContext: `topicKey`, `isFirstTopicConversation`, `otherTopics`
+- Dead v1 columns dropped: `pattern_type`, `pattern_score`, `topic_key`, `engine_version`
+- `beta_analytics` table dropped
+- Migration 012 added (rename + cleanup SQL)
 
 ## 2025-02-06
 - Coaching engine v2: 3-agent architecture (Coach, Observer, Strategist)

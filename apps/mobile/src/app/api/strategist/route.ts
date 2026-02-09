@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         const { data } = await supabase
           .from('messages')
           .select('role, content')
-          .eq('conversation_id', sessionId)
+          .eq('session_id', sessionId)
           .order('created_at', { ascending: true });
         sessionTranscript = (data || []).map(m => ({
           role: m.role as 'user' | 'assistant',

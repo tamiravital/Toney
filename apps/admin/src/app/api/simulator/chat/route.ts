@@ -10,13 +10,13 @@ export const maxDuration = 120; // May run Strategist + Coach + Observer
  */
 export async function POST(request: NextRequest) {
   try {
-    const { userId, message, conversationId } = await request.json();
+    const { userId, message, sessionId } = await request.json();
 
-    if (!userId || !message || !conversationId) {
-      return NextResponse.json({ error: 'Missing userId, message, or conversationId' }, { status: 400 });
+    if (!userId || !message || !sessionId) {
+      return NextResponse.json({ error: 'Missing userId, message, or sessionId' }, { status: 400 });
     }
 
-    const result = await processSimChat(userId, message, conversationId);
+    const result = await processSimChat(userId, message, sessionId);
 
     return NextResponse.json(result);
   } catch (error) {

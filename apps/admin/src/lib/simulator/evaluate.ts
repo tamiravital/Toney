@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
-  getSimConversationMessages,
+  getSimSessionMessages,
   updateRun,
   type CardEvaluationSummary,
 } from '@/lib/queries/simulator';
@@ -58,19 +58,19 @@ export async function quickCardCheck(content: string): Promise<boolean> {
 }
 
 // ============================================================
-// Full evaluation — runs after conversation completes
-// Reads from sim_messages (by conversationId)
+// Full evaluation — runs after session completes
+// Reads from sim_messages (by sessionId)
 // ============================================================
 
 export async function evaluateRun(
   runId: string,
-  conversationId?: string | null,
+  sessionId?: string | null,
 ): Promise<CardEvaluationSummary> {
-  if (!conversationId) {
+  if (!sessionId) {
     return { total_messages: 0, card_worthy_count: 0, categories: {} };
   }
 
-  const simMessages = await getSimConversationMessages(conversationId, 200);
+  const simMessages = await getSimSessionMessages(sessionId, 200);
   const assistantMsgs = simMessages
     .filter(m => m.role === 'assistant')
     .map(m => ({ id: m.id, content: m.content }));

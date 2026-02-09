@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRun, updateRun, getSimConversationMessages } from '@/lib/queries/simulator';
+import { getRun, updateRun, getSimSessionMessages } from '@/lib/queries/simulator';
 import { generateUserMessage, buildDefaultUserPrompt } from '@/lib/simulator/engine';
 import { processSimChat, generateCoachGreeting } from '@/lib/simulator/chat';
 import { quickCardCheck } from '@/lib/simulator/evaluate';
@@ -21,18 +21,18 @@ export async function POST(
     if (run.status !== 'running') {
       return NextResponse.json({ error: 'Run is not active', status: run.status }, { status: 400 });
     }
-    if (!run.conversation_id) {
-      return NextResponse.json({ error: 'Run has no conversation_id (v1 run?)' }, { status: 400 });
+    if (!run.session_id) {
+      return NextResponse.json({ error: 'Run has no session_id (v1 run?)' }, { status: 400 });
     }
 
     const simProfile = run.simProfile;
 
     // Load existing messages to build history for User Agent
-    const existingMessages = await getSimConversationMessages(run.conversation_id);
+    const existingMessages = await getSimSessionMessages(run.session_id);
 
     // Clone greeting: Coach speaks first on the first tick
     if (existingMessages.length === 0 && simProfile.source_user_id) {
-      const greetingResult = await generateCoachGreeting(simProfile.id, run.conversation_id);
+      const greetingResult = await generateCoachGreeting(simProfile.id, run.session_id);
       return NextResponse.json({
         userMsg: null,
         assistantMsg: greetingResult.message,
@@ -46,17 +46,17 @@ export async function POST(
     const profileConfig = simProfile as unknown as Profile;
     const userPrompt = simProfile.user_prompt || buildDefaultUserPrompt(profileConfig);
 
-    const conversationHistory = existingMessages.map(m => ({
+    const sessionHistory = existingMessages.map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
     const turnIndex = Math.floor(existingMessages.length / 2);
 
     // 1. Generate user message via User Agent
-    const userMessage = await generateUserMessage(userPrompt, conversationHistory);
+    const userMessage = await generateUserMessage(userPrompt, sessionHistory);
 
     // 2. Process chat directly (no HTTP self-call)
-    const chatData = await processSimChat(simProfile.id, userMessage, run.conversation_id);
+    const chatData = await processSimChat(simProfile.id, userMessage, run.session_id);
 
     // 3. Determine if we should stop
     let done = false;

@@ -1,8 +1,8 @@
-import { Profile, Conversation } from './index';
+import { Profile, Session } from './index';
 import { StageOfChange, TensionType } from './index';
 
 export interface UserWithStats extends Profile {
-  conversation_count: number;
+  session_count: number;
   total_messages: number;
   last_active: string | null;
 }
@@ -10,9 +10,9 @@ export interface UserWithStats extends Profile {
 export interface OverviewStats {
   totalUsers: number;
   onboardedUsers: number;
-  totalConversations: number;
+  totalSessions: number;
   totalMessages: number;
-  avgMessagesPerConversation: number;
+  avgMessagesPerSession: number;
   activeUsers7d: number;
 }
 
@@ -26,7 +26,7 @@ export interface StageDistribution {
   count: number;
 }
 
-export interface RecentConversation extends Conversation {
+export interface RecentSession extends Session {
   user_display_name: string | null;
   user_avatar_url: string | null;
   message_count: number;

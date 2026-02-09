@@ -12,9 +12,9 @@ export async function getAllUsers(): Promise<UserWithStats[]> {
 
   if (!profiles || profiles.length === 0) return [];
 
-  // Fetch conversations per user (created_at for last active)
-  const { data: conversations } = await supabase
-    .from('conversations')
+  // Fetch sessions per user (created_at for last active)
+  const { data: sessions } = await supabase
+    .from('sessions')
     .select('user_id, created_at');
 
   // Fetch message counts per user
@@ -22,15 +22,15 @@ export async function getAllUsers(): Promise<UserWithStats[]> {
     .from('messages')
     .select('user_id');
 
-  // Aggregate conversation stats
-  const convoStats = new Map<string, { count: number; lastActive: string | null }>();
-  for (const c of conversations ?? []) {
-    const existing = convoStats.get(c.user_id) ?? { count: 0, lastActive: null };
+  // Aggregate session stats
+  const sessionStats = new Map<string, { count: number; lastActive: string | null }>();
+  for (const s of sessions ?? []) {
+    const existing = sessionStats.get(s.user_id) ?? { count: 0, lastActive: null };
     existing.count += 1;
-    if (!existing.lastActive || c.created_at > existing.lastActive) {
-      existing.lastActive = c.created_at;
+    if (!existing.lastActive || s.created_at > existing.lastActive) {
+      existing.lastActive = s.created_at;
     }
-    convoStats.set(c.user_id, existing);
+    sessionStats.set(s.user_id, existing);
   }
 
   // Aggregate message counts
@@ -41,9 +41,9 @@ export async function getAllUsers(): Promise<UserWithStats[]> {
 
   return profiles.map((p: Profile) => ({
     ...p,
-    conversation_count: convoStats.get(p.id)?.count ?? 0,
+    session_count: sessionStats.get(p.id)?.count ?? 0,
     total_messages: msgCounts.get(p.id) ?? 0,
-    last_active: convoStats.get(p.id)?.lastActive ?? null,
+    last_active: sessionStats.get(p.id)?.lastActive ?? null,
   }));
 }
 

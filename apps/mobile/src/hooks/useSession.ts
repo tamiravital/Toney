@@ -2,33 +2,33 @@
 
 import { useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Message, Conversation } from '@toney/types';
+import { Message, Session } from '@toney/types';
 
 const MAX_MESSAGES = 50;
 
-export function useConversation() {
+export function useSession() {
   const supabase = createClient();
 
-  const createConversation = useCallback(async (): Promise<Conversation | null> => {
+  const createSession = useCallback(async (): Promise<Session | null> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('conversations')
+      .from('sessions')
       .insert({ user_id: user.id })
       .select()
       .single();
 
     if (error) throw error;
-    return data as Conversation;
+    return data as Session;
   }, [supabase]);
 
-  const getRecentConversation = useCallback(async (): Promise<Conversation | null> => {
+  const getRecentSession = useCallback(async (): Promise<Session | null> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('conversations')
+      .from('sessions')
       .select('*')
       .eq('user_id', user.id)
       .order('started_at', { ascending: false })
@@ -36,14 +36,14 @@ export function useConversation() {
       .single();
 
     if (error) return null;
-    return data as Conversation;
+    return data as Session;
   }, [supabase]);
 
-  const getMessages = useCallback(async (conversationId: string): Promise<Message[]> => {
+  const getMessages = useCallback(async (sessionId: string): Promise<Message[]> => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .eq('conversation_id', conversationId)
+      .eq('session_id', sessionId)
       .order('created_at', { ascending: true })
       .limit(MAX_MESSAGES);
 
@@ -54,18 +54,18 @@ export function useConversation() {
       content: msg.content,
       timestamp: new Date(msg.created_at),
       canSave: msg.can_save,
-      conversation_id: msg.conversation_id,
+      session_id: msg.session_id,
     }));
   }, [supabase]);
 
-  const appendMessage = useCallback(async (conversationId: string, role: 'user' | 'assistant', content: string, canSave = true) => {
+  const appendMessage = useCallback(async (sessionId: string, role: 'user' | 'assistant', content: string, canSave = true) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
     const { data, error } = await supabase
       .from('messages')
       .insert({
-        conversation_id: conversationId,
+        session_id: sessionId,
         user_id: user.id,
         role,
         content,
@@ -76,20 +76,20 @@ export function useConversation() {
 
     if (error) throw error;
 
-    // Update message count on the conversation
-    const { data: conv } = await supabase
-      .from('conversations')
+    // Update message count on the session
+    const { data: sess } = await supabase
+      .from('sessions')
       .select('message_count')
-      .eq('id', conversationId)
+      .eq('id', sessionId)
       .single();
 
     await supabase
-      .from('conversations')
-      .update({ message_count: (conv?.message_count || 0) + 1 })
-      .eq('id', conversationId);
+      .from('sessions')
+      .update({ message_count: (sess?.message_count || 0) + 1 })
+      .eq('id', sessionId);
 
     return data;
   }, [supabase]);
 
-  return { createConversation, getRecentConversation, getMessages, appendMessage };
+  return { createSession, getRecentSession, getMessages, appendMessage };
 }

@@ -12,10 +12,10 @@ import {
   getSimProfile,
   getLatestSimBriefing,
   getLastSimMessageTime,
-  countSimConversations,
-  getSimConversationMessages,
+  countSimSessions,
+  getSimSessionMessages,
   saveSimMessage,
-  updateSimConversationMessageCount,
+  updateSimSessionMessageCount,
   getSimBehavioralIntel,
   getSimCoachMemories,
   getSimWins,
@@ -63,7 +63,7 @@ export interface SimChatResult {
 export async function processSimChat(
   userId: string,
   message: string,
-  conversationId: string,
+  sessionId: string,
 ): Promise<SimChatResult> {
   // Load profile from sim_profiles
   const profile = await getSimProfile(userId);
@@ -81,15 +81,15 @@ export async function processSimChat(
   // If new session and we have a briefing, run Strategist for session boundary
   if (isNewSession && briefing) {
     try {
-      await runSimStrategist(userId, conversationId, profile, 'session_start');
+      await runSimStrategist(userId, sessionId, profile, 'session_start');
       briefing = await getLatestSimBriefing(userId);
     } catch { /* Strategist failed — use existing briefing */ }
   }
 
   // If first-ever message and no briefing, trigger initial briefing
   if (!briefing) {
-    const conversationCount = await countSimConversations(userId);
-    if (conversationCount <= 1) {
+    const sessionCount = await countSimSessions(userId);
+    if (sessionCount <= 1) {
       try {
         const result = await generateInitialBriefing(profile);
         await saveSimBriefing(userId, null, result);
@@ -112,8 +112,8 @@ export async function processSimChat(
     const recentWins = await getSimWins(userId, 5);
     const rewireCards = await getSimRewireCards(userId, 10);
     const coachMemories = await getSimCoachMemories(userId, 30);
-    const conversationCount = await countSimConversations(userId);
-    const isFirstConversation = conversationCount <= 1;
+    const sessionCount = await countSimSessions(userId);
+    const isFirstSession = sessionCount <= 1;
 
     systemPromptBlocks = buildSystemPromptBlocks({
       profile: profile as Profile,
@@ -121,19 +121,16 @@ export async function processSimChat(
       recentWins: recentWins as Win[],
       rewireCardTitles: rewireCards.map(c => c.title),
       coachMemories: coachMemories as CoachMemory[],
-      isFirstConversation,
+      isFirstSession,
       messageCount: 0,
-      topicKey: null,
-      isFirstTopicConversation: false,
-      otherTopics: [],
     });
   }
 
-  // Load conversation history (last 50 messages)
-  const historyRows = await getSimConversationMessages(conversationId, 50);
+  // Load session history (last 50 messages)
+  const historyRows = await getSimSessionMessages(sessionId, 50);
 
   // Save user message
-  const savedUserMsg = await saveSimMessage(conversationId, userId, 'user', message);
+  const savedUserMsg = await saveSimMessage(sessionId, userId, 'user', message);
 
   // Build message history for Claude with incremental caching
   const rawHistory = historyRows.map(m => ({
@@ -167,16 +164,16 @@ export async function processSimChat(
     : '';
 
   // Save assistant message
-  const savedAssistantMsg = await saveSimMessage(conversationId, userId, 'assistant', assistantContent);
+  const savedAssistantMsg = await saveSimMessage(sessionId, userId, 'assistant', assistantContent);
 
-  // Update conversation message count
-  await updateSimConversationMessageCount(conversationId, 2);
+  // Update session message count
+  await updateSimSessionMessageCount(sessionId, 2);
 
   // ── Run Observer inline (awaited, not fire-and-forget) ──
   let observerSignals: { signal_type: string; content: string; urgency_flag: boolean }[] = [];
   try {
     // Load recent messages for Observer context (last 6)
-    const recentMsgs = await getSimConversationMessages(conversationId, 6);
+    const recentMsgs = await getSimSessionMessages(sessionId, 6);
     if (recentMsgs.length >= 2) {
       const messages = recentMsgs.map(m => ({
         role: m.role as 'user' | 'assistant',
@@ -198,7 +195,7 @@ export async function processSimChat(
       observerSignals = result.signals;
 
       // Save signals to sim_observer_signals
-      await saveSimObserverSignals(userId, conversationId, result.signals);
+      await saveSimObserverSignals(userId, sessionId, result.signals);
     }
   } catch { /* Observer is non-critical */ }
 
@@ -231,7 +228,7 @@ export async function processSimChat(
 
 export async function generateCoachGreeting(
   userId: string,
-  conversationId: string,
+  sessionId: string,
 ): Promise<{
   message: { id: string; role: 'assistant'; content: string; timestamp: string };
 }> {
@@ -262,11 +259,8 @@ export async function generateCoachGreeting(
       recentWins: recentWins as Win[],
       rewireCardTitles: rewireCards.map(c => c.title),
       coachMemories: coachMemories as CoachMemory[],
-      isFirstConversation: false,
+      isFirstSession: false,
       messageCount: 0,
-      topicKey: null,
-      isFirstTopicConversation: false,
-      otherTopics: [],
     });
   }
 
@@ -286,8 +280,8 @@ export async function generateCoachGreeting(
     : '';
 
   // Save only the assistant message (the trigger is not a real user message)
-  const savedMsg = await saveSimMessage(conversationId, userId, 'assistant', assistantContent);
-  await updateSimConversationMessageCount(conversationId, 1);
+  const savedMsg = await saveSimMessage(sessionId, userId, 'assistant', assistantContent);
+  await updateSimSessionMessageCount(sessionId, 1);
 
   return {
     message: {
@@ -322,7 +316,7 @@ async function runSimStrategist(
   // Session transcript (for session_end/urgent)
   let sessionTranscript: { role: 'user' | 'assistant'; content: string }[] = [];
   if (sessionId && (trigger === 'session_end' || trigger === 'urgent')) {
-    const msgs = await getSimConversationMessages(sessionId);
+    const msgs = await getSimSessionMessages(sessionId);
     sessionTranscript = msgs.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
   }
 

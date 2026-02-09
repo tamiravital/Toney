@@ -6,19 +6,19 @@ import { BehavioralIntel } from '@toney/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { conversationId, userId } = body;
+    const { sessionId, userId } = body;
 
-    if (!conversationId || !userId) {
+    if (!sessionId || !userId) {
       return NextResponse.json({ error: 'Missing params' }, { status: 400 });
     }
 
     const supabase = await createClient();
 
-    // Load conversation messages
+    // Load session messages
     const { data: messages } = await supabase
       .from('messages')
       .select('role, content')
-      .eq('conversation_id', conversationId)
+      .eq('session_id', sessionId)
       .order('created_at', { ascending: true });
 
     if (!messages || messages.length < 4) {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', userId)
       .single();
 
-    // Extract new intel from conversation
+    // Extract new intel from session
     const extracted = await extractBehavioralIntel(
       messages,
       currentIntel as BehavioralIntel | null

@@ -4,6 +4,9 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Rename conversations → sessions in DB and code (2026-02-08)
+Renamed the `conversations` table to `sessions` and `conversation_id` to `session_id` everywhere to match v2's session-based model. Also dropped dead v1 columns (pattern_type, pattern_score, topic_key, engine_version) and the unused beta_analytics table. Migration uses DROP/CREATE for indexes and policies instead of ALTER RENAME — Supabase SQL editor doesn't handle PL/pgSQL DO blocks reliably. Live DB missing `started_at` column on sessions table despite migration 001 defining it — skipped that index.
+
 ### Direct function calls instead of HTTP self-calls (2026-02-08)
 The tick and message routes were calling /api/simulator/chat via HTTP fetch to themselves. This broke on Vercel (401 auth error). Extracted core chat logic into processSimChat() in lib/simulator/chat.ts — called directly as a function. Faster, no URL config needed, no auth issues.
 

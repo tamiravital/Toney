@@ -52,13 +52,13 @@ toney/
 │   │       │       └── extract-intel/ # Legacy extraction (kept for Strategist)
 │   │       ├── components/       # onboarding, chat, home, layout, rewire, wins, auth
 │   │       ├── context/          # ToneyContext (global state)
-│   │       ├── hooks/            # useProfile, useConversation, useFocusCard, useHomeIntel, etc.
+│   │       ├── hooks/            # useProfile, useSession, useFocusCard, useHomeIntel, etc.
 │   │       ├── lib/supabase/     # Client/server Supabase setup
 │   │       └── middleware.ts     # Auth session refresh
 │   │
 │   └── admin/                    # Admin dashboard (@toney/admin, port 3001)
 │       └── src/
-│           ├── app/              # login, dashboard (users, conversations, intel, metrics)
+│           ├── app/              # login, dashboard (users, sessions, intel, metrics)
 │           ├── components/       # LoginForm, Sidebar, StatCard, etc.
 │           ├── lib/              # queries/, auth.ts, format.ts, supabase/admin.ts
 │           └── middleware.ts     # Admin cookie auth
@@ -75,7 +75,7 @@ toney/
 │   │       └── extraction/       # Legacy intel extraction (used by Strategist internally)
 │   └── config-typescript/        # @toney/config-typescript — shared tsconfig
 │
-├── supabase/migrations/          # Shared database schema + RLS (001-009)
+├── supabase/migrations/          # Shared database schema + RLS (001-012)
 └── _prototype/                   # Original prototype (reference only)
 ```
 
@@ -87,7 +87,7 @@ The coaching engine uses three AI agents working in concert. All agent logic liv
 
 | Agent | Model | Temp | When it runs | What it does |
 |-------|-------|------|-------------|--------------|
-| **Coach** | Sonnet | 0.7 | Every user message | The main chat endpoint (`/api/chat`). This is the original Sonnet call that was always there — not a new agent. What changed in v2 is what it reads: when a Strategist briefing exists, it reads the briefing instead of raw data dumps. When no briefing exists (first conversation, simulator), it falls back to the legacy prompt path (`buildSystemPromptBlocks`). Prompt-cached. |
+| **Coach** | Sonnet | 0.7 | Every user message | The main chat endpoint (`/api/chat`). This is the original Sonnet call that was always there — not a new agent. What changed in v2 is what it reads: when a Strategist briefing exists, it reads the briefing instead of raw data dumps. When no briefing exists (first session, simulator), it falls back to the legacy prompt path (`buildSystemPromptBlocks`). Prompt-cached. |
 | **Observer** | Haiku | 0 | Fire-and-forget after each Coach response | New in v2. Lightweight per-turn analysis. Detects deflections, breakthroughs, emotional signals, practice check-ins. Writes signals to `observer_signals` table. Replaced the old "every 5th message" Sonnet extraction. |
 | **Strategist** | Sonnet | 0.3 | On session boundaries (>12h gap) + after onboarding | New in v2. Reads Observer signals + all user data. Produces a "Coach Briefing" — a narrative coaching document the Coach reads instead of raw data dumps. Handles clinical sequencing, journey narrative, Focus card prescription. |
 
@@ -121,7 +121,7 @@ System prompt is structured as `SystemPromptBlock[]` with `cache_control: { type
 ~80% input cost reduction vs v1 (uncached single prompt).
 
 ### Session Model
-- **No topics** — conversations are session-based, not topic-bounded
+- **No topics** — sessions are time-bounded (>12h gap = new session)
 - **New session**: first message after >12h gap
 - **Session boundary**: triggers Strategist to write new briefing
 - **Hash routing**: `#home`, `#chat`, `#rewire`, `#wins` (no `#chat/topicKey`)
@@ -129,7 +129,7 @@ System prompt is structured as `SystemPromptBlock[]` with `cache_control: { type
 
 ### Focus Card
 One active card per user on the home screen. Set by the Strategist.
-- Lifecycle: created in conversation → set as Focus → tracked daily → graduated when internalized → in toolkit forever
+- Lifecycle: created in session → set as Focus → tracked daily → graduated when internalized → in toolkit forever
 - Home screen shows: title, content, "Did it" / "Not today" buttons, optional reflection input
 - API: `GET /api/focus` (current card), `POST /api/focus` (complete/skip with optional reflection)
 - Hook: `useFocusCard()` — `fetchFocusCard()`, `completeFocusCard(reflection?)`, `skipFocusCard()`
@@ -216,7 +216,7 @@ Specific facts, decisions, life events, and commitments the Coach remembers acro
 ## Shared Packages
 
 ### @toney/types
-All TypeScript type definitions: `TensionType`, `Profile`, `Message`, `Conversation`, `BehavioralIntel`, `Win`, `RewireCard`, `CoachMemory`, `CoachingBriefing`, `ObserverSignal`, `SystemPromptBlock`, plus admin aggregate types.
+All TypeScript type definitions: `TensionType`, `Profile`, `Message`, `Session`, `BehavioralIntel`, `Win`, `RewireCard`, `CoachMemory`, `CoachingBriefing`, `ObserverSignal`, `SystemPromptBlock`, plus admin aggregate types.
 
 ### @toney/constants
 Tension details/colors, onboarding questions, style options, stage/engagement colors. Exports `tensionColor()`, `stageColor()`, `identifyTension()`, `ALL_TENSIONS`, `ALL_STAGES`.
@@ -234,7 +234,7 @@ Tension details/colors, onboarding questions, style options, stage/engagement co
 
 ### Prompt System
 `packages/coaching/src/prompts/systemPromptBuilder.ts` assembles the system prompt from 10 modules:
-`safetyRails`, `awareMethod`, `tensionPrompts`, `tonePrompts`, `depthPrompts`, `learningStylePrompts`, `biasDetection`, `stageMatching`, `motivationalInterviewing`, `firstConversation`
+`safetyRails`, `awareMethod`, `tensionPrompts`, `tonePrompts`, `depthPrompts`, `learningStylePrompts`, `biasDetection`, `stageMatching`, `motivationalInterviewing`, `firstSession`
 
 When a Strategist briefing exists, the Coach reads the briefing instead of legacy-assembled context. Legacy path is a fallback for users who haven't triggered a Strategist run yet.
 
@@ -250,10 +250,10 @@ Runs on every turn via Haiku (fire-and-forget). Replaced the old "every 5th mess
 ### Mobile-First PWA
 All mobile UI constrained to `max-w-[430px]` centered on desktop.
 
-## Data Model (10 tables)
+## Data Model (9 tables)
 - `profiles` — user settings (tension_type, tone, depth, learning_style, etc.)
-- `conversations` — chat sessions (+ session_number, session_notes, session_status)
-- `messages` — individual chat messages
+- `sessions` — chat sessions (+ session_number, session_notes, session_status)
+- `messages` — individual chat messages (session_id FK)
 - `rewire_cards` — saved insight cards (+ is_focus, focus_set_at, graduated_at, times_completed, last_completed_at, prescribed_by)
 - `wins` — small victories (text, tension_type)
 - `behavioral_intel` — one row per user, cumulative coaching intelligence:
@@ -263,7 +263,6 @@ All mobile UI constrained to `max-w-[430px]` centered on desktop.
 - `coaching_briefings` — Strategist output per session (briefing_content, hypothesis, session_strategy, journey_narrative, growth_edges, version)
 - `observer_signals` — per-turn Observer detections (signal_type, content, confidence, urgency_flag, session_id)
   - Signal types: `deflection`, `breakthrough`, `emotional`, `practice_checkin`, `topic_shift`
-- `beta_analytics` — usage tracking
 
 Profile auto-created on signup via DB trigger.
 
@@ -281,7 +280,7 @@ Profile auto-created on signup via DB trigger.
 - `middleware.ts` uses deprecated Next.js 16 pattern (warning only, still works)
 - Shared package names use `@toney/*` prefix
 - Internal API calls (observer, strategist) need `NEXT_PUBLIC_SITE_URL` or `VERCEL_URL`
-- **No topics** — topics were removed in v2. No `activeTopic`, `topicConversations`, `selectTopic()`, or `OnboardingTopicPicker`. Conversations are session-based.
+- **No topics** — topics were removed in v2. No `activeTopic`, `topicConversations`, `selectTopic()`, or `OnboardingTopicPicker`. Sessions are time-bounded.
 - **`finishOnboarding()`** takes no arguments — onboarding goes: welcome → questions → pattern → style_intro → style_quiz → home
 - Chat route: no `topicKey` parameter, no `[TOPIC_OPENER]` logic
 

@@ -15,7 +15,7 @@ export default async function MetricsPage({
   const { userId } = await params;
   const metrics = await getUserEngagementMetrics(userId);
 
-  if (metrics.totalConversations === 0) {
+  if (metrics.totalSessions === 0) {
     return (
       <EmptyState
         title="No engagement data yet"
@@ -30,8 +30,8 @@ export default async function MetricsPage({
       {/* Summary stats */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard
-          title="Conversations"
-          value={metrics.totalConversations}
+          title="Sessions"
+          value={metrics.totalSessions}
           icon={MessageSquare}
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
@@ -39,7 +39,7 @@ export default async function MetricsPage({
         <StatCard
           title="Total Messages"
           value={metrics.totalMessages}
-          subtitle={`Avg ${metrics.avgMessagesPerConversation}/convo`}
+          subtitle={`Avg ${metrics.avgMessagesPerSession}/session`}
           icon={MessageSquare}
           iconColor="text-indigo-600"
           iconBg="bg-indigo-50"
@@ -64,14 +64,14 @@ export default async function MetricsPage({
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-1">Activity Timeline</h3>
         <p className="text-xs text-gray-500 mb-4">
-          First session: {formatDateTime(metrics.firstConversation)} &middot; Last session: {formatRelativeTime(metrics.lastConversation)}
+          First session: {formatDateTime(metrics.firstSession)} &middot; Last session: {formatRelativeTime(metrics.lastSession)}
         </p>
       </div>
 
-      {/* Per-conversation breakdown */}
+      {/* Per-session breakdown */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-900">Conversation Breakdown</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Session Breakdown</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -86,29 +86,29 @@ export default async function MetricsPage({
               </tr>
             </thead>
             <tbody>
-              {metrics.conversations.map((c) => (
-                <tr key={c.id} className="border-b border-gray-50">
+              {metrics.sessions.map((s) => (
+                <tr key={s.id} className="border-b border-gray-50">
                   <td className="py-3 px-4 text-gray-900">
-                    {formatDateTime(c.created_at)}
+                    {formatDateTime(s.created_at)}
                   </td>
                   <td className="py-3 px-4">
-                    {c.is_active ? (
+                    {s.is_active ? (
                       <Badge label="Active" bg="bg-green-100" text="text-green-700" />
                     ) : (
                       <Badge label="Ended" />
                     )}
                   </td>
                   <td className="py-3 px-4 font-medium text-gray-900">
-                    {c.message_count}
+                    {s.message_count}
                   </td>
                   <td className="py-3 px-4 text-gray-600">
-                    {c.user_message_count}
+                    {s.user_message_count}
                   </td>
                   <td className="py-3 px-4 text-gray-600">
-                    {c.assistant_message_count}
+                    {s.assistant_message_count}
                   </td>
                   <td className="py-3 px-4 text-gray-500">
-                    {formatRelativeTime(c.last_message_at)}
+                    {formatRelativeTime(s.last_message_at)}
                   </td>
                 </tr>
               ))}

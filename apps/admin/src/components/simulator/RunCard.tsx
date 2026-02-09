@@ -23,11 +23,6 @@ export default function RunCard({ run }: { run: SimulatorRunWithProfile }) {
         <div className="flex items-start justify-between mb-3">
           <div>
             <div className="text-sm font-medium text-gray-900">{run.profile_name}</div>
-            {run.topic_key && (
-              <div className="text-xs text-gray-500 mt-0.5">
-                {run.topic_key.replace(/_/g, ' ')}
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-2">
             {isStuck && (

@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server';
 import { B44_MESSAGES, B44_CARDS } from './data';
 
 const TARGET_EMAIL = 'nogaavital@gmail.com';
-const TOPIC_KEY = 'enoughness_future_calm';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,40 +20,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not applicable' }, { status: 403 });
     }
 
-    // 3. Idempotency: check if conversation already exists for this topic
+    // 3. Idempotency: check if session already exists for this user
     const { data: existing } = await supabase
-      .from('conversations')
+      .from('sessions')
       .select('id')
       .eq('user_id', user.id)
-      .eq('topic_key', TOPIC_KEY)
+      .eq('title', 'Imported from B44 beta')
       .maybeSingle();
 
     if (existing) {
       return NextResponse.json({
         status: 'already_migrated',
-        conversationId: existing.id,
+        sessionId: existing.id,
       });
     }
 
-    // 4. Create the conversation (using live DB schema)
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
+    // 4. Create the session
+    const { data: session, error: sessError } = await supabase
+      .from('sessions')
       .insert({
         user_id: user.id,
-        topic_key: TOPIC_KEY,
         title: 'Imported from B44 beta',
         is_active: true,
       })
       .select('id')
       .single();
 
-    if (convError || !conversation) {
-      console.error('[B44 Migration] Conversation insert failed:', convError);
-      return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 });
+    if (sessError || !session) {
+      console.error('[B44 Migration] Session insert failed:', sessError);
+      return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
     }
 
-    const conversationId = conversation.id;
-    console.log(`[B44 Migration] Created conversation ${conversationId} for ${user.email}`);
+    const sessionId = session.id;
+    console.log(`[B44 Migration] Created session ${sessionId} for ${user.email}`);
 
     // 5. Batch insert messages (Supabase accepts ~1000 rows per insert)
     const BATCH_SIZE = 500;
@@ -62,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < B44_MESSAGES.length; i += BATCH_SIZE) {
       const batch = B44_MESSAGES.slice(i, i + BATCH_SIZE).map(msg => ({
-        conversation_id: conversationId,
+        session_id: sessionId,
         user_id: user.id,
         role: msg.role,
         content: msg.content,
@@ -89,7 +87,6 @@ export async function POST(request: NextRequest) {
       category: card.category,
       title: card.title,
       content: card.content,
-      topic_key: TOPIC_KEY,
       auto_generated: false,
       created_at: card.created_at,
     }));
@@ -109,7 +106,7 @@ export async function POST(request: NextRequest) {
       const { data: recentMessages } = await supabase
         .from('messages')
         .select('role, content')
-        .eq('conversation_id', conversationId)
+        .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -136,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       status: 'migrated',
-      conversationId,
+      sessionId,
       messageCount: insertedMessages,
       cardCount: B44_CARDS.length,
     });
