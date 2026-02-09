@@ -12,8 +12,8 @@ export async function getUserIntel(userId: string): Promise<BehavioralIntel | nu
     .from('behavioral_intel')
     .select('*')
     .eq('user_id', userId)
-    .single();
-  return data;
+    .limit(1);
+  return (data && data.length > 0) ? data[0] as BehavioralIntel : null;
 }
 
 export async function getUserRewireCards(userId: string): Promise<RewireCard[]> {
