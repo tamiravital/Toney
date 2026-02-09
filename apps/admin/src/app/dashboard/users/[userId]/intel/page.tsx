@@ -6,13 +6,19 @@ import {
   StickyNote,
   Trophy,
   Layers,
+  Lightbulb,
+  TrendingUp,
+  Target,
+  FileText,
 } from 'lucide-react';
-import { getUserIntel, getUserRewireCards, getUserWins } from '@/lib/queries/intel';
-import { stageLabel, formatDate, categoryLabel } from '@/lib/format';
+import { getUserIntel, getUserRewireCards, getUserWins, getLatestBriefing } from '@/lib/queries/intel';
+import { stageLabel, formatDate, formatRelativeTime, categoryLabel } from '@/lib/format';
 import { stageColor } from '@toney/constants';
 import IntelSection from '@/components/IntelSection';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
+import RunFullIntelButton from '@/components/RunFullIntelButton';
+import CollapsibleSection from '@/components/CollapsibleSection';
 import type { EmotionalVocabulary } from '@toney/types';
 
 export default async function IntelPage({
@@ -22,20 +28,14 @@ export default async function IntelPage({
 }) {
   const { userId } = await params;
 
-  const [intel, rewireCards, wins] = await Promise.all([
+  const [intel, rewireCards, wins, briefing] = await Promise.all([
     getUserIntel(userId),
     getUserRewireCards(userId),
     getUserWins(userId),
+    getLatestBriefing(userId),
   ]);
 
-  if (!intel && rewireCards.length === 0 && wins.length === 0) {
-    return (
-      <EmptyState
-        title="No behavioral intel yet"
-        description="Intel is extracted after the user has had a few conversations"
-      />
-    );
-  }
+  const hasAnyIntel = !!(intel || briefing);
 
   const vocab: EmotionalVocabulary = intel?.emotional_vocabulary ?? {
     used_words: [],
@@ -51,8 +51,49 @@ export default async function IntelPage({
     return acc;
   }, {});
 
+  // Parse growth edges
+  const growthEdges = (intel?.growth_edges ?? briefing?.growth_edges ?? {}) as {
+    active?: string[];
+    stabilizing?: string[];
+    not_ready?: string[];
+  };
+
   return (
     <div className="space-y-6">
+      {/* Run Full Intel button + last run timestamp */}
+      <div className="flex items-center justify-between">
+        <RunFullIntelButton userId={userId} hasExistingIntel={hasAnyIntel} />
+        {intel?.last_strategist_run && (
+          <span className="text-xs text-gray-400">
+            Last Strategist run: {formatRelativeTime(intel.last_strategist_run)}
+          </span>
+        )}
+      </div>
+
+      {/* Show empty state if no intel and no briefing, but button is above */}
+      {!hasAnyIntel && rewireCards.length === 0 && wins.length === 0 && (
+        <EmptyState
+          title="No behavioral intel yet"
+          description="Use 'Run Full Intel' above to analyze conversation history, or intel will be extracted after conversations"
+        />
+      )}
+
+      {/* Hypothesis */}
+      {briefing?.hypothesis && (
+        <div className="bg-indigo-50 rounded-2xl border border-indigo-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb className="h-4 w-4 text-indigo-500" />
+            <h3 className="text-sm font-semibold text-indigo-900">Coaching Hypothesis</h3>
+            <span className="text-xs text-indigo-400 ml-auto">
+              v{briefing.version} &middot; {formatDate(briefing.created_at)}
+            </span>
+          </div>
+          <blockquote className="text-sm text-indigo-800 italic border-l-2 border-indigo-300 pl-3">
+            {briefing.hypothesis}
+          </blockquote>
+        </div>
+      )}
+
       {/* Stage of Change */}
       {intel && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -69,6 +110,87 @@ export default async function IntelPage({
             </span>
           </div>
         </div>
+      )}
+
+      {/* Journey Narrative */}
+      {(intel?.journey_narrative || briefing?.journey_narrative) && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="h-4 w-4 text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-900">Journey Narrative</h3>
+          </div>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {intel?.journey_narrative || briefing?.journey_narrative}
+          </p>
+        </div>
+      )}
+
+      {/* Growth Edges */}
+      {(growthEdges.active?.length || growthEdges.stabilizing?.length || growthEdges.not_ready?.length) && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="h-4 w-4 text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-900">Growth Edges</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs font-medium text-emerald-600 mb-1.5">Active</p>
+              {growthEdges.active?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {growthEdges.active.map((edge, i) => (
+                    <Badge key={i} label={edge} bg="bg-emerald-50" text="text-emerald-700" />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">None</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-amber-600 mb-1.5">Stabilizing</p>
+              {growthEdges.stabilizing?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {growthEdges.stabilizing.map((edge, i) => (
+                    <Badge key={i} label={edge} bg="bg-amber-50" text="text-amber-700" />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">None</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">Not Ready</p>
+              {growthEdges.not_ready?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {growthEdges.not_ready.map((edge, i) => (
+                    <Badge key={i} label={edge} bg="bg-gray-100" text="text-gray-600" />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">None</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Strategy */}
+      {briefing?.session_strategy && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="h-4 w-4 text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-900">Session Strategy</h3>
+          </div>
+          <p className="text-sm text-gray-700 leading-relaxed">{briefing.session_strategy}</p>
+        </div>
+      )}
+
+      {/* Full Briefing (collapsed) */}
+      {briefing?.briefing_content && (
+        <CollapsibleSection title="Full Coaching Briefing" icon={FileText}>
+          <pre className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed font-sans">
+            {briefing.briefing_content}
+          </pre>
+        </CollapsibleSection>
       )}
 
       {/* Behavioral Intel Sections */}
