@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, updateRun, getSimConversationMessages } from '@/lib/queries/simulator';
 import { generateUserMessage, buildDefaultUserPrompt } from '@/lib/simulator/engine';
+import { processSimChat } from '@/lib/simulator/chat';
 import { quickCardCheck } from '@/lib/simulator/evaluate';
 import type { Profile } from '@toney/types';
 
@@ -39,26 +40,8 @@ export async function POST(
     // 1. Generate user message via User Agent
     const userMessage = await generateUserMessage(userPrompt, conversationHistory);
 
-    // 2. Send to admin chat route (internal call)
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3001');
-
-    const chatResponse = await fetch(`${baseUrl}/api/simulator/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: simProfile.id,
-        message: userMessage,
-        conversationId: run.conversation_id,
-      }),
-    });
-
-    if (!chatResponse.ok) {
-      const errorData = await chatResponse.json().catch(() => ({}));
-      throw new Error(`Chat route failed: ${errorData.error || chatResponse.status}`);
-    }
-
-    const chatData = await chatResponse.json();
+    // 2. Process chat directly (no HTTP self-call)
+    const chatData = await processSimChat(simProfile.id, userMessage, run.conversation_id);
 
     // 3. Determine if we should stop
     let done = false;
