@@ -3,6 +3,7 @@ import { getUserSessions } from '@/lib/queries/sessions';
 import { formatDateTime, formatRelativeTime } from '@/lib/format';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
+import SplitSessionsButton from '@/components/SplitSessionsButton';
 import { MessageSquare } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,8 @@ export default async function SessionsPage({
 
   return (
     <div className="space-y-3">
+      <SplitSessionsButton userId={userId} sessionCount={sessions.length} />
+
       {sessions.map((s) => (
         <Link
           key={s.id}
@@ -44,9 +47,9 @@ export default async function SessionsPage({
                   <Badge label="Active" bg="bg-green-100" text="text-green-700" />
                 )}
               </div>
-              {s.title && (
-                <p className="text-sm text-gray-500 mt-1 truncate">
-                  {s.title}
+              {s.session_notes && (
+                <p className="text-sm text-gray-500 mt-1 line-clamp-1">
+                  {s.session_notes}
                 </p>
               )}
             </div>
