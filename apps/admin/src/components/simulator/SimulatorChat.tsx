@@ -47,6 +47,7 @@ interface SimulatorChatProps {
   isActive: boolean;
   runStatus: string;
   mode: 'automated' | 'manual';
+  isClone?: boolean;
   onRunComplete?: (evaluation: CardEvaluationSummary | null) => void;
 }
 
@@ -56,6 +57,7 @@ export default function SimulatorChat({
   isActive,
   runStatus,
   mode,
+  isClone = false,
   onRunComplete,
 }: SimulatorChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
@@ -76,6 +78,39 @@ export default function SimulatorChat({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
+
+  // ============================================================
+  // Manual mode: auto-generate Coach greeting for clones
+  // ============================================================
+
+  useEffect(() => {
+    if (isActive && mode === 'manual' && isClone && initialMessages.length === 0) {
+      const generateGreeting = async () => {
+        setTicking(true);
+        try {
+          const res = await fetch(`/api/simulator/run/${runId}/tick`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await res.json();
+          if (data.assistantMsg) {
+            setMessages([{
+              id: data.assistantMsg.id,
+              role: 'assistant',
+              content: data.assistantMsg.content,
+              created_at: data.assistantMsg.created_at || new Date().toISOString(),
+            }]);
+          }
+        } catch (err) {
+          console.error('Failed to generate greeting:', err);
+        } finally {
+          setTicking(false);
+        }
+      };
+      generateGreeting();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ============================================================
   // Automated mode: client-driven tick loop
@@ -109,26 +144,32 @@ export default function SimulatorChat({
 
         const data = await res.json();
 
-        if (data.userMsg && data.assistantMsg) {
-          const userMsg: ChatMessage = {
-            id: data.userMsg.id,
-            role: 'user',
-            content: data.userMsg.content,
-            created_at: data.userMsg.created_at || new Date().toISOString(),
-          };
-          const assistantMsg: ChatMessage = {
+        if (data.assistantMsg) {
+          const newMessages: ChatMessage[] = [];
+
+          if (data.userMsg) {
+            newMessages.push({
+              id: data.userMsg.id,
+              role: 'user',
+              content: data.userMsg.content,
+              created_at: data.userMsg.created_at || new Date().toISOString(),
+            });
+          }
+
+          newMessages.push({
             id: data.assistantMsg.id,
             role: 'assistant',
             content: data.assistantMsg.content,
             created_at: data.assistantMsg.created_at || new Date().toISOString(),
-          };
-          setMessages(prev => [...prev, userMsg, assistantMsg]);
+          });
+
+          setMessages(prev => [...prev, ...newMessages]);
 
           // Store observer signals for this assistant message
           if (data.observerSignals?.length) {
             setSignalsByMsgId(prev => ({
               ...prev,
-              [assistantMsg.id]: data.observerSignals,
+              [data.assistantMsg.id]: data.observerSignals,
             }));
           }
         }

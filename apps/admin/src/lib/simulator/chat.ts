@@ -226,6 +226,80 @@ export async function processSimChat(
 }
 
 // ────────────────────────────────────────────
+// Coach Greeting — for cloned users (Coach speaks first)
+// ────────────────────────────────────────────
+
+export async function generateCoachGreeting(
+  userId: string,
+  conversationId: string,
+): Promise<{
+  message: { id: string; role: 'assistant'; content: string; timestamp: string };
+}> {
+  const profile = await getSimProfile(userId);
+  let briefing = await getLatestSimBriefing(userId);
+
+  // If no briefing, generate initial one
+  if (!briefing) {
+    try {
+      const result = await generateInitialBriefing(profile);
+      await saveSimBriefing(userId, null, result);
+      briefing = await getLatestSimBriefing(userId);
+    } catch { /* fall through to legacy */ }
+  }
+
+  // Build system prompt (same logic as processSimChat)
+  let systemPromptBlocks: SystemPromptBlock[];
+  if (briefing) {
+    systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
+  } else {
+    const behavioralIntel = await getSimBehavioralIntel(userId);
+    const recentWins = await getSimWins(userId, 5);
+    const rewireCards = await getSimRewireCards(userId, 10);
+    const coachMemories = await getSimCoachMemories(userId, 30);
+    systemPromptBlocks = buildSystemPromptBlocks({
+      profile: profile as Profile,
+      behavioralIntel: behavioralIntel as BehavioralIntel | null,
+      recentWins: recentWins as Win[],
+      rewireCardTitles: rewireCards.map(c => c.title),
+      coachMemories: coachMemories as CoachMemory[],
+      isFirstConversation: false,
+      messageCount: 0,
+      topicKey: null,
+      isFirstTopicConversation: false,
+      otherTopics: [],
+    });
+  }
+
+  // Trigger message — not saved to DB, just used to prompt the Coach
+  const triggerMessage = `[The user just opened the app to start a new conversation. This is a returning user you know well. Greet them warmly and contextually based on what you know about them. Reference something specific from your knowledge of them. Keep it 2-4 sentences — like a coach welcoming someone back. Don't overwhelm them with questions. One gentle invitation to share what's on their mind is enough.]`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 500,
+    temperature: 0.7,
+    system: systemPromptBlocks,
+    messages: [{ role: 'user', content: triggerMessage }],
+  });
+
+  const assistantContent = response.content[0].type === 'text'
+    ? response.content[0].text
+    : '';
+
+  // Save only the assistant message (the trigger is not a real user message)
+  const savedMsg = await saveSimMessage(conversationId, userId, 'assistant', assistantContent);
+  await updateSimConversationMessageCount(conversationId, 1);
+
+  return {
+    message: {
+      id: savedMsg.id,
+      role: 'assistant',
+      content: assistantContent,
+      timestamp: savedMsg.created_at,
+    },
+  };
+}
+
+// ────────────────────────────────────────────
 // Strategist runner (mirrors mobile /api/strategist logic)
 // ────────────────────────────────────────────
 

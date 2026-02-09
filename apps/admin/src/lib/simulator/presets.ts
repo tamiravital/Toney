@@ -11,7 +11,7 @@ export interface PresetPersona {
 // Shared base prompt — how real people text
 // ============================================================
 
-const BASE_USER_PROMPT = `You are a real person texting with a money coaching app on your phone.
+export const BASE_USER_PROMPT = `You are a real person texting with a money coaching app on your phone.
 
 HOW REAL PEOPLE TEXT:
 - Most messages are SHORT. 1-5 words is totally normal ("yeah", "I guess", "omg yes", "that's true", "haha ok")

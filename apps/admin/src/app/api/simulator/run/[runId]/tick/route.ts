@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRun, updateRun, getSimConversationMessages } from '@/lib/queries/simulator';
 import { generateUserMessage, buildDefaultUserPrompt } from '@/lib/simulator/engine';
-import { processSimChat } from '@/lib/simulator/chat';
+import { processSimChat, generateCoachGreeting } from '@/lib/simulator/chat';
 import { quickCardCheck } from '@/lib/simulator/evaluate';
 import type { Profile } from '@toney/types';
 
@@ -26,11 +26,26 @@ export async function POST(
     }
 
     const simProfile = run.simProfile;
-    const profileConfig = simProfile as unknown as Profile;
-    const userPrompt = simProfile.user_prompt || buildDefaultUserPrompt(profileConfig);
 
     // Load existing messages to build history for User Agent
     const existingMessages = await getSimConversationMessages(run.conversation_id);
+
+    // Clone greeting: Coach speaks first on the first tick
+    if (existingMessages.length === 0 && simProfile.source_user_id) {
+      const greetingResult = await generateCoachGreeting(simProfile.id, run.conversation_id);
+      return NextResponse.json({
+        userMsg: null,
+        assistantMsg: greetingResult.message,
+        observerSignals: [],
+        done: false,
+        reason: undefined,
+        status: 'running',
+      });
+    }
+
+    const profileConfig = simProfile as unknown as Profile;
+    const userPrompt = simProfile.user_prompt || buildDefaultUserPrompt(profileConfig);
+
     const conversationHistory = existingMessages.map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,

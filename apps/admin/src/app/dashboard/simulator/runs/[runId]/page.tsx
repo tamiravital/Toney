@@ -242,6 +242,7 @@ export default async function RunDetailPage({
           isActive={isActive}
           runStatus={run.status}
           mode={run.mode as 'automated' | 'manual'}
+          isClone={!!simProfile.source_user_id}
         />
       </div>
     </div>

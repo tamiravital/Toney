@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Profile } from '@toney/types';
+import type { Profile, BehavioralIntel, CoachMemory } from '@toney/types';
+import { BASE_USER_PROMPT } from './presets';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -65,6 +66,91 @@ Vary your length. Not every message needs to be deep. Sometimes just "yeah" is t
 
   const block = response.content[0];
   return block.type === 'text' ? block.text : '';
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+// ============================================================
+// Character Synthesis — builds a rich persona from real user data
+// ============================================================
+
+export async function synthesizeCharacterProfile(
+  profile: Partial<Profile>,
+  userMessages: string[],
+  behavioralIntel: BehavioralIntel | null,
+  coachMemories: CoachMemory[],
+): Promise<string> {
+  const messagesBlock = userMessages.length > 0
+    ? `Here are their actual messages from the app (user messages only, chronological):\n\n${userMessages.map((m, i) => `${i + 1}. "${m}"`).join('\n')}`
+    : 'No messages available — use the profile data to infer character.';
+
+  const intelBlock = behavioralIntel
+    ? `Behavioral intel extracted from their sessions:
+- Triggers: ${(behavioralIntel.triggers || []).join(', ') || 'none identified'}
+- Resistance patterns: ${(behavioralIntel.resistance_patterns || []).join(', ') || 'none identified'}
+- Breakthroughs: ${(behavioralIntel.breakthroughs || []).join(', ') || 'none yet'}
+- Stage of change: ${behavioralIntel.stage_of_change || 'unknown'}
+- Journey narrative: ${behavioralIntel.journey_narrative || 'none yet'}`
+    : '';
+
+  const memoriesBlock = coachMemories.length > 0
+    ? `Things the coach remembers about them:\n${coachMemories.map(m => `- ${m.content}`).join('\n')}`
+    : '';
+
+  const profileBlock = `Profile data:
+- Tension type: ${profile.tension_type || 'unknown'}
+- Emotional why: "${profile.emotional_why || ''}"
+- Tone preference: ${profile.tone || 5}/10
+- Depth: ${profile.depth || 'balanced'}
+- Life stage: ${profile.life_stage || 'unknown'}
+- Income type: ${profile.income_type || 'unknown'}
+- Relationship status: ${profile.relationship_status || 'unknown'}
+- Learning styles: ${(profile.learning_styles || []).join(', ') || 'unknown'}`;
+
+  const synthesisPrompt = `You are analyzing a real user's messages and profile from a money coaching app. Your job is to create a detailed character description that captures who this person REALLY is — how they text, what they care about, their specific life details, their personality quirks.
+
+${profileBlock}
+
+${messagesBlock}
+
+${intelBlock}
+
+${memoriesBlock}
+
+Based on ALL of this, write a character description. Follow this exact format:
+
+YOUR SPECIFIC CHARACTER — [their name or a fitting pseudonym], [inferred age], [inferred job/situation]:
+- [Financial specifics: income, debt, savings, spending patterns — infer from their messages and profile]
+- [Key relationships they've mentioned: partner, family, friends — use actual names if they used them]
+- [Their texting style: message length, tone, vocabulary, filler words they actually use, punctuation habits]
+- [Specific recent events or situations they've described]
+- [Emotional patterns: what makes them open up, what makes them shut down, how they deflect]
+- [Contradictions: things they say vs what they actually do]
+- [What they're defensive about, what they're curious about]
+- Specific recent thing: [the most recent concrete situation from their messages]
+
+IMPORTANT RULES:
+- Use details DIRECTLY from their messages. Don't invent life details they never mentioned.
+- Match their ACTUAL texting style — if they use "lol" and "idk", note that. If they write in full sentences, note that.
+- If they mentioned specific people by name, use those names.
+- If they mentioned specific amounts ($), use those amounts.
+- Keep it to 8-12 bullet points. Be specific, not generic.
+- Do NOT include the base texting instructions (those are prepended separately).`;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 1000,
+    temperature: 0.7,
+    messages: [{ role: 'user', content: synthesisPrompt }],
+  });
+
+  const characterBlock = response.content[0].type === 'text'
+    ? response.content[0].text
+    : '';
+
+  return `${BASE_USER_PROMPT}\n\n${characterBlock}`;
 }
 
 // ============================================================

@@ -69,6 +69,33 @@ export async function getSimProfiles(): Promise<SimProfile[]> {
 
 export async function deleteSimProfile(id: string): Promise<void> {
   const supabase = createAdminClient();
+
+  // Delete all related sim_* data first (no FK cascades in DB)
+  // Get conversation IDs for this profile to delete messages and runs
+  const { data: convos } = await supabase
+    .from('sim_conversations')
+    .select('id')
+    .eq('user_id', id);
+  const convoIds = (convos ?? []).map(c => c.id);
+
+  if (convoIds.length > 0) {
+    await supabase.from('sim_messages').delete().in('conversation_id', convoIds);
+    await supabase.from('sim_runs').delete().in('conversation_id', convoIds);
+  }
+
+  // Delete remaining runs that may not have a conversation_id
+  await supabase.from('sim_runs').delete().eq('sim_profile_id', id);
+
+  // Delete all user-scoped sim_* data
+  await supabase.from('sim_conversations').delete().eq('user_id', id);
+  await supabase.from('sim_observer_signals').delete().eq('user_id', id);
+  await supabase.from('sim_coaching_briefings').delete().eq('user_id', id);
+  await supabase.from('sim_behavioral_intel').delete().eq('user_id', id);
+  await supabase.from('sim_coach_memories').delete().eq('user_id', id);
+  await supabase.from('sim_rewire_cards').delete().eq('user_id', id);
+  await supabase.from('sim_wins').delete().eq('user_id', id);
+
+  // Finally delete the profile itself
   const { error } = await supabase
     .from('sim_profiles')
     .delete()
@@ -675,20 +702,71 @@ export async function updateSimJourneyNarrative(userId: string, result: Strategi
 // ============================================================
 
 export async function cloneUserToSim(userId: string, name: string): Promise<{ simProfileId: string }> {
+  const { synthesizeCharacterProfile } = await import('@/lib/simulator/engine');
   const supabase = createAdminClient();
 
   // 1. Load real user's profile
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
   if (!profile) throw new Error('User not found');
 
-  // 2. Build user prompt
-  const userPrompt = `You are roleplaying as a real user of Toney, a money coaching app. Based on your profile, your primary money tension is "${profile.tension_type || 'unknown'}". ${profile.emotional_why ? `You said: "${profile.emotional_why}"` : ''}
+  // 2. Load real user's messages for character synthesis
+  let userMessages: string[] = [];
+  try {
+    const { data: convos } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+    const convoIds = (convos ?? []).map(c => c.id);
+
+    if (convoIds.length > 0) {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('content')
+        .in('conversation_id', convoIds)
+        .eq('role', 'user')
+        .order('created_at', { ascending: true })
+        .limit(100);
+      userMessages = (msgs ?? []).map(m => m.content);
+    }
+  } catch { /* no messages */ }
+
+  // 3. Load behavioral intel + coach memories (needed for synthesis AND for copying)
+  let intel: Record<string, unknown> | null = null;
+  try {
+    const { data } = await supabase.from('behavioral_intel').select('*').eq('user_id', userId).single();
+    intel = data;
+  } catch { /* no intel */ }
+
+  let memories: { content: string; importance: number; active: boolean }[] = [];
+  try {
+    const { data } = await supabase
+      .from('coach_memories')
+      .select('content, importance, active')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .limit(50);
+    memories = data ?? [];
+  } catch { /* no memories */ }
+
+  // 4. Synthesize rich character profile via Claude
+  let userPrompt: string;
+  try {
+    userPrompt = await synthesizeCharacterProfile(
+      profile,
+      userMessages,
+      intel as BehavioralIntel | null,
+      memories as unknown as CoachMemory[],
+    );
+  } catch {
+    // Fallback to generic prompt if synthesis fails
+    userPrompt = `You are roleplaying as a real user of Toney, a money coaching app. Based on your profile, your primary money tension is "${profile.tension_type || 'unknown'}". ${profile.emotional_why ? `You said: "${profile.emotional_why}"` : ''}
 
 Respond naturally as this person would. Keep responses 1-3 sentences. Be authentic — show resistance, vulnerability, deflection, or openness. Don't be overly cooperative.`;
+  }
 
-  // 3. Create sim_profile (with user_prompt and source_user_id)
+  // 5. Create sim_profile (with synthesized user_prompt and source_user_id)
   const simProfile = await createSimProfile({
-    display_name: `Clone: ${name}`,
+    display_name: name.startsWith('Clone:') ? name : `Clone: ${name}`,
     tension_type: profile.tension_type,
     secondary_tension_type: profile.secondary_tension_type,
     tension_score: profile.tension_score,
@@ -704,10 +782,9 @@ Respond naturally as this person would. Keep responses 1-3 sentences. Be authent
     source_user_id: userId,
   });
 
-  // 4. Copy behavioral intel
-  try {
-    const { data: intel } = await supabase.from('behavioral_intel').select('*').eq('user_id', userId).single();
-    if (intel) {
+  // 6. Copy behavioral intel
+  if (intel) {
+    try {
       await supabase.from('sim_behavioral_intel').insert({
         user_id: simProfile.id,
         triggers: intel.triggers,
@@ -719,25 +796,19 @@ Respond naturally as this person would. Keep responses 1-3 sentences. Be authent
         journey_narrative: intel.journey_narrative,
         growth_edges: intel.growth_edges,
       });
-    }
-  } catch { /* no intel */ }
+    } catch { /* non-critical */ }
+  }
 
-  // 5. Copy coach memories
-  try {
-    const { data: memories } = await supabase
-      .from('coach_memories')
-      .select('content, importance, active')
-      .eq('user_id', userId)
-      .eq('active', true)
-      .limit(50);
-    if (memories?.length) {
+  // 7. Copy coach memories
+  if (memories.length > 0) {
+    try {
       await supabase.from('sim_coach_memories').insert(
         memories.map(m => ({ user_id: simProfile.id, content: m.content, importance: m.importance, active: m.active }))
       );
-    }
-  } catch { /* no memories */ }
+    } catch { /* non-critical */ }
+  }
 
-  // 6. Copy latest coaching briefing
+  // 8. Copy latest coaching briefing
   try {
     const { data: briefing } = await supabase
       .from('coaching_briefings')
@@ -759,7 +830,7 @@ Respond naturally as this person would. Keep responses 1-3 sentences. Be authent
     }
   } catch { /* no briefing */ }
 
-  // 7. Copy rewire cards
+  // 9. Copy rewire cards
   try {
     const { data: cards } = await supabase
       .from('rewire_cards')
@@ -773,7 +844,7 @@ Respond naturally as this person would. Keep responses 1-3 sentences. Be authent
     }
   } catch { /* no cards */ }
 
-  // 8. Copy wins
+  // 10. Copy wins
   try {
     const { data: wins } = await supabase
       .from('wins')
