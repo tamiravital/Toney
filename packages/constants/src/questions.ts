@@ -8,26 +8,42 @@ export interface OnboardingQuestion {
   id: string;
   question: string;
   options: QuestionOption[];
+  multiSelect?: boolean;
 }
 
 /**
  * Converts raw onboarding answers {questionId: answerValue} into
  * human-readable "Q → A" lines for the Strategist.
+ * Handles both single-select (string) and multi-select (comma-separated) answers.
  */
 export function formatAnswersReadable(answers: Record<string, string>): string {
   const lines: string[] = [];
   for (const q of questions) {
     const answerValue = answers[q.id];
     if (!answerValue) continue;
-    const option = q.options.find(o => o.value === answerValue);
-    if (option) {
-      lines.push(`${q.question} → "${option.label}"`);
+
+    if (q.multiSelect) {
+      // Multi-select: value is comma-separated list of values
+      const selectedValues = answerValue.split(',').map(v => v.trim()).filter(Boolean);
+      const selectedLabels = selectedValues.map(v => {
+        const option = q.options.find(o => o.value === v);
+        return option ? option.label : v;
+      });
+      if (selectedLabels.length > 0) {
+        lines.push(`${q.question} → ${selectedLabels.map(l => `"${l}"`).join(', ')}`);
+      }
+    } else {
+      const option = q.options.find(o => o.value === answerValue);
+      if (option) {
+        lines.push(`${q.question} → "${option.label}"`);
+      }
     }
   }
   return lines.join('\n');
 }
 
 export const questions: OnboardingQuestion[] = [
+  // Q1: Balance checking — proven tension signal
   {
     id: 'money_check',
     question: 'How do you feel about checking your bank balance?',
@@ -40,28 +56,22 @@ export const questions: OnboardingQuestion[] = [
       { value: 'depends_mood', label: 'Depends on how I feel that day', emoji: '\u{1F3B2}' },
     ],
   },
+
+  // Q2: Stress response — what they DO, not how they feel (from intake form)
   {
-    id: 'unexpected_500',
-    question: 'You get an unexpected $500. What\u2019s your gut reaction?',
+    id: 'stress_response',
+    question: 'When money stress hits, what do you actually do?',
     options: [
-      { value: 'save_all', label: "Don't touch it \u2014 save for when things go wrong", emoji: '\u{1F3E6}' },
-      { value: 'treat_self', label: 'Finally, something nice for me', emoji: '\u{1F381}' },
-      { value: 'invest_fast', label: 'Where can I put this to make more?', emoji: '\u{1F4C8}' },
-      { value: 'help_others', label: 'I know someone who needs this more', emoji: '\u{1F49D}' },
-      { value: 'dont_think', label: "It'll be gone before I even notice", emoji: '\u{1F32B}\u{FE0F}' },
+      { value: 'shut_down', label: 'Shut down and avoid it completely', emoji: '\u{1F6CC}' },
+      { value: 'spend_more', label: 'Spend more to feel better', emoji: '\u{1F6CD}\u{FE0F}' },
+      { value: 'obsess_numbers', label: 'Obsess over the numbers', emoji: '\u{1F4F1}' },
+      { value: 'take_it_out', label: 'Take it out on the people around me', emoji: '\u{1F4A2}' },
+      { value: 'power_through', label: 'Push harder — hustle, grind, earn', emoji: '\u{1F4AA}' },
+      { value: 'give_away', label: 'Focus on helping someone else instead', emoji: '\u{1F49D}' },
     ],
   },
-  {
-    id: 'stress_trigger',
-    question: 'Which of these keeps you up at night?',
-    options: [
-      { value: 'falling_behind', label: 'Everyone else seems to have it figured out', emoji: '\u{1F3C3}' },
-      { value: 'not_enough', label: 'No matter what I do, it never feels like enough', emoji: '\u{1F61F}' },
-      { value: 'cant_say_no', label: "I keep putting others' needs before mine", emoji: '\u{1F494}' },
-      { value: 'losing_control', label: "I spend in ways I know I shouldn't", emoji: '\u{1F300}' },
-      { value: 'cant_enjoy', label: "I have money but I'm afraid to use it", emoji: '\u{1F512}' },
-    ],
-  },
+
+  // Q3: Social money — dinner scenario
   {
     id: 'social_money',
     question: 'A friend suggests a dinner you can\u2019t really afford. You\u2026',
@@ -73,17 +83,8 @@ export const questions: OnboardingQuestion[] = [
       { value: 'suggest_cheaper', label: 'Suggest somewhere cheaper', emoji: '\u{1F4AC}' },
     ],
   },
-  {
-    id: 'money_decisions',
-    question: 'A big purchase is coming up. How do you handle it?',
-    options: [
-      { value: 'postpone', label: 'Avoid thinking about it until I have to', emoji: '\u23F0' },
-      { value: 'overthink', label: 'Research for weeks and still feel unsure', emoji: '\u{1F92F}' },
-      { value: 'act_fast', label: 'Just do it before I overthink it', emoji: '\u26A1' },
-      { value: 'ask_others', label: 'Ask everyone I know what they think', emoji: '\u{1F5E3}\u{FE0F}' },
-      { value: 'emotion_driven', label: 'Depends entirely on my mood that day', emoji: '\u{1F4AB}' },
-    ],
-  },
+
+  // Q4: Mirror question — what others see
   {
     id: 'money_identity',
     question: 'Be honest, people who know you would say\u2026',
@@ -95,15 +96,45 @@ export const questions: OnboardingQuestion[] = [
       { value: 'big_spender', label: '"You spend like there\u2019s no tomorrow"', emoji: '\u2728' },
     ],
   },
+
+  // Q5: Frequency — how often money stress shows up
   {
-    id: 'purchase_pattern',
-    question: 'Look at your last few purchases. What do you see?',
+    id: 'stress_frequency',
+    question: 'How often does money stress actually show up in your life?',
     options: [
-      { value: 'unopened', label: "Stuff I haven't even used yet", emoji: '\u{1F4E6}' },
-      { value: 'impressive', label: 'Things I bought to feel a certain way', emoji: '\u{1F4F1}' },
-      { value: 'opportunities', label: 'Courses, investments, side projects', emoji: '\u{1F680}' },
-      { value: 'for_others', label: 'Mostly things for other people', emoji: '\u{1F381}' },
-      { value: 'mostly_essentials', label: "Just the basics \u2014 I don't let myself get extras", emoji: '\u{1F6D2}' },
+      { value: 'daily', label: 'Every single day', emoji: '\u{1F525}' },
+      { value: 'few_week', label: 'A few times a week', emoji: '\u{1F4C5}' },
+      { value: 'specific_triggers', label: 'Only around specific things (bills, payday, social events)', emoji: '\u{1F3AF}' },
+      { value: 'rarely', label: "Rarely — but when it hits, it hits hard", emoji: '\u{1F329}\u{FE0F}' },
+      { value: 'background', label: "It's a constant low hum I've learned to live with", emoji: '\u{1F50A}' },
+    ],
+  },
+
+  // Q6: Strength-based — what they're already good at
+  {
+    id: 'money_strength',
+    question: 'What\u2019s one thing you\u2019re actually good at with money?',
+    options: [
+      { value: 'generous', label: "I'm generous with the people I love", emoji: '\u{1F496}' },
+      { value: 'earn_well', label: "I know how to earn it", emoji: '\u{1F4B0}' },
+      { value: 'disciplined', label: "I'm disciplined when I set my mind to it", emoji: '\u{1F3CB}\u{FE0F}' },
+      { value: 'bounce_back', label: "I always figure it out eventually", emoji: '\u{1F331}' },
+      { value: 'nothing', label: "Honestly? I can't think of one", emoji: '\u{1F614}' },
+    ],
+  },
+
+  // Q7: Goals — multi-select, what they want from coaching
+  {
+    id: 'goals',
+    question: 'What would feel like progress?',
+    multiSelect: true,
+    options: [
+      { value: 'stop_stress', label: 'Stop stressing about money', emoji: '\u{1F9D8}' },
+      { value: 'spend_on_self', label: 'Feel okay spending on myself', emoji: '\u{1F381}' },
+      { value: 'hard_convos', label: 'Have hard money conversations without fighting', emoji: '\u{1F4AC}' },
+      { value: 'ask_worth', label: 'Ask for a raise or charge what I\u2019m worth', emoji: '\u{1F4AA}' },
+      { value: 'mood_control', label: 'Stop letting money run my mood', emoji: '\u{1F3AF}' },
+      { value: 'feel_in_control', label: 'Feel in control of my finances', emoji: '\u2705' },
     ],
   },
 ];

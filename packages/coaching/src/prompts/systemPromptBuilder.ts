@@ -185,19 +185,13 @@ function getQuizInsight(questionId: string, answer: string): string | null {
       dont_think: 'Doesn\'t think about money much — disconnection from financial reality',
       depends_mood: 'Relationship with money tracking depends on emotional state — mood-driven',
     },
-    unexpected_500: {
-      save_all: 'Unexpected money → save every cent ("you never know")',
-      treat_self: 'Unexpected money → treat themselves (emotional reward)',
-      invest_fast: 'Unexpected money → "put it to work" immediately (urgency, not strategy)',
-      help_others: 'Unexpected money → help someone else first (didn\'t even consider themselves)',
-      dont_think: 'Unexpected money → it would "disappear" without them knowing where',
-    },
-    stress_trigger: {
-      falling_behind: 'Biggest stress → feeling like others are ahead (social comparison)',
-      not_enough: 'Biggest stress → "never enough, no matter what" (the goalpost always moves)',
-      cant_say_no: 'Biggest stress → can\'t say no to people they care about',
-      losing_control: 'Biggest stress → feeling out of control with spending',
-      cant_enjoy: 'Biggest stress → has money but can\'t enjoy it',
+    stress_response: {
+      shut_down: 'Under stress → shuts down and avoids completely (flight response)',
+      spend_more: 'Under stress → spends more to feel better (emotional spending as self-medication)',
+      obsess_numbers: 'Under stress → obsesses over the numbers (hypervigilance, control through data)',
+      take_it_out: 'Under stress → takes it out on people around them (money stress bleeds into relationships)',
+      power_through: 'Under stress → pushes harder, hustles more (earning as coping, never-enough energy)',
+      give_away: 'Under stress → focuses on helping someone else instead (deflection through generosity)',
     },
     social_money: {
       go_anyway: 'Social situations → goes anyway and deals with consequences later',
@@ -206,13 +200,6 @@ function getQuizInsight(questionId: string, answer: string): string | null {
       avoid_plans: 'Social situations → makes excuses to avoid the situation entirely',
       suggest_cheaper: 'Social situations → tries to steer to something more affordable',
     },
-    money_decisions: {
-      postpone: 'Decisions → postpones as long as possible',
-      overthink: 'Decisions → researches endlessly, never feels ready',
-      act_fast: 'Decisions → acts fast, "opportunities don\'t wait"',
-      ask_others: 'Decisions → asks what others think they should do',
-      emotion_driven: 'Decisions → goes with how they feel in the moment',
-    },
     money_identity: {
       too_careful: 'Others say → "too careful" (even people who love them see the rigidity)',
       too_generous: 'Others say → "gives too much" (visible to everyone around them)',
@@ -220,15 +207,23 @@ function getQuizInsight(questionId: string, answer: string): string | null {
       always_stressed: 'Others say → "always stressed about money" (it\'s pervasive)',
       big_spender: 'Others say → "lives large" (perception may not match inner experience)',
     },
-    purchase_pattern: {
-      unopened: 'Purchases → lots of unopened/unused items (buying is the coping, not the items)',
-      impressive: 'Purchases → look great on social media (buying is identity, not need)',
-      opportunities: 'Purchases → investments, side projects, "opportunities"',
-      for_others: 'Purchases → mostly gifts and things for others',
-      mostly_essentials: 'Purchases → mostly essentials, rarely splurges',
+    stress_frequency: {
+      daily: 'Money stress frequency → every single day (high urgency, pervasive impact)',
+      few_week: 'Money stress frequency → a few times a week (significant but has breathing room)',
+      specific_triggers: 'Money stress frequency → only around specific triggers like bills, payday, social events (pattern-based, targetable)',
+      rarely: 'Money stress frequency → rare but intense when it hits (acute episodes, worth exploring what triggers them)',
+      background: 'Money stress frequency → constant low hum (normalized, may not realize how much it costs them)',
+    },
+    money_strength: {
+      generous: 'Self-identified strength → generous with people they love (can build on this, but watch for over-giving)',
+      earn_well: 'Self-identified strength → knows how to earn (confidence in generating, may struggle with keeping/enjoying)',
+      disciplined: 'Self-identified strength → disciplined when focused (has the muscle, needs the right direction)',
+      bounce_back: 'Self-identified strength → always figures it out (resilient, but "figuring it out" may mean surviving not thriving)',
+      nothing: 'Self-identified strength → can\'t think of one (low money self-efficacy, start by naming what they actually do well)',
     },
   };
 
+  // Goals (Q7) are multi-select and handled via what_brought_you, not individual insights
   return insights[questionId]?.[answer] || null;
 }
 

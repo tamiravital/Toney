@@ -5,7 +5,6 @@ import MobileShell from '@/components/layout/MobileShell';
 import {
   OnboardingWelcome,
   OnboardingQuestions,
-  OnboardingPattern,
 } from '@/components/onboarding';
 import HomeScreen from '@/components/home/HomeScreen';
 import ChatScreen from '@/components/chat/ChatScreen';
@@ -44,7 +43,6 @@ export default function ToneyApp() {
         <>
           {onboardingStep === 'welcome' && <OnboardingWelcome />}
           {onboardingStep === 'questions' && <OnboardingQuestions />}
-          {onboardingStep === 'pattern' && <OnboardingPattern />}
         </>
       ) : (
         <>

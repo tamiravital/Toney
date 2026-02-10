@@ -6,7 +6,7 @@ import { tensionDetails } from '@toney/constants';
 import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
-type OnboardingStep = 'welcome' | 'questions' | 'pattern';
+type OnboardingStep = 'welcome' | 'questions';
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
 type ActiveTab = 'home' | 'chat' | 'rewire' | 'wins';
 type SessionStatus = 'active' | 'ending' | 'completed';
@@ -497,15 +497,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   }, []);
 
-  const handleNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-    } else {
-      // No client-side scoring — Strategist determines tension at session open
-      setOnboardingStep('pattern');
-    }
-  }, [currentQuestionIndex]);
-
   const handlePrevQuestion = useCallback(() => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
@@ -845,6 +836,21 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStyleProfile({ ...defaultStyle });
     localStorage.setItem('toney_onboarded', 'true');
 
+    // Extract goals from multi-select Q7 answer for what_brought_you
+    let goalsText = '';
+    const goalsAnswer = answers['goals'] || '';
+    if (goalsAnswer) {
+      const goalsQuestion = questions.find(q => q.id === 'goals');
+      if (goalsQuestion) {
+        const selectedValues = goalsAnswer.split(',').filter(Boolean);
+        const selectedLabels = selectedValues.map(v => {
+          const opt = goalsQuestion.options.find(o => o.value === v);
+          return opt ? opt.label : v;
+        });
+        goalsText = selectedLabels.join('; ');
+      }
+    }
+
     // Save profile to Supabase — tension_type determined by Strategist at session open
     if (isSupabaseConfigured()) {
       try {
@@ -857,7 +863,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             depth: defaultStyle.depth,
             learning_styles: defaultStyle.learningStyles,
             onboarding_completed: true,
-            ...(whatBroughtYou && { what_brought_you: whatBroughtYou }),
+            ...(goalsText && { what_brought_you: goalsText }),
           }).eq('id', user.id);
         }
       } catch {
@@ -868,7 +874,16 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     // Go to main app — straight to chat
     setAppPhase('main');
     setActiveTab('chat');
-  }, [answers, whatBroughtYou]);
+  }, [answers]);
+
+  const handleNextQuestion = useCallback(() => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      // Last question — go straight to finish (goals are extracted in finishOnboarding from answers)
+      finishOnboarding();
+    }
+  }, [currentQuestionIndex, finishOnboarding]);
 
   const resetAll = useCallback(() => {
     localStorage.removeItem('toney_signed_in');
