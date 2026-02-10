@@ -18,6 +18,7 @@ export const questions: OnboardingQuestion[] = [
       { value: 'avoid_it', label: "I'd rather not know", emoji: '\u{1F648}' },
       { value: 'obsess', label: "I check all the time but it doesn't help", emoji: '\u{1F630}' },
       { value: 'track_tight', label: 'I need to know exactly where every dollar is', emoji: '\u{1F4CA}' },
+      { value: 'normal', label: 'I know roughly where I stand', emoji: '\u2705' },
       { value: 'dont_think', label: "Honestly, I don't think about it much", emoji: '\u{1F937}' },
       { value: 'depends_mood', label: 'Depends on how I feel that day', emoji: '\u{1F3B2}' },
     ],

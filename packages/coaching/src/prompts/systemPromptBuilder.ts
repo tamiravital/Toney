@@ -181,6 +181,7 @@ function getQuizInsight(questionId: string, answer: string): string | null {
       avoid_it: 'Avoids checking balance — "if I don\'t look, it can\'t hurt me"',
       obsess: 'Checks constantly but it never helps — no number feels safe enough',
       track_tight: 'Needs to know where every dollar is — could be discipline or exhausting control',
+      normal: 'Has a casual, healthy relationship with checking their balance — tension shows up elsewhere',
       dont_think: 'Doesn\'t think about money much — disconnection from financial reality',
       depends_mood: 'Relationship with money tracking depends on emotional state — mood-driven',
     },
