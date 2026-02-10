@@ -10,6 +10,23 @@ export interface OnboardingQuestion {
   options: QuestionOption[];
 }
 
+/**
+ * Converts raw onboarding answers {questionId: answerValue} into
+ * human-readable "Q → A" lines for the Strategist.
+ */
+export function formatAnswersReadable(answers: Record<string, string>): string {
+  const lines: string[] = [];
+  for (const q of questions) {
+    const answerValue = answers[q.id];
+    if (!answerValue) continue;
+    const option = q.options.find(o => o.value === answerValue);
+    if (option) {
+      lines.push(`${q.question} → "${option.label}"`);
+    }
+  }
+  return lines.join('\n');
+}
+
 export const questions: OnboardingQuestion[] = [
   {
     id: 'money_check',

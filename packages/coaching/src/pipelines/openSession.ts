@@ -42,6 +42,10 @@ export interface OpenSessionOutput {
   growthEdges: Record<string, unknown>;
   /** The Coach's opening message */
   openingMessage: string;
+  /** Tension type determined by Strategist (first session) */
+  tensionType?: string | null;
+  /** Secondary tension type */
+  secondaryTensionType?: string | null;
 }
 
 export async function openSessionPipeline(input: OpenSessionInput): Promise<OpenSessionOutput> {
@@ -53,6 +57,8 @@ export async function openSessionPipeline(input: OpenSessionInput): Promise<Open
   let sessionStrategy: string;
   let journeyNarrative: string;
   let growthEdges: Record<string, unknown>;
+  let tensionType: string | null = null;
+  let secondaryTensionType: string | null = null;
 
   if (isFirstSession) {
     const result = await generateInitialBriefing(input.profile);
@@ -61,6 +67,8 @@ export async function openSessionPipeline(input: OpenSessionInput): Promise<Open
     sessionStrategy = result.session_strategy;
     journeyNarrative = result.journey_narrative;
     growthEdges = result.growth_edges;
+    tensionType = result.tension_type || null;
+    secondaryTensionType = result.secondary_tension_type || null;
   } else {
     const plan = await planSession({
       profile: input.profile,
@@ -107,5 +115,7 @@ export async function openSessionPipeline(input: OpenSessionInput): Promise<Open
     journeyNarrative,
     growthEdges,
     openingMessage,
+    tensionType,
+    secondaryTensionType,
   };
 }

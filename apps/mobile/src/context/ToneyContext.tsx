@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win, RewireCardCategory, SessionNotesOutput } from '@toney/types';
-import { identifyTension, tensionDetails } from '@toney/constants';
+import { tensionDetails } from '@toney/constants';
 import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
@@ -501,11 +501,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      const tension = identifyTension(answers);
-      setIdentifiedTension(tension);
+      // No client-side scoring — Strategist determines tension at session open
       setOnboardingStep('pattern');
     }
-  }, [currentQuestionIndex, answers]);
+  }, [currentQuestionIndex]);
 
   const handlePrevQuestion = useCallback(() => {
     if (currentQuestionIndex > 0) {
@@ -846,23 +845,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStyleProfile({ ...defaultStyle });
     localStorage.setItem('toney_onboarded', 'true');
 
-    // Save profile to Supabase
-    if (isSupabaseConfigured() && identifiedTensionState) {
+    // Save profile to Supabase — tension_type determined by Strategist at session open
+    if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           await supabase.from('profiles').update({
-            tension_type: identifiedTensionState.primary,
-            secondary_tension_type: identifiedTensionState.secondary || null,
-            tension_score: identifiedTensionState.primaryScore,
             onboarding_answers: answers,
             tone: defaultStyle.tone,
             depth: defaultStyle.depth,
             learning_styles: defaultStyle.learningStyles,
             onboarding_completed: true,
             ...(whatBroughtYou && { what_brought_you: whatBroughtYou }),
-            ...(emotionalWhy && { emotional_why: emotionalWhy }),
           }).eq('id', user.id);
         }
       } catch {
@@ -873,7 +868,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     // Go to main app — straight to chat
     setAppPhase('main');
     setActiveTab('chat');
-  }, [identifiedTensionState, answers, whatBroughtYou, emotionalWhy]);
+  }, [answers, whatBroughtYou]);
 
   const resetAll = useCallback(() => {
     localStorage.removeItem('toney_signed_in');

@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       savedMessageId = savedMsg?.id || null;
     } catch { /* non-critical */ }
 
-    // Save briefing + update intel + session count — in parallel
+    // Save briefing + update intel + session count + tension — in parallel
     await Promise.all([
       supabase.from('coaching_briefings').insert({
         user_id: user.id,
@@ -221,6 +221,14 @@ export async function POST(request: NextRequest) {
         : Promise.resolve(),
 
       supabase.from('sessions').update({ message_count: 1 }).eq('id', sessionId),
+
+      // Save Strategist-determined tension to profile (first session)
+      result.tensionType
+        ? supabase.from('profiles').update({
+            tension_type: result.tensionType,
+            secondary_tension_type: result.secondaryTensionType || null,
+          }).eq('id', user.id)
+        : Promise.resolve(),
     ]);
 
     // ── Response ──

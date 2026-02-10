@@ -14,11 +14,9 @@ const goals = [
 ];
 
 export default function OnboardingPattern() {
-  const { identifiedTension, finishOnboarding, setWhatBroughtYou } = useToney();
+  const { finishOnboarding, setWhatBroughtYou } = useToney();
   const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set());
   const [customText, setCustomText] = useState('');
-
-  if (!identifiedTension) return null;
 
   const handleChipTap = (goal: string) => {
     setSelectedGoals(prev => {

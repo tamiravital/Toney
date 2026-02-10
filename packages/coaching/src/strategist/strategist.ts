@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Profile, BehavioralIntel, Win, CoachMemory, RewireCard, CoachingBriefing, ObserverSignal } from '@toney/types';
+import { formatAnswersReadable } from '@toney/constants';
 
 // ────────────────────────────────────────────
 // Strategist — The coaching brain (Sonnet, temp=0.3)
@@ -43,6 +44,10 @@ export interface StrategistOutput {
   session_strategy: string;
   journey_narrative: string;
   growth_edges: Record<string, unknown>;
+  /** Tension type determined by the Strategist from quiz answers */
+  tension_type?: string | null;
+  /** Secondary tension type */
+  secondary_tension_type?: string | null;
   /** @deprecated Focus cards are now co-created in-session. Kept for admin build compat. */
   focus_card_prescription?: FocusCardPrescription;
   /** Intel updates to merge into behavioral_intel */
@@ -92,8 +97,23 @@ const TENSION_GUIDANCE: Record<string, string> = {
 // ────────────────────────────────────────────
 
 function buildStrategistSystemPrompt(ctx: StrategistContext): string {
-  const tensionType = ctx.profile.tension_type || 'unknown';
-  const tensionGuidance = TENSION_GUIDANCE[tensionType] || 'Approach with curiosity. Identify what their tension is protecting them from.';
+  const tensionType = ctx.profile.tension_type || null;
+  const tensionGuidance = tensionType ? TENSION_GUIDANCE[tensionType] || '' : '';
+
+  const tensionSection = tensionType
+    ? `## This person's tension: ${tensionType}\n${tensionGuidance}`
+    : `## Tension not yet determined
+You must determine this person's primary money tension from their quiz answers. The 7 tension types are:
+- **avoid** — money feels threatening, so they don't look
+- **worry** — hyper-vigilant, no amount of checking feels safe
+- **chase** — FOMO drives reactive money decisions
+- **perform** — money is how they show the world they're OK
+- **numb** — spending quiets big feelings, it's about the relief
+- **give** — takes care of everyone else before themselves
+- **grip** — real discipline, but the control has become a prison
+
+Guidance per tension:
+${Object.entries(TENSION_GUIDANCE).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`;
 
   return `You are the Strategist for Toney, an AI money coaching app. Your job is to produce a Coach Briefing — a narrative coaching document that tells the Coach exactly how to work with this person in their next session.
 
@@ -109,8 +129,7 @@ You are NOT the coach. You are the clinical intelligence behind the coach. Think
 
 4. **Session-to-session continuity.** Reference previous breakthroughs, check on practices, use their own words. The coaching should feel like a relationship, not disconnected sessions.
 
-## This person's tension: ${tensionType}
-${tensionGuidance}
+${tensionSection}
 
 ${GROWTH_LENSES}
 
@@ -119,7 +138,7 @@ ${GROWTH_LENSES}
 COACH BRIEFING — Session ${ctx.previousBriefing ? (ctx.previousBriefing.version + 1) : 1}
 
 WHO THEY ARE:
-[Tension type + secondary. Life context. Their emotional why IN THEIR OWN WORDS from onboarding. The key insight you formed by connecting dots across their quiz answers — the thing they haven't articulated yet.]
+[Tension type + secondary. Life context. Their goals (what would feel like progress). The key insight you formed by connecting dots across their quiz answers — the thing they haven't articulated yet.]
 
 WHERE THEY ARE IN THEIR JOURNEY:
 [Narrative of arc — not data points. What shifted since they started. What's stabilizing vs still raw. What they're ready for and what they're NOT ready for. Stage of change assessed from behavior, not self-report.]
@@ -143,6 +162,8 @@ COACHING STYLE:
 
 \`\`\`json
 {
+  "tension_type": "primary tension (one of: avoid, worry, chase, perform, numb, give, grip)",
+  "secondary_tension_type": "secondary tension or null",
   "hypothesis": "Your one-sentence coaching hypothesis for this person right now",
   "session_strategy": "What this session should accomplish in 1-2 sentences",
   "journey_narrative": "The story of this person's journey so far in 2-3 sentences",
@@ -163,13 +184,18 @@ function buildStrategistUserMessage(ctx: StrategistContext): string {
 
   // Profile data
   const p = ctx.profile;
+  const readableAnswers = p.onboarding_answers
+    ? formatAnswersReadable(p.onboarding_answers as Record<string, string>)
+    : 'No quiz answers';
+
   sections.push(`## Profile Data
-- Tension: ${p.tension_type || 'unknown'}${p.secondary_tension_type ? ` (secondary: ${p.secondary_tension_type})` : ''}
+${p.tension_type ? `- Tension: ${p.tension_type}${p.secondary_tension_type ? ` (secondary: ${p.secondary_tension_type})` : ''}` : '- Tension: not yet determined — determine from quiz answers below'}
 - Life stage: ${p.life_stage || 'unknown'}, Income: ${p.income_type || 'unknown'}, Relationship: ${p.relationship_status || 'unknown'}
 - Tone: ${p.tone ?? 5}/10, Depth: ${p.depth || 'balanced'}, Learning styles: ${(p.learning_styles || []).join(', ') || 'none set'}
-- What brought them here: "${p.what_brought_you || 'not provided'}"
-- Emotional why: "${p.emotional_why || 'not provided'}"
-- Onboarding answers: ${JSON.stringify(p.onboarding_answers || {})}`);
+- What would feel like progress: "${p.what_brought_you || 'not provided'}"
+
+## Quiz Answers
+${readableAnswers}`);
 
   // Behavioral intel
   if (ctx.behavioralIntel) {
@@ -285,6 +311,8 @@ export async function runStrategist(ctx: StrategistContext): Promise<StrategistO
     session_strategy: (metadata.session_strategy as string) || '',
     journey_narrative: (metadata.journey_narrative as string) || '',
     growth_edges: (metadata.growth_edges as Record<string, unknown>) || {},
+    tension_type: (metadata.tension_type as string) || null,
+    secondary_tension_type: (metadata.secondary_tension_type as string) || null,
     intel_updates: metadata.intel_updates as StrategistOutput['intel_updates'],
   };
 }
