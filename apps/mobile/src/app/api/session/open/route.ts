@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
-import { openSessionPipeline, closeSessionPipeline } from '@toney/coaching';
+import { planSessionStep, closeSessionPipeline } from '@toney/coaching';
 import { Profile, BehavioralIntel, RewireCard, CoachingBriefing } from '@toney/types';
 
 /**
@@ -169,8 +170,8 @@ export async function POST(request: NextRequest) {
       }
     } catch { /* no notes yet */ }
 
-    // ── Pipeline ──
-    const result = await openSessionPipeline({
+    // ── Pipeline Step 1: Plan session (Sonnet) ──
+    const plan = await planSessionStep({
       profile: profile as Profile,
       behavioralIntel,
       recentSessionNotes,
@@ -178,69 +179,104 @@ export async function POST(request: NextRequest) {
       previousBriefing,
     });
 
-    // ── Save results ──
+    // Save briefing + update intel + tension — don't wait for these
     let version = 1;
     if (previousBriefing) {
       version = (previousBriefing.version || 0) + 1;
     }
 
-    // Save opening message (need the ID back)
-    let savedMessageId: string | null = null;
-    try {
-      const { data: savedMsg } = await supabase
-        .from('messages')
-        .insert({
-          session_id: sessionId,
-          user_id: user.id,
-          role: 'assistant',
-          content: result.openingMessage,
-        })
-        .select('id')
-        .single();
-      savedMessageId = savedMsg?.id || null;
-    } catch { /* non-critical */ }
-
-    // Save briefing + update intel + session count + tension — in parallel
-    await Promise.all([
+    // Fire-and-forget: save planning results in parallel with streaming
+    const savePlanPromise = Promise.all([
       supabase.from('coaching_briefings').insert({
         user_id: user.id,
         session_id: sessionId,
-        briefing_content: result.briefingContent,
-        hypothesis: result.hypothesis,
-        session_strategy: result.sessionStrategy,
-        journey_narrative: result.journeyNarrative,
-        growth_edges: result.growthEdges,
+        briefing_content: plan.briefingContent,
+        hypothesis: plan.hypothesis,
+        session_strategy: plan.sessionStrategy,
+        journey_narrative: plan.journeyNarrative,
+        growth_edges: plan.growthEdges,
         version,
       }),
-
-      result.journeyNarrative && behavioralIntel
+      plan.journeyNarrative && behavioralIntel
         ? supabase.from('behavioral_intel').update({
-            journey_narrative: result.journeyNarrative,
-            growth_edges: result.growthEdges,
+            journey_narrative: plan.journeyNarrative,
+            growth_edges: plan.growthEdges,
           }).eq('user_id', user.id)
         : Promise.resolve(),
-
       supabase.from('sessions').update({ message_count: 1 }).eq('id', sessionId),
-
-      // Save Strategist-determined tension to profile (first session)
-      result.tensionType
+      plan.tensionType
         ? supabase.from('profiles').update({
-            tension_type: result.tensionType,
-            secondary_tension_type: result.secondaryTensionType || null,
+            tension_type: plan.tensionType,
+            secondary_tension_type: plan.secondaryTensionType || null,
           }).eq('id', user.id)
         : Promise.resolve(),
-    ]);
+    ]).catch(err => console.error('Save plan results failed:', err));
 
-    // ── Response ──
-    return NextResponse.json({
-      sessionId,
-      message: {
-        id: savedMessageId || `msg-${Date.now()}`,
-        role: 'assistant',
-        content: result.openingMessage,
-        timestamp: new Date().toISOString(),
-        canSave: false,
-        saved: false,
+    // ── Pipeline Step 2: Stream opening message (Sonnet) ──
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 1500,
+      temperature: 0.7,
+      system: plan.systemPromptBlocks,
+      messages: [
+        { role: 'user', content: '[Session started — please open the conversation]' },
+      ],
+    });
+
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        let fullContent = '';
+
+        // Send sessionId immediately so the client can set it
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'session', sessionId })}\n\n`));
+
+        stream.on('text', (text) => {
+          fullContent += text;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`));
+        });
+
+        stream.on('end', async () => {
+          // Save opening message to DB
+          let savedMessageId: string | null = null;
+          try {
+            const { data: savedMsg } = await supabase
+              .from('messages')
+              .insert({
+                session_id: sessionId,
+                user_id: user.id,
+                role: 'assistant',
+                content: fullContent,
+              })
+              .select('id')
+              .single();
+            savedMessageId = savedMsg?.id || null;
+          } catch { /* non-critical */ }
+
+          // Wait for plan saves to finish
+          await savePlanPromise;
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
+          controller.close();
+        });
+
+        stream.on('error', (err) => {
+          console.error('Opening message stream error:', err);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', text: "Hey! Good to see you. What's on your mind today?" })}\n\n`));
+          controller.close();
+        });
+      },
+    });
+
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     });
   } catch (error) {

@@ -20,7 +20,7 @@ export type { SessionBoundary } from './session';
 export { generateSessionNotes } from './session-notes';
 export type { SessionNotesInput } from './session-notes';
 // Pipelines — full session lifecycle orchestration (no DB, no framework)
-export { openSessionPipeline } from './pipelines';
-export type { OpenSessionInput, OpenSessionOutput } from './pipelines';
+export { openSessionPipeline, planSessionStep } from './pipelines';
+export type { OpenSessionInput, OpenSessionOutput, PlanSessionOutput } from './pipelines';
 export { closeSessionPipeline } from './pipelines';
 export type { CloseSessionInput, CloseSessionOutput } from './pipelines';

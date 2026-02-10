@@ -165,8 +165,8 @@ export async function POST(request: NextRequest) {
       return m;
     });
 
-    // Call Claude with cache-optimized system prompt blocks
-    const response = await anthropic.messages.create({
+    // Call Claude with streaming
+    const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1500,
       temperature: 0.7,
@@ -174,52 +174,65 @@ export async function POST(request: NextRequest) {
       messages: messageHistory,
     });
 
-    const assistantContent = response.content[0].type === 'text'
-      ? response.content[0].text
-      : '';
+    // Create a ReadableStream that forwards SSE chunks to the client
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        let fullContent = '';
 
-    // Save assistant message
-    let savedMessage = null;
-    try {
-      const { data } = await supabase
-        .from('messages')
-        .insert({
-          session_id: sessionId,
-          user_id: user.id,
-          role: 'assistant',
-          content: assistantContent,
-        })
-        .select()
-        .single();
-      savedMessage = data;
-    } catch { /* message save failed — non-critical */ }
+        stream.on('text', (text) => {
+          fullContent += text;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`));
+        });
 
-    // Update session message count (non-critical)
-    try {
-      const { data: sess } = await supabase
-        .from('sessions')
-        .select('message_count')
-        .eq('id', sessionId)
-        .single();
+        stream.on('end', async () => {
+          // Save assistant message to DB
+          let savedMessageId: string | null = null;
+          try {
+            const { data } = await supabase
+              .from('messages')
+              .insert({
+                session_id: sessionId,
+                user_id: user.id,
+                role: 'assistant',
+                content: fullContent,
+              })
+              .select('id')
+              .single();
+            savedMessageId = data?.id || null;
+          } catch { /* non-critical */ }
 
-      await supabase
-        .from('sessions')
-        .update({ message_count: (sess?.message_count || 0) + 2 })
-        .eq('id', sessionId);
-    } catch { /* non-critical */ }
+          // Update session message count (non-critical)
+          try {
+            const { data: sess } = await supabase
+              .from('sessions')
+              .select('message_count')
+              .eq('id', sessionId)
+              .single();
+            await supabase
+              .from('sessions')
+              .update({ message_count: (sess?.message_count || 0) + 2 })
+              .eq('id', sessionId);
+          } catch { /* non-critical */ }
 
-    return NextResponse.json({
-      message: {
-        id: savedMessage?.id || `msg-${Date.now()}`,
-        role: 'assistant',
-        content: assistantContent,
-        timestamp: new Date().toISOString(),
-        canSave: true,
-        saved: false,
+          // Send final message with saved ID
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
+          controller.close();
+        });
+
+        stream.on('error', (err) => {
+          console.error('Stream error:', err);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', text: "I'm having trouble connecting right now. Give me a moment and try again?" })}\n\n`));
+          controller.close();
+        });
       },
-      usage: {
-        input_tokens: response.usage.input_tokens,
-        output_tokens: response.usage.output_tokens,
+    });
+
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     });
   } catch (error) {

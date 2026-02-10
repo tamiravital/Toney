@@ -530,17 +530,83 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        {
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: userMsg.content,
-              sessionId: sessId,
-            }),
-          });
-          const data = await res.json();
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userMsg.content,
+            sessionId: sessId,
+          }),
+        });
 
+        // Check if response is streaming (SSE) or JSON fallback
+        const contentType = res.headers.get('content-type') || '';
+
+        if (contentType.includes('text/event-stream')) {
+          // Streaming response — progressively render
+          const streamingMsgId = `msg-streaming-${Date.now()}`;
+
+          // Add empty assistant message that will be filled progressively
+          const streamingMsg: Message = {
+            id: streamingMsgId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            canSave: true,
+            saved: false,
+          };
+          setMessages(prev => [...prev, streamingMsg]);
+          setIsTyping(false); // Hide typing dots — text is streaming in
+
+          const reader = res.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.type === 'delta') {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === streamingMsgId
+                        ? { ...m, content: m.content + event.text }
+                        : m
+                    )
+                  );
+                } else if (event.type === 'done') {
+                  // Update message ID to the saved DB ID
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === streamingMsgId
+                        ? { ...m, id: event.id }
+                        : m
+                    )
+                  );
+                } else if (event.type === 'error') {
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === streamingMsgId
+                        ? { ...m, content: event.text, canSave: false }
+                        : m
+                    )
+                  );
+                }
+              } catch { /* skip malformed SSE events */ }
+            }
+          }
+          return;
+        } else {
+          // JSON fallback (error responses)
+          const data = await res.json();
           if (data.message) {
             const toneyMsg: Message = {
               id: data.message.id || `msg-${Date.now() + 1}`,
@@ -702,27 +768,101 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           ...(previousSessionId && { previousSessionId }),
         }),
       });
-      const data = await res.json();
 
-      if (data.sessionId) {
-        setCurrentSessionId(data.sessionId);
-        sessionIdRef.current = data.sessionId;
-      }
+      const contentType = res.headers.get('content-type') || '';
 
-      if (data.message) {
-        const openingMsg: Message = {
-          id: data.message.id || `msg-${Date.now()}`,
-          role: 'assistant',
-          content: data.message.content,
-          timestamp: new Date(data.message.timestamp || Date.now()),
-          canSave: false,
-          saved: false,
-        };
-        setMessages([openingMsg]);
+      if (contentType.includes('text/event-stream')) {
+        // Streaming response — progressively render opening message
+        const streamingMsgId = `msg-opening-${Date.now()}`;
+        let sessionIdReceived = false;
+
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'session') {
+                setCurrentSessionId(event.sessionId);
+                sessionIdRef.current = event.sessionId;
+                sessionIdReceived = true;
+              } else if (event.type === 'delta') {
+                if (!sessionIdReceived) continue;
+                // Hide loading state on first text chunk
+                setLoadingChat(false);
+                setMessages(prev => {
+                  const existing = prev.find(m => m.id === streamingMsgId);
+                  if (existing) {
+                    return prev.map(m =>
+                      m.id === streamingMsgId
+                        ? { ...m, content: m.content + event.text }
+                        : m
+                    );
+                  } else {
+                    return [{
+                      id: streamingMsgId,
+                      role: 'assistant' as const,
+                      content: event.text,
+                      timestamp: new Date(),
+                      canSave: false,
+                      saved: false,
+                    }];
+                  }
+                });
+              } else if (event.type === 'done') {
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === streamingMsgId
+                      ? { ...m, id: event.id }
+                      : m
+                  )
+                );
+              } else if (event.type === 'error') {
+                setLoadingChat(false);
+                setMessages([{
+                  id: streamingMsgId,
+                  role: 'assistant',
+                  content: event.text,
+                  timestamp: new Date(),
+                  canSave: false,
+                  saved: false,
+                }]);
+              }
+            } catch { /* skip malformed SSE events */ }
+          }
+        }
+        setLoadingChat(false);
+      } else {
+        // JSON fallback (error responses)
+        const data = await res.json();
+        if (data.sessionId) {
+          setCurrentSessionId(data.sessionId);
+          sessionIdRef.current = data.sessionId;
+        }
+        if (data.message) {
+          setMessages([{
+            id: data.message.id || `msg-${Date.now()}`,
+            role: 'assistant',
+            content: data.message.content,
+            timestamp: new Date(data.message.timestamp || Date.now()),
+            canSave: false,
+            saved: false,
+          }]);
+        }
+        setLoadingChat(false);
       }
     } catch (err) {
       console.error('[Toney] Session open failed:', err);
-    } finally {
       setLoadingChat(false);
     }
   }, []);
