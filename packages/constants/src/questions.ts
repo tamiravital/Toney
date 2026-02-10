@@ -68,7 +68,7 @@ export const questions: OnboardingQuestion[] = [
   },
   {
     id: 'money_identity',
-    question: 'Be honest \u2014 people who know you would say\u2026',
+    question: 'Be honest, people who know you would say\u2026',
     options: [
       { value: 'too_careful', label: '"You need to live a little"', emoji: '\u{1F510}' },
       { value: 'too_generous', label: '"You\u2019re too generous for your own good"', emoji: '\u{1F4B8}' },
