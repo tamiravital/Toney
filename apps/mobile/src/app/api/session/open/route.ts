@@ -1,15 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { openSessionPipeline } from '@toney/coaching';
+import { openSessionPipeline, closeSessionPipeline } from '@toney/coaching';
 import { Profile, BehavioralIntel, RewireCard, CoachingBriefing } from '@toney/types';
 
 /**
  * POST /api/session/open
  *
  * Thin shell: auth + data loading + pipeline + save.
- * All orchestration logic lives in @toney/coaching openSessionPipeline.
+ * Accepts optional previousSessionId to close an old session first (deferred close).
+ * All orchestration logic lives in @toney/coaching pipelines.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
@@ -17,6 +18,82 @@ export async function POST() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // ── Parse optional previousSessionId ──
+    let previousSessionId: string | null = null;
+    try {
+      const body = await request.json();
+      previousSessionId = body.previousSessionId || null;
+    } catch { /* empty body is fine */ }
+
+    // ── Deferred close of previous session ──
+    if (previousSessionId) {
+      try {
+        const { data: oldMessages } = await supabase
+          .from('messages')
+          .select('role, content')
+          .eq('session_id', previousSessionId)
+          .order('created_at', { ascending: true });
+
+        const messages = (oldMessages || []).map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }));
+
+        if (messages.length > 0) {
+          const { data: oldProfile } = await supabase
+            .from('profiles')
+            .select('tension_type')
+            .eq('id', user.id)
+            .single();
+
+          let oldIntel: BehavioralIntel | null = null;
+          try {
+            const { data } = await supabase
+              .from('behavioral_intel')
+              .select('*')
+              .eq('user_id', user.id)
+              .single();
+            oldIntel = data as BehavioralIntel | null;
+          } catch { /* no intel yet */ }
+
+          let oldHypothesis: string | null = null;
+          try {
+            const { data: briefing } = await supabase
+              .from('coaching_briefings')
+              .select('hypothesis')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            if (briefing) oldHypothesis = briefing.hypothesis;
+          } catch { /* no briefing yet */ }
+
+          const closeResult = await closeSessionPipeline({
+            messages,
+            tensionType: oldProfile?.tension_type || null,
+            hypothesis: oldHypothesis,
+            currentIntel: oldIntel,
+          });
+
+          // Save close results
+          await Promise.all([
+            supabase.from('sessions').update({
+              session_notes: JSON.stringify(closeResult.sessionNotes),
+              session_status: 'completed',
+              ended_at: new Date().toISOString(),
+            }).eq('id', previousSessionId),
+
+            oldIntel
+              ? supabase.from('behavioral_intel').update(closeResult.personModelUpdate).eq('user_id', user.id)
+              : supabase.from('behavioral_intel').insert({ user_id: user.id, ...closeResult.personModelUpdate }),
+          ]);
+        }
+      } catch (err) {
+        console.error('Deferred session close failed:', err);
+        // Non-fatal — continue opening new session
+      }
     }
 
     // ── Load data ──

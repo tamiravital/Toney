@@ -119,7 +119,7 @@ interface ToneyContextValue {
   sessionNotes: SessionNotesOutput | null;
   endSession: () => Promise<void>;
   dismissSessionNotes: () => void;
-  openSession: () => Promise<void>;
+  openSession: (previousSessionId?: string) => Promise<void>;
   loadingChat: boolean;
 
   // Rewire
@@ -298,6 +298,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             if (recentSession) {
               setCurrentSessionId(recentSession.id);
+
+              // Get last message timestamp for boundary detection
+              const { data: lastMsg } = await supabase
+                .from('messages')
+                .select('created_at')
+                .eq('session_id', recentSession.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+              if (lastMsg) {
+                lastMessageTimestampRef.current = lastMsg.created_at;
+              }
             }
           }
         } catch {
@@ -518,24 +531,16 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     if (isSupabaseConfigured()) {
       try {
-        let sessId = currentSessionId;
+        const sessId = sessionIdRef.current;
+
+        // Session should already exist via auto-open
         if (!sessId) {
-          const supabase = createClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { data: sess } = await supabase
-              .from('sessions')
-              .insert({ user_id: user.id })
-              .select('id')
-              .single();
-            if (sess) {
-              sessId = sess.id;
-              setCurrentSessionId(sess.id);
-            }
-          }
+          console.error('[Toney] No session ID — auto-open may not have fired');
+          setIsTyping(false);
+          return;
         }
 
-        if (sessId) {
+        {
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -575,7 +580,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       saved: false,
     }]);
     setIsTyping(false);
-  }, [chatInput, currentSessionId]);
+  }, [chatInput]);
 
   const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
     setMessages(prev =>
@@ -690,7 +695,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionNotes(null);
   }, []);
 
-  const openSession = useCallback(async () => {
+  const openSession = useCallback(async (previousSessionId?: string) => {
     if (!isSupabaseConfigured()) return;
 
     setLoadingChat(true);
@@ -703,11 +708,15 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/session/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(previousSessionId && { previousSessionId }),
+        }),
       });
       const data = await res.json();
 
       if (data.sessionId) {
         setCurrentSessionId(data.sessionId);
+        sessionIdRef.current = data.sessionId;
       }
 
       if (data.message) {
@@ -730,26 +739,46 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
   // ── Auto-open session when user navigates to chat ──
   const sessionOpenedRef = useRef(false);
+  const lastMessageTimestampRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+
+  // Keep sessionIdRef in sync with state
+  useEffect(() => {
+    sessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
   useEffect(() => {
     if (appPhase !== 'main') return;
     if (activeTab !== 'chat') {
-      // Reset when leaving chat, so next visit opens a new session if needed
       sessionOpenedRef.current = false;
       return;
     }
-    // Don't open if still loading messages for an existing session
     if (loadingChat) return;
-    // Don't open if we already have messages (existing session)
-    if (messages.length > 0) return;
-    // Don't open if we already fired openSession this visit
     if (sessionOpenedRef.current) return;
-    // Don't open if session is ending/completed (user just ended a session)
     if (sessionStatus !== 'active') return;
 
+    // If we have messages, this is a live session — resume
+    if (messages.length > 0) return;
+
     sessionOpenedRef.current = true;
-    openSession();
-  }, [activeTab, appPhase, loadingChat, messages.length, sessionStatus, openSession]);
+
+    // Check if we need boundary detection
+    if (currentSessionId && lastMessageTimestampRef.current) {
+      const lastTime = new Date(lastMessageTimestampRef.current).getTime();
+      const hoursSince = (Date.now() - lastTime) / (1000 * 60 * 60);
+
+      if (hoursSince < 12) {
+        // Within 12h — resume existing session (messages already loaded as empty = empty session, that's fine)
+        return;
+      }
+
+      // >12h gap — close old session and open new one
+      openSession(currentSessionId);
+    } else {
+      // No existing session or no timestamp — open fresh
+      openSession();
+    }
+  }, [activeTab, appPhase, loadingChat, messages.length, sessionStatus, currentSessionId, openSession]);
 
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {
     setSavedInsights(prev =>

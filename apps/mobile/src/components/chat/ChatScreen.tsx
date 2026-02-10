@@ -97,7 +97,6 @@ export default function ChatScreen() {
     isTyping,
     handleSendMessage,
     handleSaveCard,
-    sessionHasCard,
     sessionStatus,
     sessionNotes,
     endSession,
@@ -119,7 +118,7 @@ export default function ChatScreen() {
       {/* Header with optional End Session button */}
       <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
-        {sessionHasCard && sessionStatus === 'active' && (
+        {messages.length >= 4 && sessionStatus === 'active' && (
           <button
             onClick={endSession}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 hover:text-gray-700 transition-all active:scale-95"
