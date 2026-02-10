@@ -1,141 +1,111 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { tensionColor } from '@toney/constants';
 
-const chips = [
-  "I avoid looking at my accounts",
-  "I stress about money even though I'm fine",
-  "I can't stop spending",
-  "Money causes fights in my relationship",
-  "I feel behind compared to friends",
-  "I don't know where my money goes",
-  "I want to invest but don't know where to start",
+const goals = [
+  "Stop stressing about money",
+  "Feel okay spending on myself",
+  "Have hard money conversations without fighting",
+  "Ask for a raise or charge what I'm worth",
+  "Stop letting money run my mood",
+  "Feel in control of my finances",
 ];
 
 export default function OnboardingPattern() {
-  const { identifiedTension, finishOnboarding, setEmotionalWhy, setWhatBroughtYou } = useToney();
-  const [emotionalWhyText, setEmotionalWhyText] = useState('');
-  const [storyText, setStoryText] = useState('');
+  const { identifiedTension, finishOnboarding, setWhatBroughtYou } = useToney();
+  const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set());
+  const [customText, setCustomText] = useState('');
 
   if (!identifiedTension) return null;
-  const p = identifiedTension.primaryDetails;
-  const colors = tensionColor(identifiedTension.primary);
 
-  const handleChipTap = (chip: string) => {
-    if (storyText) {
-      // Append with comma separator if there's existing text
-      setStoryText(prev => prev + ', ' + chip.toLowerCase());
-    } else {
-      setStoryText(chip);
-    }
+  const handleChipTap = (goal: string) => {
+    setSelectedGoals(prev => {
+      const next = new Set(prev);
+      if (next.has(goal)) {
+        next.delete(goal);
+      } else {
+        next.add(goal);
+      }
+      return next;
+    });
   };
 
   const handleFinish = () => {
-    setEmotionalWhy(emotionalWhyText.trim());
-    setWhatBroughtYou(storyText.trim());
+    // Combine selected chips + custom text into what_brought_you
+    const parts: string[] = [...selectedGoals];
+    if (customText.trim()) {
+      parts.push(customText.trim());
+    }
+    setWhatBroughtYou(parts.join('; '));
     finishOnboarding();
   };
+
+  const hasSelection = selectedGoals.size > 0 || customText.trim().length > 0;
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-8 pb-2 hide-scrollbar">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Here&apos;s what I notice</h2>
-          <p className="text-gray-500 text-sm">Based on your answers, here&apos;s what&apos;s going on with your money relationship</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          What would feel like progress?
+        </h2>
+        <p className="text-sm text-gray-500 mb-6">
+          Select all that apply
+        </p>
+
+        <div className="flex flex-wrap gap-2 mb-6">
+          {goals.map((goal) => {
+            const isSelected = selectedGoals.has(goal);
+            return (
+              <button
+                key={goal}
+                onClick={() => handleChipTap(goal)}
+                className={`px-3 py-2 rounded-full border text-sm transition-all active:scale-[0.97] flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
+                }`}
+              >
+                {isSelected && <Check className="w-3.5 h-3.5" />}
+                {goal}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="space-y-4">
-          {/* Primary tension — the mirror */}
-          <div className={`${colors.bg} rounded-2xl p-5`}>
-            <p className={`${colors.text} text-sm leading-relaxed`}>{p.description}</p>
-          </div>
-
-          {/* Root feelings + behaviors */}
-          <div className="bg-gray-50 rounded-2xl p-5">
-            <h3 className="font-semibold text-gray-900 text-sm mb-2">What&apos;s underneath</h3>
-            <p className="text-gray-700 text-sm mb-3">{p.root_feelings}</p>
-            <ul className="space-y-1.5">
-              {p.common_behaviors.map((b, i) => (
-                <li key={i} className="text-gray-600 text-sm flex items-start gap-2">
-                  <span className="text-gray-400 mt-0.5">{"\u2022"}</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Reframe — the hope */}
-          <div className={`${colors.light} rounded-2xl p-5`}>
-            <h3 className="font-semibold text-gray-900 text-sm mb-2">The reframe</h3>
-            <p className="text-gray-700 text-sm leading-relaxed">{p.reframe}</p>
-          </div>
-
-          {/* Secondary tension */}
-          {identifiedTension.secondary && identifiedTension.secondaryDetails && (
-            <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
-              <p className="text-gray-600 text-sm leading-relaxed">
-                I also notice a bit of this: {identifiedTension.secondaryDetails.description}
-              </p>
-            </div>
-          )}
-
-          {/* Pick what resonates — chips + textarea */}
-          <div className="pt-4">
-            <h3 className="font-semibold text-gray-900 text-base mb-3">
-              Pick what resonates
-            </h3>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {chips.map((chip) => (
-                <button
-                  key={chip}
-                  onClick={() => handleChipTap(chip)}
-                  className="px-3 py-2 rounded-full border border-gray-200 bg-white text-sm text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.97] transition-all"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={storyText}
-              onChange={(e) => setStoryText(e.target.value)}
-              placeholder="Or tell us in your own words..."
-              rows={3}
-              className="w-full p-4 rounded-2xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none resize-none"
-            />
-          </div>
-
-          {/* Emotional Why — rides the wave of the reveal */}
-          <div className="pt-2">
-            <h3 className="font-semibold text-gray-900 text-base mb-1">
-              One more thing
-            </h3>
-            <p className="text-gray-500 text-sm mb-4">
-              If this changed, what would feel different? Not a goal — just a feeling.
-            </p>
-            <textarea
-              value={emotionalWhyText}
-              onChange={(e) => setEmotionalWhyText(e.target.value)}
-              placeholder="e.g., I'd stop dreading Sundays because Monday means bills..."
-              rows={3}
-              className="w-full p-4 rounded-2xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none resize-none"
-            />
-          </div>
-        </div>
+        <textarea
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          placeholder="Anything else in your own words..."
+          rows={3}
+          className="w-full p-4 rounded-2xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none resize-none"
+        />
       </div>
 
       {/* Sticky button */}
       <div className="flex-shrink-0 px-6 py-4 bg-gray-50">
         <button
           onClick={handleFinish}
-          className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-semibold text-lg hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          disabled={!hasSelection}
+          className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
+            hasSelection
+              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+              : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+          }`}
         >
           Start coaching
           <ArrowRight className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => {
+            setWhatBroughtYou('');
+            finishOnboarding();
+          }}
+          className="w-full text-gray-400 text-sm py-3 hover:text-gray-500 transition-colors"
+        >
+          Skip
         </button>
       </div>
     </div>
