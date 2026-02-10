@@ -1,5 +1,24 @@
 # Toney — Changelog
 
+## 2026-02-10
+- Quiz redesigned: 7 behavioral questions replacing old feeling-based quiz
+  - Q1: Balance checking (kept), Q2: Stress response behavior (new), Q3: Dinner scenario (kept)
+  - Q4: Mirror/identity (kept), Q5: Stress frequency (new), Q6: Money strength (new)
+  - Q7: Multi-select goals — "What would feel like progress?" (absorbed from separate screen)
+- Goals screen eliminated — Q7 replaces the standalone OnboardingPattern page
+- Tension scoring moved from client-side points to Strategist LLM determination
+- First session Coach no longer says "last time we talked"
+- Onboarding finishes into chat (was: home screen)
+- Quiz answer format for Strategist: human-readable "Q → A" lines instead of raw JSON
+
+## 2026-02-09 (session 3)
+- All v3 rearchitecture + onboarding v2 committed (4 commits, was all uncommitted)
+- Session lifecycle wired: auto-open on chat, 12h boundary detection, session resumption
+- Deferred session close: returning after 12h closes old session and opens new one in single call
+- "End Session" button appears after 4+ messages (was: only after card co-created)
+- Removed raw session creation fallback — all sessions go through openSessionPipeline
+- Deleted stray data migration files from repo root
+
 ## 2026-02-09 (session 2)
 - Onboarding redesigned: 15 screens → 10 screens
 - New "What's going on with money right now?" prompt captures user's specific situation

@@ -4,6 +4,24 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Absorb goals into quiz as Q7 multi-select (2026-02-10)
+The separate "What would feel like progress?" goals page after the quiz was redundant — users had already answered 7 behavioral questions and the goals felt repetitive. Made it Q7 inside the quiz itself as multi-select chips. Benefits: shorter flow (no extra screen), goals stored as comma-separated values in onboarding_answers alongside other answers, `formatAnswersReadable()` handles both single and multi-select. The goals feed `what_brought_you` which the Strategist and Coach both read.
+
+### Kill client-side tension scoring, use Strategist LLM (2026-02-10)
+Removed `identifyTension()` point-based scoring from the client. The Strategist now determines `tension_type` and `secondary_tension_type` from human-readable quiz answers at first session open. Why: the point system was brittle (adding/removing options required rebalancing scores), couldn't detect nuance (same answer in different contexts signals different tensions), and we already had an LLM reading the same data. The Strategist sees the full picture — quiz answers + goals + any freeform text — and can reason about which tension pattern fits. Session open API saves the determined tension back to the profiles table.
+
+### Behavioral questions over feeling-based (2026-02-10)
+Replaced "What keeps you up at night?" / "Unexpected $500" / "Look at your purchases" with "When money stress hits, what do you actually do?" / "How often does stress show up?" / "What are you good at with money?". Informed by analyzing a real coaching intake form. Behavioral questions produce better coaching signal: what someone DOES under stress is more actionable than what they FEEL. Frequency tells the Coach how urgent to be. Strength-based question gives the Coach something to build on (and "Honestly? I can't think of one" is itself a powerful signal).
+
+### Sessions stay open on tab switch (2026-02-09)
+Sessions are not auto-closed when the user navigates away from chat. They close via manual "End Session" button or deferred close when the user returns after 12h. Auto-close on tab switch would cost 2 Haiku calls every time someone checks their toolkit or logs a win. The deferred close captures the same data — just not immediately. Session notes from deferred close appear on the home screen via "Last Session" card.
+
+### Deferred close inside /api/session/open (2026-02-09)
+When a user returns after 12h, the old session is closed inside the `/api/session/open` endpoint — one round trip instead of two. The close runs first (notes + reflection + intel merge), then the open reads the freshly-merged intel for planning. This ensures the new session's opening message is informed by what happened in the old one. Alternative was client-side close-then-open (two round trips, slower UX).
+
+### End Session button after 4 messages, not card creation (2026-02-09)
+Changed the "End Session" button visibility from requiring a card to be co-created to appearing after 4+ messages. The card requirement meant users with no card had no way to manually end a session. 4 messages (1 opening + 1.5 exchanges) is enough for meaningful session notes.
+
 ### Add "what brought you here" to onboarding (2026-02-09)
 Added an open-ended textarea ("What's going on with money right now?") as the second onboarding screen, before the tension quiz. This is the highest-leverage change for first-session quality — the Strategist needs a specific current situation to generate a hypothesis that makes the user feel seen. Categorical labels (life_stage=early_career, tension=avoid) tell the Strategist what type of person this is. The `what_brought_you` field tells it what's actually happening in their life right now. Placed before the quiz so the flow says "I want to hear from YOU first" rather than "take a test."
 
