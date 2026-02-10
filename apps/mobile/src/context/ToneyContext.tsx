@@ -1,14 +1,15 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win } from '@toney/types';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win, RewireCardCategory, SessionNotesOutput } from '@toney/types';
 import { identifyTension, tensionDetails } from '@toney/constants';
 import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
-type OnboardingStep = 'welcome' | 'questions' | 'pattern' | 'style_intro' | 'style_quiz';
+type OnboardingStep = 'welcome' | 'story' | 'questions' | 'pattern';
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
 type ActiveTab = 'home' | 'chat' | 'rewire' | 'wins';
+type SessionStatus = 'active' | 'ending' | 'completed';
 
 const VALID_TABS = new Set<ActiveTab>(['home', 'chat', 'rewire', 'wins']);
 
@@ -87,22 +88,20 @@ interface ToneyContextValue {
   currentQuestionIndex: number;
   setCurrentQuestionIndex: (index: number) => void;
   answers: Record<string, string>;
-  quizStep: number;
-  setQuizStep: (step: number) => void;
   identifiedTension: IdentifiedTension | null;
   handleAnswer: (questionId: string, value: string) => void;
   handleNextQuestion: () => void;
   handlePrevQuestion: () => void;
+  whatBroughtYou: string;
+  setWhatBroughtYou: (text: string) => void;
+  emotionalWhy: string;
+  setEmotionalWhy: (text: string) => void;
 
   // Style
   styleProfile: StyleProfile;
   setStyleProfile: (profile: StyleProfile) => void;
   tempStyle: StyleProfile;
   setTempStyle: (style: StyleProfile | ((prev: StyleProfile) => StyleProfile)) => void;
-
-  // Life context (onboarding)
-  tempLifeContext: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string };
-  setTempLifeContext: (ctx: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string } | ((prev: { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string }) => { lifeStage: string; incomeType: string; relationship: string; emotionalWhy: string })) => void;
 
   // Chat — session-based (v2)
   currentSessionId: string | null;
@@ -114,6 +113,13 @@ interface ToneyContextValue {
   setIsTyping: (typing: boolean) => void;
   handleSendMessage: (overrideText?: string) => void;
   handleSaveInsight: (messageId: string, editedContent?: string, category?: string) => Promise<string | null>;
+  handleSaveCard: (title: string, content: string, category: RewireCardCategory) => Promise<void>;
+  sessionHasCard: boolean;
+  sessionStatus: SessionStatus;
+  sessionNotes: SessionNotesOutput | null;
+  endSession: () => Promise<void>;
+  dismissSessionNotes: () => void;
+  openSession: () => Promise<void>;
   loadingChat: boolean;
 
   // Rewire
@@ -157,12 +163,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [identifiedTensionState, setIdentifiedTension] = useState<IdentifiedTension | null>(null);
-  const [quizStep, setQuizStep] = useState(0);
+  const [whatBroughtYou, setWhatBroughtYou] = useState('');
+  const [emotionalWhy, setEmotionalWhy] = useState('');
 
   // Style
   const [styleProfile, setStyleProfile] = useState<StyleProfile>({ ...defaultStyle });
   const [tempStyle, setTempStyle] = useState<StyleProfile>({ ...defaultStyle });
-  const [tempLifeContext, setTempLifeContext] = useState({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
 
   // Chat — session-based (v2, no topics)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -170,6 +176,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [sessionHasCard, setSessionHasCard] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('active');
+  const [sessionNotes, setSessionNotes] = useState<SessionNotesOutput | null>(null);
 
   // Rewire
   const [savedInsights, setSavedInsights] = useState<Insight[]>([]);
@@ -427,6 +436,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   // ── Load messages when currentSessionId changes ──
   useEffect(() => {
     if (appPhase !== 'main') return;
+    setSessionHasCard(false); // Reset card state for new session
+    setSessionStatus('active');
+    setSessionNotes(null);
     if (!currentSessionId) {
       setMessages([]);
       return;
@@ -485,6 +497,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const handlePrevQuestion = useCallback(() => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
+    } else {
+      setOnboardingStep('story');
     }
   }, [currentQuestionIndex]);
 
@@ -614,6 +628,129 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     return null;
   }, [messages, identifiedTensionState]);
 
+  const handleSaveCard = useCallback(async (title: string, content: string, category: RewireCardCategory) => {
+    // Add to local state
+    const newInsight: Insight = {
+      id: `insight-${Date.now()}`,
+      content,
+      category,
+      savedAt: new Date(),
+      fromChat: true,
+      tags: [identifiedTensionState?.primary ? `tends to ${identifiedTensionState.primary}` : 'Insight'],
+    };
+    setSavedInsights(prev => [newInsight, ...prev]);
+    setSessionHasCard(true);
+
+    // Save to Supabase
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('rewire_cards').insert({
+            user_id: user.id,
+            category,
+            title,
+            content,
+            tension_type: identifiedTensionState?.primary || null,
+            auto_generated: false,
+            prescribed_by: 'coach',
+            session_id: currentSessionId || null,
+          });
+        }
+      } catch { /* non-critical */ }
+    }
+  }, [identifiedTensionState, currentSessionId]);
+
+  const endSession = useCallback(async () => {
+    if (!currentSessionId || sessionStatus !== 'active') return;
+    setSessionStatus('ending');
+
+    try {
+      const res = await fetch('/api/session/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: currentSessionId }),
+      });
+
+      const data = await res.json();
+
+      if (data.sessionNotes) {
+        setSessionNotes(data.sessionNotes as SessionNotesOutput);
+      }
+
+      setSessionStatus('completed');
+    } catch {
+      // If session close fails, revert to active
+      setSessionStatus('active');
+    }
+  }, [currentSessionId, sessionStatus]);
+
+  const dismissSessionNotes = useCallback(() => {
+    setSessionNotes(null);
+  }, []);
+
+  const openSession = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+
+    setLoadingChat(true);
+    setMessages([]);
+    setSessionHasCard(false);
+    setSessionStatus('active');
+    setSessionNotes(null);
+
+    try {
+      const res = await fetch('/api/session/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+
+      if (data.sessionId) {
+        setCurrentSessionId(data.sessionId);
+      }
+
+      if (data.message) {
+        const openingMsg: Message = {
+          id: data.message.id || `msg-${Date.now()}`,
+          role: 'assistant',
+          content: data.message.content,
+          timestamp: new Date(data.message.timestamp || Date.now()),
+          canSave: false,
+          saved: false,
+        };
+        setMessages([openingMsg]);
+      }
+    } catch (err) {
+      console.error('[Toney] Session open failed:', err);
+    } finally {
+      setLoadingChat(false);
+    }
+  }, []);
+
+  // ── Auto-open session when user navigates to chat ──
+  const sessionOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (appPhase !== 'main') return;
+    if (activeTab !== 'chat') {
+      // Reset when leaving chat, so next visit opens a new session if needed
+      sessionOpenedRef.current = false;
+      return;
+    }
+    // Don't open if still loading messages for an existing session
+    if (loadingChat) return;
+    // Don't open if we already have messages (existing session)
+    if (messages.length > 0) return;
+    // Don't open if we already fired openSession this visit
+    if (sessionOpenedRef.current) return;
+    // Don't open if session is ending/completed (user just ended a session)
+    if (sessionStatus !== 'active') return;
+
+    sessionOpenedRef.current = true;
+    openSession();
+  }, [activeTab, appPhase, loadingChat, messages.length, sessionStatus, openSession]);
+
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {
     setSavedInsights(prev =>
       prev.map(i =>
@@ -643,7 +780,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(() => {
     localStorage.setItem('toney_signed_in', 'true');
     const hasOnboarded = localStorage.getItem('toney_onboarded') === 'true';
-    setOnboardingStep('questions');
+    setOnboardingStep('welcome');
     if (hasOnboarded) {
       let savedTension = loadJSON<IdentifiedTension | null>('toney_tension', null);
       if (!savedTension) savedTension = migrateOldPattern();
@@ -677,7 +814,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const finishOnboarding = useCallback(async () => {
-    setStyleProfile({ ...tempStyle });
+    setStyleProfile({ ...defaultStyle });
     localStorage.setItem('toney_onboarded', 'true');
 
     // Save profile to Supabase
@@ -691,14 +828,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             secondary_tension_type: identifiedTensionState.secondary || null,
             tension_score: identifiedTensionState.primaryScore,
             onboarding_answers: answers,
-            tone: tempStyle.tone,
-            depth: tempStyle.depth,
-            learning_styles: tempStyle.learningStyles || [],
+            tone: defaultStyle.tone,
+            depth: defaultStyle.depth,
+            learning_styles: defaultStyle.learningStyles,
             onboarding_completed: true,
-            ...(tempLifeContext.lifeStage && { life_stage: tempLifeContext.lifeStage }),
-            ...(tempLifeContext.incomeType && { income_type: tempLifeContext.incomeType }),
-            ...(tempLifeContext.relationship && { relationship_status: tempLifeContext.relationship }),
-            ...(tempLifeContext.emotionalWhy && { emotional_why: tempLifeContext.emotionalWhy }),
+            ...(whatBroughtYou && { what_brought_you: whatBroughtYou }),
+            ...(emotionalWhy && { emotional_why: emotionalWhy }),
           }).eq('id', user.id);
         }
       } catch {
@@ -706,10 +841,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Go to main app — home screen (no topic selection)
+    // Go to main app — home screen
     setAppPhase('main');
     setActiveTab('home');
-  }, [tempStyle, identifiedTensionState, answers, tempLifeContext]);
+  }, [identifiedTensionState, answers, whatBroughtYou, emotionalWhy]);
 
   const resetAll = useCallback(() => {
     localStorage.removeItem('toney_signed_in');
@@ -722,11 +857,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('toney_streak');
 
     setAppPhase('signed_out');
-    setOnboardingStep('questions');
+    setOnboardingStep('welcome');
     setCurrentQuestionIndex(0);
     setAnswers({});
     setIdentifiedTension(null);
-    setQuizStep(0);
+    setWhatBroughtYou('');
+    setEmotionalWhy('');
     setMessages([]);
     setSavedInsights([]);
     setWins([]);
@@ -734,20 +870,22 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setShowSettings(false);
     setStyleProfile({ ...defaultStyle });
     setTempStyle({ ...defaultStyle });
-    setTempLifeContext({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
     setCurrentSessionId(null);
+    setSessionHasCard(false);
+    setSessionStatus('active');
+    setSessionNotes(null);
   }, []);
 
   const retakeQuiz = useCallback(() => {
     localStorage.removeItem('toney_tension');
     localStorage.removeItem('toney_onboarded');
-    setOnboardingStep('questions');
+    setOnboardingStep('welcome');
     setCurrentQuestionIndex(0);
     setAnswers({});
     setIdentifiedTension(null);
-    setQuizStep(0);
+    setWhatBroughtYou('');
+    setEmotionalWhy('');
     setTempStyle({ ...defaultStyle });
-    setTempLifeContext({ lifeStage: '', incomeType: '', relationship: '', emotionalWhy: '' });
     setShowSettings(false);
     setAppPhase('onboarding');
   }, []);
@@ -766,18 +904,18 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         currentQuestionIndex,
         setCurrentQuestionIndex,
         answers,
-        quizStep,
-        setQuizStep,
         identifiedTension: identifiedTensionState,
         handleAnswer,
         handleNextQuestion,
         handlePrevQuestion,
+        whatBroughtYou,
+        setWhatBroughtYou,
+        emotionalWhy,
+        setEmotionalWhy,
         styleProfile,
         setStyleProfile,
         tempStyle,
         setTempStyle,
-        tempLifeContext,
-        setTempLifeContext,
         currentSessionId,
         messages,
         setMessages,
@@ -787,6 +925,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setIsTyping,
         handleSendMessage,
         handleSaveInsight,
+        handleSaveCard,
+        sessionHasCard,
+        sessionStatus,
+        sessionNotes,
+        endSession,
+        dismissSessionNotes,
+        openSession,
         loadingChat,
         savedInsights,
         setSavedInsights,

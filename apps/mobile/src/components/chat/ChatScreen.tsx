@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback, ComponentPropsWithoutRef } from 'react';
-import { Send, Bookmark, BookmarkCheck } from 'lucide-react';
+import { useRef, useEffect, ComponentPropsWithoutRef } from 'react';
+import { Send, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
-import { useRewireCards } from '@/hooks/useRewireCards';
-import SaveInsightSheet from './SaveInsightSheet';
+import DraftCard from './DraftCard';
+import SessionNotesView from './SessionNotesView';
+import type { RewireCardCategory } from '@toney/types';
 
 // Custom markdown components for chat bubble styling
 const markdownComponents = {
@@ -17,26 +18,76 @@ const markdownComponents = {
   li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm leading-relaxed" {...props} />,
 };
 
-function extractInsight(assistantContent: string, userContent?: string): string {
-  const paragraphs = assistantContent.split('\n\n').filter(p => p.trim());
-  if (paragraphs.length >= 2) {
-    const validationStarters = ['i hear', 'that sounds', 'that\'s a really', 'ok,', 'okay'];
-    const first = paragraphs[0].toLowerCase();
-    const isValidation = validationStarters.some(s => first.startsWith(s));
-    if (isValidation && paragraphs.length > 1) {
-      return paragraphs.slice(1).join('\n\n').trim();
-    }
-  }
-  return assistantContent.trim();
+// ── Parse [CARD:category]...[/CARD] markers from message content ──
+
+interface TextSegment {
+  type: 'text';
+  content: string;
 }
 
-// ── Conversation starters for empty chat ──
-const conversationStarters = [
-  "Something's been on my mind about money...",
-  "I want to understand why I do what I do with money",
-  "I had a money moment today",
-  "I want to talk about a money decision",
-];
+interface CardSegment {
+  type: 'card';
+  category: RewireCardCategory;
+  title: string;
+  content: string;
+}
+
+type MessageSegment = TextSegment | CardSegment;
+
+const VALID_CATEGORIES = new Set<RewireCardCategory>(['reframe', 'truth', 'plan', 'practice', 'conversation_kit']);
+
+function parseMessageContent(raw: string): MessageSegment[] {
+  const segments: MessageSegment[] = [];
+  const cardRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = cardRegex.exec(raw)) !== null) {
+    // Text before this card
+    if (match.index > lastIndex) {
+      const text = raw.slice(lastIndex, match.index).trim();
+      if (text) segments.push({ type: 'text', content: text });
+    }
+
+    const categoryRaw = match[1].toLowerCase() as RewireCardCategory;
+    const category = VALID_CATEGORIES.has(categoryRaw) ? categoryRaw : 'reframe';
+    const cardBody = match[2].trim();
+
+    // Extract title: first line starting with ** or plain first line
+    let title = '';
+    let content = cardBody;
+    const lines = cardBody.split('\n');
+    if (lines.length > 0) {
+      const firstLine = lines[0].trim();
+      // Check for **Title** pattern
+      const boldMatch = firstLine.match(/^\*\*(.+?)\*\*$/);
+      if (boldMatch) {
+        title = boldMatch[1];
+        content = lines.slice(1).join('\n').trim();
+      } else {
+        // Use first line as title, rest as content
+        title = firstLine.replace(/^\*\*/, '').replace(/\*\*$/, '');
+        content = lines.slice(1).join('\n').trim();
+      }
+    }
+
+    segments.push({ type: 'card', category, title, content });
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining text after last card
+  if (lastIndex < raw.length) {
+    const text = raw.slice(lastIndex).trim();
+    if (text) segments.push({ type: 'text', content: text });
+  }
+
+  // If no cards found, return the whole thing as text
+  if (segments.length === 0) {
+    segments.push({ type: 'text', content: raw });
+  }
+
+  return segments;
+}
 
 export default function ChatScreen() {
   const {
@@ -45,140 +96,95 @@ export default function ChatScreen() {
     setChatInput,
     isTyping,
     handleSendMessage,
-    handleSaveInsight,
+    handleSaveCard,
+    sessionHasCard,
+    sessionStatus,
+    sessionNotes,
+    endSession,
+    dismissSessionNotes,
     loadingChat,
+    setActiveTab,
   } = useToney();
 
+  const isSessionEnded = sessionStatus === 'completed' || sessionStatus === 'ending';
+
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [saveSheetData, setSaveSheetData] = useState<{
-    messageId: string;
-    content: string;
-  } | null>(null);
-  const [lastSavedCardId, setLastSavedCardId] = useState<string | null>(null);
-  const { setScore } = useRewireCards();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSaveClick = (messageId: string) => {
-    const msg = messages.find(m => m.id === messageId);
-    if (!msg) return;
-    if (msg.saved) {
-      handleSaveInsight(messageId);
-      return;
-    }
-    const msgIndex = messages.findIndex(m => m.id === messageId);
-    const precedingUserMsg = msgIndex > 0
-      ? messages.slice(0, msgIndex).reverse().find(m => m.role === 'user')
-      : undefined;
-    const extracted = extractInsight(msg.content, precedingUserMsg?.content);
-    setSaveSheetData({ messageId, content: extracted });
-  };
-
-  const handleSheetSave = async (content: string, category: string) => {
-    if (saveSheetData) {
-      const cardId = await handleSaveInsight(saveSheetData.messageId, content, category);
-      setLastSavedCardId(cardId);
-    }
-  };
-
-  const handleSheetScore = useCallback(async (score: number) => {
-    if (lastSavedCardId) {
-      try {
-        await setScore(lastSavedCardId, score);
-      } catch { /* non-critical */ }
-    }
-  }, [lastSavedCardId, setScore]);
-
-  const handleSheetClose = useCallback(() => {
-    setSaveSheetData(null);
-    setLastSavedCardId(null);
-  }, []);
-
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Simple header */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
+      {/* Header with optional End Session button */}
+      <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
+        {sessionHasCard && sessionStatus === 'active' && (
+          <button
+            onClick={endSession}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 hover:text-gray-700 transition-all active:scale-95"
+          >
+            <Square className="w-3 h-3" />
+            End Session
+          </button>
+        )}
+        {sessionStatus === 'ending' && (
+          <span className="text-xs text-gray-400 font-medium">Wrapping up...</span>
+        )}
       </div>
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 hide-scrollbar">
-        {loadingChat && messages.length === 0 && (
-          <div className="flex justify-center py-8">
-            <div className="flex gap-1.5">
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        {/* Loading state — Toney is preparing the session */}
+        {messages.length === 0 && (
+          <div className="flex justify-center items-center py-16">
+            <div className="text-center">
+              <div className="flex justify-center mb-3">
+                <div className="flex gap-1.5">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+              <p className="text-sm text-gray-400">Toney is preparing your session...</p>
             </div>
           </div>
         )}
 
-        {/* Empty state with conversation starters */}
-        {!loadingChat && messages.length === 0 && !isTyping && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-4xl mb-4">{"\uD83D\uDCAC"}</div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">What&apos;s on your mind?</h2>
-            <p className="text-sm text-gray-500 mb-8 max-w-[280px]">
-              Start a conversation about anything money-related. Toney&apos;s here to listen and coach.
-            </p>
-            <div className="w-full space-y-2">
-              {conversationStarters.map((starter) => (
-                <button
-                  key={starter}
-                  onClick={() => handleSendMessage(starter)}
-                  className="w-full text-left p-3.5 rounded-2xl border border-gray-100 bg-white text-sm text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all active:scale-[0.98]"
-                >
-                  {starter}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg) => {
-          // Find if this is the last assistant message
-          const lastAssistantId = [...messages].reverse().find(m => m.role === 'assistant')?.id;
-          const isLastAssistant = msg.role === 'assistant' && msg.id === lastAssistantId;
-
-          return (
+        {messages.map((msg) => (
           <div key={msg.id}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className="w-10/12">
-                <div
-                  className={`p-4 rounded-2xl text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-md whitespace-pre-line'
-                      : 'bg-gray-100 text-gray-900 rounded-bl-md'
-                  }`}
-                >
-                  {msg.role === 'assistant' ? (
-                    <ReactMarkdown components={markdownComponents}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-                {msg.role === 'assistant' && msg.canSave !== false && (
-                  <button
-                    onClick={() => handleSaveClick(msg.id)}
-                    className={`mt-1.5 flex items-center gap-1.5 text-xs transition-all ${
-                      msg.saved
-                        ? 'text-indigo-600 font-medium'
-                        : isLastAssistant
-                          ? 'text-indigo-500 hover:text-indigo-700 font-medium'
-                          : 'text-gray-300 hover:text-gray-500'
-                    }`}
-                  >
-                    {msg.saved ? (
-                      <BookmarkCheck className="w-3.5 h-3.5" />
-                    ) : (
-                      <Bookmark className={`${isLastAssistant ? 'w-4 h-4' : 'w-3 h-3'}`} />
-                    )}
-                    {msg.saved ? 'Saved to Rewire' : isLastAssistant ? 'Save insight' : ''}
-                  </button>
+                {msg.role === 'user' ? (
+                  <div className="p-4 rounded-2xl text-sm leading-relaxed bg-indigo-600 text-white rounded-br-md whitespace-pre-line">
+                    {msg.content}
+                  </div>
+                ) : (
+                  <>
+                    {parseMessageContent(msg.content).map((segment, i) => {
+                      if (segment.type === 'card') {
+                        return (
+                          <DraftCard
+                            key={`${msg.id}-card-${i}`}
+                            category={segment.category}
+                            initialTitle={segment.title}
+                            initialContent={segment.content}
+                            onSave={(title, content, category) => handleSaveCard(title, content, category)}
+                          />
+                        );
+                      }
+                      return (
+                        <div
+                          key={`${msg.id}-text-${i}`}
+                          className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md"
+                        >
+                          <ReactMarkdown components={markdownComponents}>
+                            {segment.content}
+                          </ReactMarkdown>
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
               </div>
             </div>
@@ -197,8 +203,7 @@ export default function ChatScreen() {
               </div>
             )}
           </div>
-          );
-        })}
+        ))}
 
         {isTyping && (
           <div className="flex justify-start">
@@ -215,46 +220,53 @@ export default function ChatScreen() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-gray-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-end gap-2">
-          <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-3">
-            <textarea
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="What's on your mind?"
-              rows={1}
-              className="w-full bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none outline-none"
-              style={{ minHeight: 20, maxHeight: 120 }}
-            />
+      {!isSessionEnded ? (
+        <div className="flex-shrink-0 px-4 py-3 border-t border-gray-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-3">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="What's on your mind?"
+                rows={1}
+                className="w-full bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none outline-none"
+                style={{ minHeight: 20, maxHeight: 120 }}
+              />
+            </div>
+            <button
+              onClick={() => handleSendMessage()}
+              disabled={!chatInput.trim()}
+              className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                chatInput.trim()
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                  : 'bg-gray-100 text-gray-300'
+              }`}
+            >
+              <Send className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      ) : (
+        <div className="flex-shrink-0 px-4 py-4 border-t border-gray-100 bg-gray-50 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <p className="text-sm text-gray-500 mb-2">Session complete</p>
           <button
-            onClick={() => handleSendMessage()}
-            disabled={!chatInput.trim()}
-            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-              chatInput.trim()
-                ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
-                : 'bg-gray-100 text-gray-300'
-            }`}
+            onClick={() => setActiveTab('home')}
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-all"
           >
-            <Send className="w-4 h-4" />
+            Back to Home
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Save insight sheet */}
-      {saveSheetData && (
-        <SaveInsightSheet
-          initialContent={saveSheetData.content}
-          onSave={handleSheetSave}
-          onClose={handleSheetClose}
-          onScore={handleSheetScore}
-        />
+      {/* Session notes overlay */}
+      {sessionNotes && (
+        <SessionNotesView notes={sessionNotes} onDismiss={dismissSessionNotes} />
       )}
     </div>
   );
