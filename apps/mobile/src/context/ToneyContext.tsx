@@ -870,9 +870,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Go to main app — home screen
+    // Go to main app — straight to chat
     setAppPhase('main');
-    setActiveTab('home');
+    setActiveTab('chat');
   }, [identifiedTensionState, answers, whatBroughtYou, emotionalWhy]);
 
   const resetAll = useCallback(() => {
