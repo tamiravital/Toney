@@ -56,6 +56,19 @@ export interface FocusCardStatus {
   focus_set_at?: string | null;
 }
 
+// --- Session Notes ---
+
+export interface SessionNotesOutput {
+  /** One sentence capturing the core of what happened — specific, not generic */
+  headline: string;
+  /** 2-3 short paragraphs, second person, warm. The narrative arc of the conversation. */
+  narrative: string;
+  /** Specific moments that mattered — things the user said or realized. Optional. */
+  keyMoments?: string[];
+  /** Cards co-created during this session (title + category). Optional — omitted if none. */
+  cardsCreated?: { title: string; category: string }[];
+}
+
 // --- System Prompt Blocks (for prompt caching) ---
 
 export interface SystemPromptBlock {

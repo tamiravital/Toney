@@ -6,7 +6,8 @@ import { Profile, BehavioralIntel, Win, CoachMemory, RewireCard, CoachingBriefin
 // ────────────────────────────────────────────
 // Runs between sessions. Produces a "Coach Briefing" —
 // the narrative coaching document the Coach reads instead of raw data.
-// Handles clinical sequencing, journey narrative, Focus card prescription.
+// Handles clinical sequencing, journey narrative, growth edges.
+// Cards are co-created in-session by the Coach — the Strategist does NOT prescribe them.
 
 export interface StrategistContext {
   profile: Profile;
@@ -15,24 +16,24 @@ export interface StrategistContext {
   wins?: Win[];
   rewireCards?: RewireCard[];
   previousBriefing?: CoachingBriefing | null;
+  /** Session notes from recent completed sessions (replaces observerSignals) */
+  previousSessionNotes?: string[];
+  /** @deprecated Observer removed in v3. Kept for admin build compat. Ignored. */
   observerSignals?: ObserverSignal[];
   /** Full session transcript (for session_end analysis) */
   sessionTranscript?: { role: 'user' | 'assistant'; content: string }[];
   isFirstBriefing: boolean;
 }
 
+/** @deprecated Focus cards are now co-created in-session. Kept for admin build compat. */
 export interface FocusCardPrescription {
-  /** 'create_new' to generate a new card, 'set_existing' to promote a saved card, 'keep_current' to maintain, 'graduate' to graduate current and create new */
   action: 'create_new' | 'set_existing' | 'keep_current' | 'graduate';
-  /** For create_new/graduate: the card to create */
   card?: {
     category: string;
     title: string;
     content: string;
   };
-  /** For set_existing: the card ID to promote */
   existing_card_id?: string;
-  /** Reason for the prescription */
   rationale: string;
 }
 
@@ -41,8 +42,9 @@ export interface StrategistOutput {
   hypothesis: string;
   session_strategy: string;
   journey_narrative: string;
-  focus_card_prescription?: FocusCardPrescription;
   growth_edges: Record<string, unknown>;
+  /** @deprecated Focus cards are now co-created in-session. Kept for admin build compat. */
+  focus_card_prescription?: FocusCardPrescription;
   /** Intel updates to merge into behavioral_intel */
   intel_updates?: {
     triggers?: string[];
@@ -103,7 +105,7 @@ You are NOT the coach. You are the clinical intelligence behind the coach. Think
 
 2. **Clinical sequencing — you decide what to work on.** The therapeutic progression is: Foundation → Trust → Awareness → Reframe → Practice → Identity → Integration. Different tensions start at different places. Don't let the user's stated goal override what they're ready for.
 
-3. **The conversation IS the coaching.** The chat is where transformation happens. The Focus card ADDS to growth between sessions by keeping the insight alive.
+3. **The conversation IS the coaching.** The chat is where transformation happens. Cards are co-created between the Coach and user in-session. You do NOT prescribe cards. Your job is to prepare the Coach with context about what cards exist and what insights might be worth building toward next.
 
 4. **Session-to-session continuity.** Reference previous breakthroughs, check on practices, use their own words. The coaching should feel like a relationship, not disconnected sessions.
 
@@ -125,8 +127,8 @@ WHERE THEY ARE IN THEIR JOURNEY:
 WHAT WE KNOW:
 [Triggers — specific situations, not categories. Their actual emotional vocabulary — words they use, words they avoid, phrases they deflect with. Resistance patterns — where coaching bounces off. Breakthroughs — aha moments that stuck. What coaching approaches work for them.]
 
-THEIR FOCUS RIGHT NOW:
-[The active Focus card — what it is, how they've been engaging with it (completion data), whether it's landing or needs adjustment. If no Focus card yet, what the first one should be.]
+THEIR TOOLKIT:
+[What cards the user has co-created in recent sessions. Which ones seem to resonate (they revisit them, reference them). What types of insights have landed vs not. What kind of card might be worth co-creating next — but do NOT prescribe it. The Coach and user will create it together.]
 
 WHERE GROWTH IS AVAILABLE:
 [Which growth lenses are active — where the person is ready to stretch. Which have been touched and are stabilizing. Which are too raw to push on. What the next edge is.]
@@ -145,11 +147,6 @@ COACHING STYLE:
   "session_strategy": "What this session should accomplish in 1-2 sentences",
   "journey_narrative": "The story of this person's journey so far in 2-3 sentences",
   "growth_edges": { "active": ["which lenses are ready"], "stabilizing": ["which are settling"], "not_ready": ["which to avoid"] },
-  "focus_card_prescription": {
-    "action": "create_new | set_existing | keep_current | graduate",
-    "card": { "category": "reframe|truth|plan|practice|conversation_kit", "title": "Card Title", "content": "Card content" },
-    "rationale": "Why this Focus card right now"
-  },
   "intel_updates": {
     "triggers": ["any new triggers identified"],
     "breakthroughs": ["any new breakthroughs"],
@@ -170,6 +167,7 @@ function buildStrategistUserMessage(ctx: StrategistContext): string {
 - Tension: ${p.tension_type || 'unknown'}${p.secondary_tension_type ? ` (secondary: ${p.secondary_tension_type})` : ''}
 - Life stage: ${p.life_stage || 'unknown'}, Income: ${p.income_type || 'unknown'}, Relationship: ${p.relationship_status || 'unknown'}
 - Tone: ${p.tone ?? 5}/10, Depth: ${p.depth || 'balanced'}, Learning styles: ${(p.learning_styles || []).join(', ') || 'none set'}
+- What brought them here: "${p.what_brought_you || 'not provided'}"
 - Emotional why: "${p.emotional_why || 'not provided'}"
 - Onboarding answers: ${JSON.stringify(p.onboarding_answers || {})}`);
 
@@ -220,12 +218,12 @@ Strategy: ${ctx.previousBriefing.session_strategy || 'none'}
 Journey: ${ctx.previousBriefing.journey_narrative || 'none'}`);
   }
 
-  // Observer signals from recent session
-  if (ctx.observerSignals && ctx.observerSignals.length > 0) {
-    const signalLines = ctx.observerSignals.map(s =>
-      `- [${s.signal_type}${s.urgency_flag ? ' URGENT' : ''}] ${s.content}`
+  // Session notes from recent completed sessions
+  if (ctx.previousSessionNotes && ctx.previousSessionNotes.length > 0) {
+    const notesLines = ctx.previousSessionNotes.map((n, i) =>
+      `### Session ${ctx.previousSessionNotes!.length - i} (most recent first)\n${n}`
     );
-    sections.push(`## Observer Signals (from recent session)\n${signalLines.join('\n')}`);
+    sections.push(`## Previous Session Notes\n${notesLines.join('\n\n')}`);
   }
 
   // Session transcript (for session_end analysis)
@@ -287,7 +285,6 @@ export async function runStrategist(ctx: StrategistContext): Promise<StrategistO
     session_strategy: (metadata.session_strategy as string) || '',
     journey_narrative: (metadata.journey_narrative as string) || '',
     growth_edges: (metadata.growth_edges as Record<string, unknown>) || {},
-    focus_card_prescription: metadata.focus_card_prescription as FocusCardPrescription | undefined,
     intel_updates: metadata.intel_updates as StrategistOutput['intel_updates'],
   };
 }

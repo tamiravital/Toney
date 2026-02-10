@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { runStrategist, generateInitialBriefing } from '@toney/coaching';
-import { Profile, BehavioralIntel, CoachMemory, Win, RewireCard, CoachingBriefing, ObserverSignal } from '@toney/types';
+import { Profile, BehavioralIntel, CoachMemory, Win, RewireCard, CoachingBriefing } from '@toney/types';
 import type { StrategistOutput } from '@toney/coaching';
 
+/**
+ * POST /api/strategist
+ *
+ * Triggers:
+ * - `onboarding`: Initial briefing after onboarding (minimal context)
+ * - `session_start`: Full briefing at session open (will be replaced by planSession)
+ *
+ * Intel extraction is handled separately at session close by
+ * reflectOnSession() + updatePersonModel(). This route only
+ * produces briefings — it does NOT update behavioral_intel.
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -29,13 +40,11 @@ export async function POST(request: NextRequest) {
     if (trigger === 'onboarding') {
       const result = await generateInitialBriefing(profile as Profile);
       await saveBriefing(supabase, userId, null, result);
-      await applyIntelUpdates(supabase, userId, result);
-      await applyFocusCardPrescription(supabase, userId, result);
 
       return NextResponse.json({ status: 'briefing_created', trigger });
     }
 
-    // --- Load full context for session_start / session_end / urgent ---
+    // --- Load context for session_start ---
 
     // Behavioral intel
     let behavioralIntel: BehavioralIntel | null = null;
@@ -103,36 +112,24 @@ export async function POST(request: NextRequest) {
       previousBriefing = data as CoachingBriefing | null;
     } catch { /* no previous briefing */ }
 
-    // Observer signals from the session
-    let observerSignals: ObserverSignal[] = [];
-    if (sessionId) {
-      try {
-        const { data } = await supabase
-          .from('observer_signals')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('created_at', { ascending: true });
-        observerSignals = (data || []) as ObserverSignal[];
-      } catch { /* no signals */ }
-    }
+    // Session notes from recent completed sessions
+    let previousSessionNotes: string[] = [];
+    try {
+      const { data: recentSessions } = await supabase
+        .from('sessions')
+        .select('session_notes')
+        .eq('user_id', userId)
+        .not('session_notes', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (recentSessions) {
+        previousSessionNotes = recentSessions
+          .map((s: { session_notes: string | null }) => s.session_notes)
+          .filter(Boolean) as string[];
+      }
+    } catch { /* no notes yet */ }
 
-    // Session transcript (for session_end — get all messages from this session)
-    let sessionTranscript: { role: 'user' | 'assistant'; content: string }[] = [];
-    if (sessionId && (trigger === 'session_end' || trigger === 'urgent')) {
-      try {
-        const { data } = await supabase
-          .from('messages')
-          .select('role, content')
-          .eq('session_id', sessionId)
-          .order('created_at', { ascending: true });
-        sessionTranscript = (data || []).map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }));
-      } catch { /* no messages */ }
-    }
-
-    // Run Strategist
+    // Run Strategist — briefing only, no intel extraction
     const result = await runStrategist({
       profile: profile as Profile,
       behavioralIntel,
@@ -140,17 +137,14 @@ export async function POST(request: NextRequest) {
       wins,
       rewireCards,
       previousBriefing,
-      observerSignals,
-      sessionTranscript,
+      previousSessionNotes,
       isFirstBriefing: !previousBriefing,
     });
 
-    // Save outputs
+    // Save briefing only — intel is handled at session close
     await saveBriefing(supabase, userId, sessionId, result);
-    await applyIntelUpdates(supabase, userId, result);
-    await applyFocusCardPrescription(supabase, userId, result);
 
-    // Update journey narrative on behavioral_intel
+    // Update journey narrative on behavioral_intel (non-intel briefing data)
     if (result.journey_narrative) {
       try {
         await supabase
@@ -158,7 +152,6 @@ export async function POST(request: NextRequest) {
           .update({
             journey_narrative: result.journey_narrative,
             growth_edges: result.growth_edges,
-            last_strategist_run: new Date().toISOString(),
           })
           .eq('user_id', userId);
       } catch { /* non-critical */ }
@@ -206,142 +199,4 @@ async function saveBriefing(supabase: any, userId: string, sessionId: string | n
       growth_edges: result.growth_edges,
       version,
     });
-}
-
-// ────────────────────────────────────────────
-// Helper: Apply intel updates to behavioral_intel
-// ────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function applyIntelUpdates(supabase: any, userId: string, result: StrategistOutput) {
-  if (!result.intel_updates) return;
-
-  try {
-    // Get current intel
-    const { data: current } = await supabase
-      .from('behavioral_intel')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (current) {
-      // Partial merge — append new items to existing arrays, don't replace
-      const updates = result.intel_updates;
-      const merged: Record<string, unknown> = {};
-
-      if (updates.triggers?.length) {
-        const existing = current.triggers || [];
-        merged.triggers = [...new Set([...existing, ...updates.triggers])];
-      }
-      if (updates.breakthroughs?.length) {
-        const existing = current.breakthroughs || [];
-        merged.breakthroughs = [...new Set([...existing, ...updates.breakthroughs])];
-      }
-      if (updates.coaching_notes?.length) {
-        const existing = current.coaching_notes || [];
-        merged.coaching_notes = [...new Set([...existing, ...updates.coaching_notes])];
-      }
-      if (updates.resistance_patterns?.length) {
-        const existing = current.resistance_patterns || [];
-        merged.resistance_patterns = [...new Set([...existing, ...updates.resistance_patterns])];
-      }
-      if (updates.stage_of_change) {
-        merged.stage_of_change = updates.stage_of_change;
-      }
-      if (updates.emotional_vocabulary) {
-        const existingEv = current.emotional_vocabulary || { used_words: [], avoided_words: [], deflection_phrases: [] };
-        merged.emotional_vocabulary = {
-          used_words: [...new Set([...(existingEv.used_words || []), ...(updates.emotional_vocabulary.used_words || [])])],
-          avoided_words: [...new Set([...(existingEv.avoided_words || []), ...(updates.emotional_vocabulary.avoided_words || [])])],
-          deflection_phrases: [...new Set([...(existingEv.deflection_phrases || []), ...(updates.emotional_vocabulary.deflection_phrases || [])])],
-        };
-      }
-
-      if (Object.keys(merged).length > 0) {
-        await supabase
-          .from('behavioral_intel')
-          .update(merged)
-          .eq('user_id', userId);
-      }
-    } else {
-      // Create initial intel
-      await supabase
-        .from('behavioral_intel')
-        .insert({
-          user_id: userId,
-          ...result.intel_updates,
-        });
-    }
-  } catch { /* non-critical */ }
-}
-
-// ────────────────────────────────────────────
-// Helper: Apply Focus card prescription
-// ────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function applyFocusCardPrescription(supabase: any, userId: string, result: StrategistOutput) {
-  const prescription = result.focus_card_prescription;
-  if (!prescription) return;
-
-  try {
-    if (prescription.action === 'keep_current') {
-      // Do nothing
-      return;
-    }
-
-    if (prescription.action === 'graduate') {
-      // Graduate current focus card
-      await supabase
-        .from('rewire_cards')
-        .update({
-          is_focus: false,
-          graduated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId)
-        .eq('is_focus', true);
-    }
-
-    if ((prescription.action === 'create_new' || prescription.action === 'graduate') && prescription.card) {
-      // Clear any existing focus first
-      await supabase
-        .from('rewire_cards')
-        .update({ is_focus: false })
-        .eq('user_id', userId)
-        .eq('is_focus', true);
-
-      // Create new card and set as focus
-      await supabase
-        .from('rewire_cards')
-        .insert({
-          user_id: userId,
-          category: prescription.card.category,
-          title: prescription.card.title,
-          content: prescription.card.content,
-          is_focus: true,
-          focus_set_at: new Date().toISOString(),
-          prescribed_by: 'strategist',
-          auto_generated: true,
-        });
-    }
-
-    if (prescription.action === 'set_existing' && prescription.existing_card_id) {
-      // Clear any existing focus
-      await supabase
-        .from('rewire_cards')
-        .update({ is_focus: false })
-        .eq('user_id', userId)
-        .eq('is_focus', true);
-
-      // Set existing card as focus
-      await supabase
-        .from('rewire_cards')
-        .update({
-          is_focus: true,
-          focus_set_at: new Date().toISOString(),
-          prescribed_by: 'strategist',
-        })
-        .eq('id', prescription.existing_card_id);
-    }
-  } catch { /* non-critical */ }
 }

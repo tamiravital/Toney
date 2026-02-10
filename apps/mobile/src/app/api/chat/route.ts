@@ -37,7 +37,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // ── v2: Try to load Strategist briefing first ──
+    // ── Load Strategist briefing ──
+    // Session opening (Strategist, session creation) is handled by /api/session/open.
+    // By the time /api/chat is called, the briefing should already exist.
     let briefing: CoachingBriefing | null = null;
     try {
       const { data } = await supabase
@@ -49,66 +51,6 @@ export async function POST(request: NextRequest) {
         .single();
       briefing = data as CoachingBriefing | null;
     } catch { /* no briefing yet — will use legacy path */ }
-
-    // ── v2: Session boundary detection ──
-    // Check if this is a new session (>12h gap since last message)
-    let lastMessageTime: Date | null = null;
-    try {
-      const { data: lastMsg } = await supabase
-        .from('messages')
-        .select('created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (lastMsg) {
-        lastMessageTime = new Date(lastMsg.created_at);
-      }
-    } catch { /* no messages yet */ }
-
-    const hoursSinceLastMessage = lastMessageTime
-      ? (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60)
-      : Infinity;
-    const isNewSession = hoursSinceLastMessage > 12;
-
-    // If new session and we have a briefing, trigger Strategist for session boundary
-    if (isNewSession && briefing) {
-      try {
-        await triggerStrategist(user.id, sessionId, 'session_start');
-        // Reload briefing after Strategist runs
-        const { data: freshBriefing } = await supabase
-          .from('coaching_briefings')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        if (freshBriefing) briefing = freshBriefing as CoachingBriefing;
-      } catch { /* Strategist failed — use existing briefing */ }
-    }
-
-    // If first-ever message and no briefing, trigger initial briefing
-    if (!briefing) {
-      const { count: sessionCount } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      if ((sessionCount || 0) <= 1) {
-        try {
-          await triggerStrategist(user.id, null, 'onboarding');
-          // Reload briefing
-          const { data: freshBriefing } = await supabase
-            .from('coaching_briefings')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          if (freshBriefing) briefing = freshBriefing as CoachingBriefing;
-        } catch { /* Strategist failed — fall through to legacy */ }
-      }
-    }
 
     // ── Build system prompt ──
     let systemPromptBlocks: SystemPromptBlock[];
@@ -266,11 +208,6 @@ export async function POST(request: NextRequest) {
         .eq('id', sessionId);
     } catch { /* non-critical */ }
 
-    // Trigger Observer on every turn (fire-and-forget)
-    triggerObserver(sessionId, user.id).catch(() => {
-      // Silent fail — Observer is non-critical
-    });
-
     return NextResponse.json({
       message: {
         id: savedMessage?.id || `msg-${Date.now()}`,
@@ -299,33 +236,5 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 } // Return 200 with error message so UI handles gracefully
     );
-  }
-}
-
-async function triggerObserver(sessionId: string, userId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
-
-  await fetch(`${baseUrl}/api/observer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, userId }),
-  });
-}
-
-async function triggerStrategist(userId: string, sessionId: string | null, trigger: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
-
-  const response = await fetch(`${baseUrl}/api/strategist`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, sessionId, trigger }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Strategist returned ${response.status}`);
   }
 }
