@@ -345,7 +345,7 @@ export default function RewireScreen() {
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-2 hide-scrollbar">
       {/* Header */}
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900 mb-0.5">Your Toolkit</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-0.5">Your Rewire Cards</h1>
         <p className="text-sm text-gray-400">
           {categorizedInsights.length} insight{categorizedInsights.length !== 1 ? 's' : ''} saved
         </p>
@@ -493,7 +493,7 @@ export default function RewireScreen() {
               <Trash2 className="w-5 h-5 text-red-500" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">Delete insight?</h3>
-            <p className="text-sm text-gray-500 mb-6 text-center">This can&apos;t be undone. The insight will be removed from your toolkit.</p>
+            <p className="text-sm text-gray-500 mb-6 text-center">This can&apos;t be undone. The insight will be removed from your rewire cards.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => handleDelete(deletingInsightId)}

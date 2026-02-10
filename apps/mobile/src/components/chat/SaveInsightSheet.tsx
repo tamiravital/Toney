@@ -105,7 +105,7 @@ export default function SaveInsightSheet({ initialContent, onSave, onClose, onSc
       <div className="w-full max-w-[430px] bg-white rounded-t-3xl p-6 pb-8 animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-gray-900">Save to Your Toolkit</h3>
+          <h3 className="text-lg font-bold text-gray-900">Save to Rewire</h3>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"

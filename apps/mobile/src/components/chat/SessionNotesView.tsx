@@ -84,7 +84,7 @@ export default function SessionNotesView({ notes, onDismiss }: SessionNotesViewP
             <div className="bg-gray-50 rounded-2xl p-4">
               <div className="flex items-center gap-1.5 mb-2">
                 <Layers className="w-3.5 h-3.5 text-gray-500" />
-                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Added to Your Toolkit</span>
+                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Added to Rewire</span>
               </div>
               <div className="space-y-2">
                 {notes.cardsCreated.map((card, i) => (

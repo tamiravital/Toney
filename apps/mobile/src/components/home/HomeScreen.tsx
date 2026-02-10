@@ -47,7 +47,7 @@ export default function HomeScreen() {
         ]
       : [];
 
-  // Show 3 most recent toolkit cards
+  // Show 3 most recent rewire cards
   const recentCards = savedInsights.slice(0, 3);
 
   return (
@@ -165,13 +165,13 @@ export default function HomeScreen() {
         </div>
       </div>
 
-      {/* Recent toolkit cards */}
+      {/* Recent rewire cards */}
       {recentCards.length > 0 ? (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-gray-400" />
-              <h3 className="font-semibold text-gray-900 text-sm">Your Toolkit</h3>
+              <h3 className="font-semibold text-gray-900 text-sm">Your Rewire Cards</h3>
             </div>
             <button onClick={() => setActiveTab('rewire')} className="text-indigo-600 text-xs font-medium">
               See all

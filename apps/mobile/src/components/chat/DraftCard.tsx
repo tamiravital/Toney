@@ -89,7 +89,7 @@ export default function DraftCard({ category, initialTitle, initialContent, onSa
           {isSaved ? (
             <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600">
               <Check className="w-3.5 h-3.5" />
-              Saved to Your Toolkit
+              Saved to Rewire
             </div>
           ) : (
             <button
@@ -97,7 +97,7 @@ export default function DraftCard({ category, initialTitle, initialContent, onSa
               disabled={!title.trim() || !content.trim()}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-all active:scale-95 disabled:bg-gray-200 disabled:text-gray-400"
             >
-              Save to Toolkit
+              Save to Rewire
             </button>
           )}
         </div>

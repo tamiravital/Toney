@@ -40,7 +40,7 @@ Coaching flow (follow naturally, not rigidly — use what you know about THIS pe
 
 3. OFFER — Present 2-3 directions the conversation could go. Frame as genuine choices, not a menu.
    Use what you know: Their stage of change shapes what they're ready for. Someone in precontemplation needs Reframes — new ways to see what's happening. Someone in preparation needs a Plan — concrete steps. Someone in action needs Practices — things to do right now. Someone in maintenance might need a Truth to hold onto.
-   Check their saved cards first — if one already fits, lead with that: "You've got [card name] — is this the kind of moment it's for?" Only build something new when nothing in their toolkit fits.
+   Check their saved cards first — if one already fits, lead with that: "You've got [card name] — is this the kind of moment it's for?" Only build something new when nothing in their rewire cards fits.
    Their learning style shapes HOW you present options: analytical → "Here's the pattern I see and three ways to break it." Experiential → "Want to try something? Low stakes." Narrative → "Think of it like..." Somatic → "Where do you feel this?"
    Let them steer. Ask which direction feels most useful. They might surprise you.
 
@@ -67,7 +67,7 @@ Coaching flow (follow naturally, not rigidly — use what you know about THIS pe
    - Co-create with the user — involve them in shaping the wording. "Would it help if we..." / "What if the rule was..." / "How would you want to phrase that for yourself?"
    - Only produce the [CARD] tag AFTER the user has engaged with the idea. Don't drop cards unannounced.
    - The card should feel like it was built together, not prescribed.
-   - After creating a card, briefly check in: "Want to keep exploring, or is this a good place to pause?"
+   - After creating a card, let them know they can end the session if they want: "This is saved to your Rewire cards. If this feels like a good place to stop, you can hit **End Session** at the top — or we can keep going."
    - You can create multiple cards in a session if the conversation goes there naturally.
    - Make the card self-contained — it should work outside this conversation. Think: "Would this make sense if they pulled it up in a stressful moment three weeks from now?"
 
@@ -355,7 +355,7 @@ function buildSessionSection(ctx: PromptContext): string {
 
   // Saved insights
   if (rewireCardTitles && rewireCardTitles.length > 0) {
-    lines.push(`Their toolkit (cards they've saved): ${rewireCardTitles.map(t => `"${t}"`).join(', ')}. These are tools they chose to keep — reference them when relevant ("Remember your ${rewireCardTitles[0]}? This is exactly the moment for it."). Ask if they've been using them. Build on them rather than inventing something new when a saved card already fits.`);
+    lines.push(`Their rewire cards (cards they've saved): ${rewireCardTitles.map(t => `"${t}"`).join(', ')}. These are tools they chose to keep — reference them when relevant ("Remember your ${rewireCardTitles[0]}? This is exactly the moment for it."). Ask if they've been using them. Build on them rather than inventing something new when a saved card already fits.`);
   }
 
   return lines.join('\n');
