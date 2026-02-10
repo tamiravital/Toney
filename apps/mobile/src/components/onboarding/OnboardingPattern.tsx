@@ -5,16 +5,37 @@ import { ArrowRight } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { tensionColor } from '@toney/constants';
 
+const chips = [
+  "I avoid looking at my accounts",
+  "I stress about money even though I'm fine",
+  "I can't stop spending",
+  "Money causes fights in my relationship",
+  "I feel behind compared to friends",
+  "I don't know where my money goes",
+  "I want to invest but don't know where to start",
+];
+
 export default function OnboardingPattern() {
-  const { identifiedTension, finishOnboarding, setEmotionalWhy } = useToney();
+  const { identifiedTension, finishOnboarding, setEmotionalWhy, setWhatBroughtYou } = useToney();
   const [emotionalWhyText, setEmotionalWhyText] = useState('');
+  const [storyText, setStoryText] = useState('');
 
   if (!identifiedTension) return null;
   const p = identifiedTension.primaryDetails;
   const colors = tensionColor(identifiedTension.primary);
 
+  const handleChipTap = (chip: string) => {
+    if (storyText) {
+      // Append with comma separator if there's existing text
+      setStoryText(prev => prev + ', ' + chip.toLowerCase());
+    } else {
+      setStoryText(chip);
+    }
+  };
+
   const handleFinish = () => {
     setEmotionalWhy(emotionalWhyText.trim());
+    setWhatBroughtYou(storyText.trim());
     finishOnboarding();
   };
 
@@ -63,8 +84,33 @@ export default function OnboardingPattern() {
             </div>
           )}
 
-          {/* Emotional Why — rides the wave of the reveal */}
+          {/* Pick what resonates — chips + textarea */}
           <div className="pt-4">
+            <h3 className="font-semibold text-gray-900 text-base mb-3">
+              Pick what resonates
+            </h3>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {chips.map((chip) => (
+                <button
+                  key={chip}
+                  onClick={() => handleChipTap(chip)}
+                  className="px-3 py-2 rounded-full border border-gray-200 bg-white text-sm text-gray-700 hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.97] transition-all"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={storyText}
+              onChange={(e) => setStoryText(e.target.value)}
+              placeholder="Or tell us in your own words..."
+              rows={3}
+              className="w-full p-4 rounded-2xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none resize-none"
+            />
+          </div>
+
+          {/* Emotional Why — rides the wave of the reveal */}
+          <div className="pt-2">
             <h3 className="font-semibold text-gray-900 text-base mb-1">
               One more thing
             </h3>

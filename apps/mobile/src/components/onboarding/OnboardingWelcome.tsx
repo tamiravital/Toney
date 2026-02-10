@@ -37,7 +37,7 @@ export default function OnboardingWelcome() {
       </div>
 
       <button
-        onClick={() => setOnboardingStep('story')}
+        onClick={() => setOnboardingStep('questions')}
         className="w-full bg-indigo-600 text-white py-4 px-6 rounded-2xl font-semibold text-lg hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
       >
         Start Your Journey

@@ -4,7 +4,6 @@ import { useToney } from '@/context/ToneyContext';
 import MobileShell from '@/components/layout/MobileShell';
 import {
   OnboardingWelcome,
-  OnboardingStory,
   OnboardingQuestions,
   OnboardingPattern,
 } from '@/components/onboarding';
@@ -44,7 +43,6 @@ export default function ToneyApp() {
       {appPhase === 'onboarding' ? (
         <>
           {onboardingStep === 'welcome' && <OnboardingWelcome />}
-          {onboardingStep === 'story' && <OnboardingStory />}
           {onboardingStep === 'questions' && <OnboardingQuestions />}
           {onboardingStep === 'pattern' && <OnboardingPattern />}
         </>

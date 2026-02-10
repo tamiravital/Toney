@@ -6,7 +6,7 @@ import { identifyTension, tensionDetails } from '@toney/constants';
 import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
-type OnboardingStep = 'welcome' | 'story' | 'questions' | 'pattern';
+type OnboardingStep = 'welcome' | 'questions' | 'pattern';
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
 type ActiveTab = 'home' | 'chat' | 'rewire' | 'wins';
 type SessionStatus = 'active' | 'ending' | 'completed';
@@ -511,7 +511,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
     } else {
-      setOnboardingStep('story');
+      setOnboardingStep('welcome');
     }
   }, [currentQuestionIndex]);
 
