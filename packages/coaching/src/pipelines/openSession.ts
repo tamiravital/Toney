@@ -79,7 +79,7 @@ export async function openSessionPipeline(input: OpenSessionInput): Promise<Open
 
   // ── Step 2: Build system prompt from briefing ──
   const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefingContent);
-  systemPromptBlocks.push(buildSessionOpeningBlock());
+  systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession));
 
   // ── Step 3: Generate opening message ──
   const anthropic = new Anthropic({

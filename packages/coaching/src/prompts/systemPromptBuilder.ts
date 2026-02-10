@@ -454,7 +454,22 @@ export function buildSystemPromptFromBriefing(briefingContent: string): SystemPr
  * Append to system blocks only for the first message of a session.
  * No cache_control — it's ephemeral and one-time.
  */
-export function buildSessionOpeningBlock(): SystemPromptBlock {
+export function buildSessionOpeningBlock(isFirstSession?: boolean): SystemPromptBlock {
+  if (isFirstSession) {
+    return {
+      type: 'text',
+      text: `[SESSION OPENING — FIRST SESSION] This is the very first time you're talking to this person. They just finished onboarding and are here for the first time.
+
+Your opening should:
+- Make them feel seen — reference their goals (what would feel like progress) and their tension naturally, as understanding not diagnosis
+- Be warm and human. They just took a step by downloading this — acknowledge that without being cheesy
+- Ask one specific, open question that invites them to share what's on their mind right now
+- Keep it to 3-4 sentences. Conversational, not clinical.
+
+Do NOT reference previous sessions, previous conversations, "last time we talked", or anything that implies history. This is the first time. There is no "last time."`,
+    };
+  }
+
   return {
     type: 'text',
     text: `[SESSION OPENING] This is the start of a new session. Open the conversation — don't wait for the user to speak first.
