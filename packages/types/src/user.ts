@@ -24,6 +24,7 @@ export interface Profile {
   income_type?: string | null;
   relationship_status?: string | null;
   emotional_why?: string | null;
+  what_brought_you?: string | null;
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

@@ -4,10 +4,9 @@ import { useToney } from '@/context/ToneyContext';
 import MobileShell from '@/components/layout/MobileShell';
 import {
   OnboardingWelcome,
+  OnboardingStory,
   OnboardingQuestions,
   OnboardingPattern,
-  OnboardingStyleIntro,
-  OnboardingStyleQuiz,
 } from '@/components/onboarding';
 import HomeScreen from '@/components/home/HomeScreen';
 import ChatScreen from '@/components/chat/ChatScreen';
@@ -45,10 +44,9 @@ export default function ToneyApp() {
       {appPhase === 'onboarding' ? (
         <>
           {onboardingStep === 'welcome' && <OnboardingWelcome />}
+          {onboardingStep === 'story' && <OnboardingStory />}
           {onboardingStep === 'questions' && <OnboardingQuestions />}
           {onboardingStep === 'pattern' && <OnboardingPattern />}
-          {onboardingStep === 'style_intro' && <OnboardingStyleIntro />}
-          {onboardingStep === 'style_quiz' && <OnboardingStyleQuiz />}
         </>
       ) : (
         <>

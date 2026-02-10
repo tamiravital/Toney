@@ -1,5 +1,25 @@
 # Toney — Changelog
 
+## 2026-02-09 (session 2)
+- Onboarding redesigned: 15 screens → 10 screens
+- New "What's going on with money right now?" prompt captures user's specific situation
+- Style quiz eliminated — balanced defaults, Coach learns preferences over time
+- Tension reveal + emotional why combined into single screen with "Start coaching" CTA
+- New `what_brought_you` profile field feeds Coach, Strategist, and planSession
+- Migration 014: `what_brought_you` column on profiles
+
+## 2026-02-09
+- Coaching engine rearchitected: 3 agents → 2 agents (Observer killed)
+- Strategist decomposed into planSession, reflectOnSession, updatePersonModel
+- Pipeline orchestration layer: openSessionPipeline + closeSessionPipeline (pure functions, no DB/framework dependency)
+- Session notes engine: user-facing 4-field format (headline, narrative, keyMoments?, cardsCreated?)
+- Session lifecycle: Coach opens with context-aware greeting, session closes with notes display
+- In-chat card co-creation via [CARD] markers with interactive DraftCard component
+- Focus card widget removed from home screen
+- Closing message removed — session notes are the ending
+- API routes rewritten as thin shells over pipelines
+- NOTE: All changes uncommitted — pending onboarding redesign
+
 ## 2026-02-08
 - Admin simulator revamped to use v2 coaching engine (3-agent: Coach + Observer + Strategist)
 - Replaced simulator_personas with sim_profiles as single source of truth
