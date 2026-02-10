@@ -119,7 +119,8 @@ interface ToneyContextValue {
   sessionNotes: SessionNotesOutput | null;
   endSession: () => Promise<void>;
   dismissSessionNotes: () => void;
-  openSession: (previousSessionId?: string) => Promise<void>;
+  openSession: (previousSessionId?: string, preserveMessages?: boolean) => Promise<void>;
+  startNewSession: () => Promise<void>;
   loadingChat: boolean;
 
   // Rewire
@@ -449,6 +450,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   // ── Load messages when currentSessionId changes ──
   useEffect(() => {
     if (appPhase !== 'main') return;
+
+    // Skip reload if we're doing an inline session open (messages are being streamed in)
+    if (skipMessageLoadRef.current) {
+      skipMessageLoadRef.current = false;
+      return;
+    }
+
     setSessionHasCard(false); // Reset card state for new session
     setSessionStatus('active');
     setSessionNotes(null);
@@ -751,14 +759,31 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionNotes(null);
   }, []);
 
-  const openSession = useCallback(async (previousSessionId?: string) => {
+  const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean) => {
     if (!isSupabaseConfigured()) return;
 
     setLoadingChat(true);
-    setMessages([]);
     setSessionHasCard(false);
     setSessionStatus('active');
     setSessionNotes(null);
+
+    // When preserving messages, skip the message-load effect triggered by sessionId change
+    if (preserveMessages) {
+      skipMessageLoadRef.current = true;
+    }
+
+    // Insert a visual divider if preserving old messages, otherwise clear
+    if (preserveMessages) {
+      const dividerMsg: Message = {
+        id: `divider-${Date.now()}`,
+        role: 'divider',
+        content: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, dividerMsg]);
+    } else {
+      setMessages([]);
+    }
 
     try {
       const res = await fetch('/api/session/open', {
@@ -809,7 +834,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                         : m
                     );
                   } else {
-                    return [{
+                    return [...prev, {
                       id: streamingMsgId,
                       role: 'assistant' as const,
                       content: event.text,
@@ -829,7 +854,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 );
               } else if (event.type === 'error') {
                 setLoadingChat(false);
-                setMessages([{
+                setMessages(prev => [...prev, {
                   id: streamingMsgId,
                   role: 'assistant',
                   content: event.text,
@@ -850,7 +875,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           sessionIdRef.current = data.sessionId;
         }
         if (data.message) {
-          setMessages([{
+          setMessages(prev => [...prev, {
             id: data.message.id || `msg-${Date.now()}`,
             role: 'assistant',
             content: data.message.content,
@@ -871,6 +896,14 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const sessionOpenedRef = useRef(false);
   const lastMessageTimestampRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const skipMessageLoadRef = useRef(false); // Skip message reload during inline session open
+
+  const startNewSession = useCallback(async () => {
+    const prevId = currentSessionId;
+    sessionOpenedRef.current = true; // Prevent auto-open from firing
+    // Open new session inline — preserve old messages with a divider
+    await openSession(prevId || undefined, true);
+  }, [currentSessionId, openSession]);
 
   // Keep sessionIdRef in sync with state
   useEffect(() => {
@@ -1111,6 +1144,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         endSession,
         dismissSessionNotes,
         openSession,
+        startNewSession,
         loadingChat,
         savedInsights,
         setSavedInsights,

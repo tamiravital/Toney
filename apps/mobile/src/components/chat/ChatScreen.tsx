@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, ComponentPropsWithoutRef } from 'react';
-import { Send, Square } from 'lucide-react';
+import { Send, Square, Plus } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import DraftCard from './DraftCard';
@@ -102,6 +102,7 @@ export default function ChatScreen() {
     sessionNotes,
     endSession,
     dismissSessionNotes,
+    startNewSession,
     loadingChat,
     setActiveTab,
   } = useToney();
@@ -153,59 +154,72 @@ export default function ChatScreen() {
 
         {messages.map((msg) => (
           <div key={msg.id}>
-            <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className="w-10/12">
-                {msg.role === 'user' ? (
-                  <div className="p-4 rounded-2xl text-sm leading-relaxed bg-indigo-600 text-white rounded-br-md whitespace-pre-line">
-                    {msg.content}
+            {msg.role === 'divider' ? (
+              /* ── Session divider ── */
+              <div className="flex items-center gap-3 py-2 my-2">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+                  Session ended — {msg.content}
+                </span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+            ) : (
+              <>
+                <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className="w-10/12">
+                    {msg.role === 'user' ? (
+                      <div className="p-4 rounded-2xl text-sm leading-relaxed bg-indigo-600 text-white rounded-br-md whitespace-pre-line">
+                        {msg.content}
+                      </div>
+                    ) : (
+                      <>
+                        {parseMessageContent(msg.content).map((segment, i) => {
+                          if (segment.type === 'card') {
+                            return (
+                              <DraftCard
+                                key={`${msg.id}-card-${i}`}
+                                category={segment.category}
+                                initialTitle={segment.title}
+                                initialContent={segment.content}
+                                onSave={(title, content, category) => handleSaveCard(title, content, category)}
+                              />
+                            );
+                          }
+                          return (
+                            <div
+                              key={`${msg.id}-text-${i}`}
+                              className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md"
+                            >
+                              <ReactMarkdown components={markdownComponents}>
+                                {segment.content}
+                              </ReactMarkdown>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    {parseMessageContent(msg.content).map((segment, i) => {
-                      if (segment.type === 'card') {
-                        return (
-                          <DraftCard
-                            key={`${msg.id}-card-${i}`}
-                            category={segment.category}
-                            initialTitle={segment.title}
-                            initialContent={segment.content}
-                            onSave={(title, content, category) => handleSaveCard(title, content, category)}
-                          />
-                        );
-                      }
-                      return (
-                        <div
-                          key={`${msg.id}-text-${i}`}
-                          className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md"
-                        >
-                          <ReactMarkdown components={markdownComponents}>
-                            {segment.content}
-                          </ReactMarkdown>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
-            </div>
+                </div>
 
-            {msg.role === 'assistant' && msg.quickReplies && msg.quickReplies.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3 ml-1">
-                {msg.quickReplies.map((reply, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSendMessage(reply)}
-                    className="text-xs bg-white border border-indigo-200 text-indigo-700 px-3 py-2 rounded-full hover:bg-indigo-50 hover:border-indigo-300 transition-all active:scale-95"
-                  >
-                    {reply}
-                  </button>
-                ))}
-              </div>
+                {msg.role === 'assistant' && msg.quickReplies && msg.quickReplies.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3 ml-1">
+                    {msg.quickReplies.map((reply, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSendMessage(reply)}
+                        className="text-xs bg-white border border-indigo-200 text-indigo-700 px-3 py-2 rounded-full hover:bg-indigo-50 hover:border-indigo-300 transition-all active:scale-95"
+                      >
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         ))}
 
-        {isTyping && (
+        {(isTyping || (loadingChat && messages.length > 0)) && (
           <div className="flex justify-start">
             <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1.5">
@@ -253,14 +267,23 @@ export default function ChatScreen() {
           </div>
         </div>
       ) : (
-        <div className="flex-shrink-0 px-4 py-4 border-t border-gray-100 bg-gray-50 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <p className="text-sm text-gray-500 mb-2">Session complete</p>
-          <button
-            onClick={() => setActiveTab('home')}
-            className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-all"
-          >
-            Back to Home
-          </button>
+        <div className="flex-shrink-0 px-4 py-4 border-t border-gray-100 bg-gray-50 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={startNewSession}
+              disabled={loadingChat}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              New Session
+            </button>
+            <button
+              onClick={() => setActiveTab('home')}
+              className="text-sm text-gray-400 hover:text-gray-600 transition-all"
+            >
+              Home
+            </button>
+          </div>
         </div>
       )}
 

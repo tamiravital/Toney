@@ -63,10 +63,10 @@ export default async function SessionDetailPage({
         />
       ) : (
         <div className="space-y-4 pb-8">
-          {messages.map((msg) => (
+          {messages.filter(msg => msg.role === 'user' || msg.role === 'assistant').map((msg) => (
             <MessageBubble
               key={msg.id}
-              role={msg.role}
+              role={msg.role as 'user' | 'assistant'}
               content={msg.content}
               createdAt={msg.created_at || ''}
             />

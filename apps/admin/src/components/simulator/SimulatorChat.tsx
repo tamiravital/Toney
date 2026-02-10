@@ -310,7 +310,7 @@ export default function SimulatorChat({
         {messages.map((msg) => (
           <div key={msg.id}>
             <MessageBubble
-              role={msg.role}
+              role={msg.role as 'user' | 'assistant'}
               content={msg.content}
               createdAt={msg.created_at}
             />

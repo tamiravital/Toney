@@ -1,6 +1,6 @@
 export interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'divider';
   content: string;
   timestamp?: Date;
   canSave?: boolean;
