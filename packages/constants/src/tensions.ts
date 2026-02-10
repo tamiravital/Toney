@@ -162,12 +162,13 @@ export function tensionColor(type: TensionType | null | undefined): TensionColor
 export function identifyTension(responses: Record<string, string>): IdentifiedTension {
   const scores: Record<TensionType, number> = { avoid: 0, worry: 0, chase: 0, perform: 0, numb: 0, give: 0, grip: 0 };
 
-  // Q1: How do you relate to checking your bank balance?
+  // Q1: How do you feel about checking your bank balance?
   const check = responses.money_check;
   if (check === 'avoid_it') { scores.avoid += 3; }
   else if (check === 'obsess') { scores.worry += 2; scores.grip += 1; }
   else if (check === 'track_tight') { scores.grip += 3; }
-  else if (check === 'only_when_needed') { scores.numb += 1; scores.avoid += 1; }
+  else if (check === 'dont_think') { scores.numb += 1; scores.avoid += 1; }
+  else if (check === 'depends_mood') { scores.numb += 2; }
 
   // Q2: You get an unexpected $500. First instinct?
   const windfall = responses.unexpected_500;
@@ -185,13 +186,13 @@ export function identifyTension(responses: Record<string, string>): IdentifiedTe
   else if (trigger === 'losing_control') { scores.numb += 2; scores.avoid += 1; }
   else if (trigger === 'cant_enjoy') { scores.grip += 3; }
 
-  // Q4: When friends suggest something expensive, you...
+  // Q4: A friend suggests a dinner you can't really afford. You…
   const social = responses.social_money;
-  if (social === 'say_yes_regret') { scores.perform += 1; scores.numb += 2; }
+  if (social === 'go_anyway') { scores.perform += 1; scores.numb += 2; }
   else if (social === 'cover_others') { scores.give += 3; }
-  else if (social === 'calculate') { scores.worry += 2; scores.grip += 1; }
+  else if (social === 'stress_whole_time') { scores.worry += 2; scores.grip += 1; }
   else if (social === 'avoid_plans') { scores.avoid += 3; }
-  else if (social === 'go_big') { scores.perform += 1; scores.chase += 2; }
+  else if (social === 'suggest_cheaper') { scores.grip += 2; }
 
   // Q5: When you need to make a money decision, you tend to...
   const decide = responses.money_decisions;

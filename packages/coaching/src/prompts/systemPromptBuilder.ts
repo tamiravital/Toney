@@ -180,9 +180,9 @@ function getQuizInsight(questionId: string, answer: string): string | null {
     money_check: {
       avoid_it: 'Avoids checking balance — "if I don\'t look, it can\'t hurt me"',
       obsess: 'Checks constantly but it never helps — no number feels safe enough',
-      track_tight: 'Tracks every dollar carefully — could be discipline or could be exhausting',
-      only_when_needed: 'Only checks when buying something — mild disconnection from financial reality',
-      check_normally: 'Checks regularly, feels fine — tension shows up elsewhere',
+      track_tight: 'Needs to know where every dollar is — could be discipline or exhausting control',
+      dont_think: 'Doesn\'t think about money much — disconnection from financial reality',
+      depends_mood: 'Relationship with money tracking depends on emotional state — mood-driven',
     },
     unexpected_500: {
       save_all: 'Unexpected money → save every cent ("you never know")',
@@ -199,11 +199,11 @@ function getQuizInsight(questionId: string, answer: string): string | null {
       cant_enjoy: 'Biggest stress → has money but can\'t enjoy it',
     },
     social_money: {
-      say_yes_regret: 'Social situations → says yes, figures it out later',
-      cover_others: 'Social situations → offers to cover others even when tight',
-      calculate: 'Social situations → internally calculating if they can afford it',
+      go_anyway: 'Social situations → goes anyway and deals with consequences later',
+      cover_others: 'Social situations → ends up paying for others even when tight',
+      stress_whole_time: 'Social situations → goes but stresses about money the entire time',
       avoid_plans: 'Social situations → makes excuses to avoid the situation entirely',
-      go_big: 'Social situations → goes big, wants people to have a good time',
+      suggest_cheaper: 'Social situations → tries to steer to something more affordable',
     },
     money_decisions: {
       postpone: 'Decisions → postpones as long as possible',
