@@ -457,10 +457,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setSessionHasCard(false); // Reset card state for new session
-    setSessionStatus('active');
+    setSessionHasCard(false);
     setSessionNotes(null);
     if (!currentSessionId) {
+      setSessionStatus('active');
       setMessages([]);
       return;
     }
@@ -470,12 +470,34 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       setLoadingChat(true);
       try {
         const supabase = createClient();
-        const { data: dbMessages } = await supabase
-          .from('messages')
-          .select('id, role, content, created_at')
-          .eq('session_id', currentSessionId)
-          .order('created_at', { ascending: false })
-          .limit(50);
+        const [{ data: dbMessages }, { count: cardCount }, { data: sessionData }] = await Promise.all([
+          supabase
+            .from('messages')
+            .select('id, role, content, created_at')
+            .eq('session_id', currentSessionId)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          supabase
+            .from('rewire_cards')
+            .select('id', { count: 'exact', head: true })
+            .eq('session_id', currentSessionId),
+          supabase
+            .from('sessions')
+            .select('session_status')
+            .eq('id', currentSessionId)
+            .single(),
+        ]);
+
+        if (cardCount && cardCount > 0) {
+          setSessionHasCard(true);
+        }
+
+        // Restore session status (e.g. if user refreshes after ending)
+        if (sessionData?.session_status === 'completed') {
+          setSessionStatus('completed');
+        } else {
+          setSessionStatus('active');
+        }
 
         if (dbMessages && dbMessages.length > 0) {
           setMessages(dbMessages.reverse().map(m => ({
