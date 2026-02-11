@@ -28,6 +28,8 @@ export interface CloseSessionInput {
   currentIntel?: BehavioralIntel | null;
   /** Session number (for notes context) */
   sessionNumber?: number | null;
+  /** Actually-saved rewire cards from this session (from DB, not LLM-guessed) */
+  savedCards?: { title: string; category: string }[];
 }
 
 export interface CloseSessionOutput {
@@ -45,6 +47,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       tensionType: input.tensionType,
       hypothesis: input.hypothesis,
       sessionNumber: input.sessionNumber,
+      savedCards: input.savedCards,
     }),
     reflectOnSession({
       messages: input.messages,

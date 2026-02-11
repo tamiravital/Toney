@@ -68,12 +68,26 @@ export async function POST(request: NextRequest) {
       if (briefing) hypothesis = briefing.hypothesis;
     } catch { /* no briefing yet */ }
 
+    // Load actually-saved cards for this session (not LLM-guessed)
+    let savedCards: { title: string; category: string }[] = [];
+    try {
+      const { data: sessionCards } = await supabase
+        .from('rewire_cards')
+        .select('title, category')
+        .eq('session_id', sessionId);
+      savedCards = (sessionCards || []).map((c: { title: string; category: string }) => ({
+        title: c.title,
+        category: c.category,
+      }));
+    } catch { /* no cards saved */ }
+
     // ── Pipeline ──
     const result = await closeSessionPipeline({
       messages,
       tensionType: profile?.tension_type || null,
       hypothesis,
       currentIntel,
+      savedCards,
     });
 
     // ── Save results ──

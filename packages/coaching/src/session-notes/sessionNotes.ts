@@ -14,6 +14,8 @@ export interface SessionNotesInput {
   tensionType?: string | null;
   hypothesis?: string | null;
   sessionNumber?: number | null;
+  /** Actually-saved rewire cards from this session (from DB, not LLM-guessed) */
+  savedCards?: { title: string; category: string }[];
 }
 
 const SESSION_NOTES_PROMPT = `You are writing session notes for Toney, an AI money coaching app. The user just finished a coaching session and will read these as their personal recap.
@@ -26,8 +28,7 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 {
   "headline": "One specific sentence capturing the core of what happened. Not generic ('We talked about spending') but reflective ('You connected your reluctance to spend on yourself to how your mom treated money as scarce').",
   "narrative": "2-3 short paragraphs. Second person, warm. The arc of the conversation — where it started, where it went, what shifted. Like a thoughtful friend summarizing what happened. Use their actual words and situations, not therapy-speak.",
-  "keyMoments": ["Specific things the user said or realized that mattered — the 'oh wow' moments. Close to their actual words. 2-3 items. OMIT this field entirely if nothing stood out."],
-  "cardsCreated": [{"title": "Card title", "category": "reframe"}]
+  "keyMoments": ["Specific things the user said or realized that mattered — the 'oh wow' moments. Close to their actual words. 2-3 items. OMIT this field entirely if nothing stood out."]
 }
 \`\`\`
 
@@ -35,7 +36,7 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 - The headline should be specific enough that reading it tomorrow, they remember what happened
 - The narrative should feel like someone was really listening — not a summary, a reflection
 - keyMoments: only include if there were genuine moments worth highlighting. If the session was casual or exploratory, omit this field. Don't manufacture moments.
-- cardsCreated: include title and category for any cards co-created during the session. If no cards were created, omit this field entirely.
+- Do NOT include any "cardsCreated" field — saved cards are handled separately
 - Don't invent insights that didn't happen
 - Keep it concise — quality over length`;
 
@@ -89,8 +90,9 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
     if (Array.isArray(parsed.keyMoments) && parsed.keyMoments.length > 0) {
       result.keyMoments = parsed.keyMoments;
     }
-    if (Array.isArray(parsed.cardsCreated) && parsed.cardsCreated.length > 0) {
-      result.cardsCreated = parsed.cardsCreated;
+    // Use actually-saved cards from DB, not LLM-extracted
+    if (input.savedCards && input.savedCards.length > 0) {
+      result.cardsCreated = input.savedCards;
     }
     return result;
   } catch {
