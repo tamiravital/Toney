@@ -5,7 +5,7 @@ import { processSimChat, generateCoachGreeting } from '@/lib/simulator/chat';
 import { quickCardCheck } from '@/lib/simulator/evaluate';
 import type { Profile } from '@toney/types';
 
-export const maxDuration = 120; // Chat route may run Strategist + Coach + Observer
+export const maxDuration = 120;
 
 export async function POST(
   request: NextRequest,
@@ -36,7 +36,6 @@ export async function POST(
       return NextResponse.json({
         userMsg: null,
         assistantMsg: greetingResult.message,
-        observerSignals: [],
         done: false,
         reason: undefined,
         status: 'running',
@@ -87,7 +86,6 @@ export async function POST(
     return NextResponse.json({
       userMsg: chatData.userMessage,
       assistantMsg: chatData.message,
-      observerSignals: chatData.observerSignals || [],
       done,
       reason,
       status: done ? 'completed' : 'running',

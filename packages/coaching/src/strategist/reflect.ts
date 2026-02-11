@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { GROWTH_LENS_NAMES } from './constants';
 
 // ────────────────────────────────────────────
 // Session Reflection — Post-session clinical extraction (Haiku)
@@ -62,7 +63,7 @@ You are NOT writing notes for the user. This is internal data that feeds the coa
 - Be specific — situations, words, phrases. Not categories or labels.
 - Empty arrays are fine. Don't manufacture intel.
 - stageOfChange: only include if there was observable movement. Most sessions don't shift stages.
-- growthEdgeUpdates: only include lenses that showed observable change. Growth lenses: self_receiving, earning_mindset, money_identity, money_relationships, financial_awareness, decision_confidence, future_orientation.`;
+- growthEdgeUpdates: only include lenses that showed observable change. Growth lenses: ${GROWTH_LENS_NAMES.join(', ')}.`;
 
 export async function reflectOnSession(input: ReflectionInput): Promise<SessionReflection> {
   const anthropic = new Anthropic({

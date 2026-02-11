@@ -55,9 +55,6 @@ export default async function ProfilePage({
               ) : (
                 <span className="text-sm text-gray-400">Not identified</span>
               )}
-              {profile.tension_score != null && (
-                <span className="text-xs text-gray-500">Score: {profile.tension_score}</span>
-              )}
             </dd>
           </div>
           {profile.secondary_tension_type && (

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Bot, User, ChevronDown, Sparkles, Brain, Eye } from 'lucide-react';
+import { ArrowLeft, Bot, User, ChevronDown, Sparkles, Brain } from 'lucide-react';
 import Badge from '@/components/Badge';
 import SimulatorChat from '@/components/simulator/SimulatorChat';
 import ReEvaluateButton from '@/components/simulator/ReEvaluateButton';
@@ -9,7 +9,6 @@ import {
   getRun,
   getSimSessionMessages,
   getLatestSimBriefing,
-  getSimObserverSignals,
 } from '@/lib/queries/simulator';
 import { formatDateTime, tensionLabel, toneLabel, depthLabel } from '@/lib/format';
 import type { TensionType } from '@toney/types';
@@ -21,14 +20,6 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   running: { bg: 'bg-blue-100', text: 'text-blue-700' },
   completed: { bg: 'bg-green-100', text: 'text-green-700' },
   failed: { bg: 'bg-red-100', text: 'text-red-700' },
-};
-
-const SIGNAL_TYPE_LABELS: Record<string, string> = {
-  deflection: 'Deflections',
-  breakthrough: 'Breakthroughs',
-  emotional: 'Emotional',
-  practice_checkin: 'Practice Check-ins',
-  topic_shift: 'Topic Shifts',
 };
 
 export default async function RunDetailPage({
@@ -47,30 +38,16 @@ export default async function RunDetailPage({
     ? await getSimSessionMessages(run.session_id, 200)
     : [];
 
-  // Load coaching briefing + observer signals
-  let briefing: { briefing_content: string; hypothesis?: string | null; session_strategy?: string | null } | null = null;
-  let signalCounts: Record<string, number> = {};
+  // Load coaching briefing
+  let briefing: { briefing_content: string; hypothesis?: string | null; leverage_point?: string | null; tension_narrative?: string | null } | null = null;
 
   if (simProfile.id) {
-    const [latestBriefing, signals] = await Promise.all([
-      getLatestSimBriefing(simProfile.id),
-      run.session_id
-        ? getSimObserverSignals(simProfile.id, run.session_id)
-        : Promise.resolve([]),
-    ]);
-
-    briefing = latestBriefing;
-
-    // Count signals by type
-    for (const signal of signals) {
-      signalCounts[signal.signal_type] = (signalCounts[signal.signal_type] || 0) + 1;
-    }
+    briefing = await getLatestSimBriefing(simProfile.id);
   }
 
   const status = STATUS_STYLES[run.status] ?? STATUS_STYLES.pending;
   const cardWorthyCount = run.card_evaluation?.card_worthy_count ?? 0;
   const isActive = run.status === 'running';
-  const totalSignals = Object.values(signalCounts).reduce((a, b) => a + b, 0);
 
   return (
     <div className="max-w-4xl">
@@ -160,10 +137,16 @@ export default async function RunDetailPage({
             )}
           </summary>
           <div className="px-4 pb-4 space-y-3">
-            {briefing.session_strategy && (
+            {briefing.leverage_point && (
               <div>
-                <span className="text-xs font-medium text-indigo-600">Session Strategy:</span>
-                <p className="text-sm text-gray-700 mt-1">{briefing.session_strategy}</p>
+                <span className="text-xs font-medium text-indigo-600">Leverage Point:</span>
+                <p className="text-sm text-gray-700 mt-1">{briefing.leverage_point}</p>
+              </div>
+            )}
+            {briefing.tension_narrative && (
+              <div>
+                <span className="text-xs font-medium text-indigo-600">Tension Narrative:</span>
+                <p className="text-sm text-gray-700 mt-1">{briefing.tension_narrative}</p>
               </div>
             )}
             <div>
@@ -174,28 +157,6 @@ export default async function RunDetailPage({
             </div>
           </div>
         </details>
-      )}
-
-      {/* Observer Signals Summary */}
-      {totalSignals > 0 && (
-        <div className="mb-4 border border-purple-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Eye className="h-4 w-4 text-purple-500" />
-            <span className="text-sm font-medium text-purple-800">
-              Observer Signals ({totalSignals})
-            </span>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {Object.entries(signalCounts).map(([type, count]) => (
-              <Badge
-                key={type}
-                label={`${SIGNAL_TYPE_LABELS[type] || type}: ${count}`}
-                bg={type === 'breakthrough' ? 'bg-green-100' : type === 'deflection' ? 'bg-amber-100' : type === 'emotional' ? 'bg-purple-100' : 'bg-gray-100'}
-                text={type === 'breakthrough' ? 'text-green-700' : type === 'deflection' ? 'text-amber-700' : type === 'emotional' ? 'text-purple-700' : 'text-gray-600'}
-              />
-            ))}
-          </div>
-        </div>
       )}
 
       {/* Error message */}

@@ -24,7 +24,6 @@ export function useProfile() {
   const updateProfile = useCallback(async (updates: Partial<{
     tension_type: TensionType;
     secondary_tension_type: TensionType;
-    tension_score: number;
     onboarding_answers: Record<string, string>;
     tone: number;
     depth: DepthLevel;
@@ -50,20 +49,5 @@ export function useProfile() {
     return data as Profile;
   }, [supabase]);
 
-  const saveOnboardingResults = useCallback(async (params: {
-    tension_type: TensionType;
-    secondary_tension_type?: TensionType;
-    tension_score: number;
-    onboarding_answers: Record<string, string>;
-    tone: number;
-    depth: DepthLevel;
-    learning_styles: LearningStyle[];
-  }) => {
-    return updateProfile({
-      ...params,
-      onboarding_completed: true,
-    });
-  }, [updateProfile]);
-
-  return { getProfile, updateProfile, saveOnboardingResults };
+  return { getProfile, updateProfile };
 }

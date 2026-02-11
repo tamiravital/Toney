@@ -71,16 +71,16 @@ export const questions: OnboardingQuestion[] = [
     ],
   },
 
-  // Q3: Social money — dinner scenario
+  // Q3: Self-receiving — spending on yourself
   {
     id: 'social_money',
-    question: 'A friend suggests a dinner you can\u2019t really afford. You\u2026',
+    question: 'You want something for yourself \u2014 not a need, just something you\u2019d enjoy. You\u2026',
     options: [
-      { value: 'go_anyway', label: "Go anyway \u2014 I'll deal with it later", emoji: '\u{1F62C}' },
-      { value: 'cover_others', label: 'Go and probably end up paying for others too', emoji: '\u{1F932}' },
-      { value: 'stress_whole_time', label: 'Go but stress about the bill the whole time', emoji: '\u{1F9EE}' },
-      { value: 'avoid_plans', label: 'Make up an excuse not to go', emoji: '\u{1F6AA}' },
-      { value: 'suggest_cheaper', label: 'Suggest somewhere cheaper', emoji: '\u{1F4AC}' },
+      { value: 'buy_no_guilt', label: 'Buy it and enjoy it', emoji: '\u{1F60A}' },
+      { value: 'buy_then_guilt', label: 'Buy it, then feel guilty about it', emoji: '\u{1F62C}' },
+      { value: 'research_forever', label: 'Research it for weeks and probably never buy it', emoji: '\u{1F50D}' },
+      { value: 'only_if_earned', label: "Only if I feel like I've earned it", emoji: '\u2696\uFE0F' },
+      { value: 'spend_on_others', label: "I'd rather spend that money on someone else", emoji: '\u{1F381}' },
     ],
   },
 
@@ -91,9 +91,10 @@ export const questions: OnboardingQuestion[] = [
     options: [
       { value: 'too_careful', label: '"You need to live a little"', emoji: '\u{1F510}' },
       { value: 'too_generous', label: '"You\u2019re too generous for your own good"', emoji: '\u{1F4B8}' },
-      { value: 'head_in_sand', label: '"You pretend money doesn\u2019t exist"', emoji: '\u{1F3D6}\u{FE0F}' },
+      { value: 'head_in_sand', label: '"You don\u2019t deal with the money stuff"', emoji: '\u{1F3D6}\u{FE0F}' },
       { value: 'always_stressed', label: '"You worry about money way too much"', emoji: '\u{1F630}' },
       { value: 'big_spender', label: '"You spend like there\u2019s no tomorrow"', emoji: '\u2728' },
+      { value: 'always_pays', label: '"You always have to be the one paying"', emoji: '\u{1F4B3}' },
     ],
   },
 
@@ -135,6 +136,7 @@ export const questions: OnboardingQuestion[] = [
       { value: 'ask_worth', label: 'Ask for a raise or charge what I\u2019m worth', emoji: '\u{1F4AA}' },
       { value: 'mood_control', label: 'Stop letting money run my mood', emoji: '\u{1F3AF}' },
       { value: 'feel_in_control', label: 'Feel in control of my finances', emoji: '\u2705' },
+      { value: 'feel_enough', label: 'Feel satisfied with what I have', emoji: '\u{1F33F}' },
     ],
   },
 ];

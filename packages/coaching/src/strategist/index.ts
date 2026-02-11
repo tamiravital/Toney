@@ -1,8 +1,6 @@
-export { runStrategist, generateInitialBriefing } from './strategist';
-export type { StrategistContext, StrategistOutput, FocusCardPrescription } from './strategist';
+export { prepareSession } from './prepareSession';
+export type { PrepareSessionInput, SessionPreparation } from './prepareSession';
 export { reflectOnSession } from './reflect';
 export type { ReflectionInput, SessionReflection } from './reflect';
-export { updatePersonModel } from './personModel';
-export type { PersonModelUpdate } from './personModel';
-export { planSession } from './planSession';
-export type { SessionPlanInput, SessionPlan } from './planSession';
+export { buildKnowledgeUpdates, mergeGrowthEdges } from './personModel';
+export type { KnowledgeUpdate } from './personModel';

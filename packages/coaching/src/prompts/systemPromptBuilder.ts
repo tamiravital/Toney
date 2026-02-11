@@ -34,6 +34,13 @@ Coaching flow (follow naturally, not rigidly — use what you know about THIS pe
    Use what you know: Their tension type tells you what they're likely NOT saying. An avoider who shows up is already doing something brave — honor that. A worrier doesn't need more questions about what could go wrong. A performer might present the surface problem, not the real one. Ask based on what you know is underneath, not just what's in front of you.
    If they've told you about triggers before, listen for them. If they've had breakthroughs, notice if this contradicts one. If they have saved cards, this might be a moment one already covers.
 
+   CHECK YOUR MODEL — Your hypothesis about this person is a starting point, not gospel. Watch for signs that you're solving the wrong problem:
+   - They correct you or push back ("that's not what I mean," "you need to remember," "I didn't say that") — stop and listen. Your frame is off.
+   - Short, flat, disengaged answers after you've been exploring a direction — they're not buying it. Don't press harder.
+   - "Yes, but..." followed by steering somewhere else — their real issue isn't where you're looking.
+   - What they describe contradicts your assumptions (e.g., you assume they regret spending but they're financially secure and don't).
+   When you notice any of these: stop pursuing the current thread. Name the gap honestly — "I think I might be looking at the wrong thing here." Ask a reset question that hands the wheel back: "What's actually going on?" Don't double down on a broken frame. It's better to say "help me understand" than to keep pushing a hypothesis that doesn't fit.
+
 2. REFLECT — Mirror back what you heard in *italic* to show you understood. Confirm.
    Use what you know: Mirror using THEIR words — the emotional vocabulary they actually use (from what you've learned over time). If they say "freaking out" don't say "experiencing anxiety." If they avoid certain words, don't force those words on them. When you recognize a pattern you've seen before — name it gently: "This sounds like the same thing that happens when [trigger]."
    Reference their breakthroughs when relevant: "Last time something like this came up, you realized [breakthrough]. Does that still feel true?"
@@ -194,6 +201,13 @@ function getQuizInsight(questionId: string, answer: string): string | null {
       give_away: 'Under stress → focuses on helping someone else instead (deflection through generosity)',
     },
     social_money: {
+      // New self-receiving options
+      buy_no_guilt: 'Buys what they want and enjoys it — healthy self-receiving, or spending may serve as identity/mood regulation (explore which)',
+      buy_then_guilt: 'Buys for themselves then feels guilty — can\'t receive without self-punishment, possible give tension or internalized "I don\'t deserve this"',
+      research_forever: 'Researches endlessly and probably never buys — the decision itself is the stress, not the money. Grip or avoid pattern around self-spending',
+      only_if_earned: 'Only spends on self if they feel they\'ve earned it — conditional self-worth, money as reward system, possible perform tension',
+      spend_on_others: 'Would rather spend on someone else than themselves — deflects self-receiving through generosity, classic give tension',
+      // Legacy options (backward compat for existing users)
       go_anyway: 'Social situations → goes anyway and deals with consequences later',
       cover_others: 'Social situations → ends up paying for others even when tight',
       stress_whole_time: 'Social situations → goes but stresses about money the entire time',
@@ -203,9 +217,10 @@ function getQuizInsight(questionId: string, answer: string): string | null {
     money_identity: {
       too_careful: 'Others say → "too careful" (even people who love them see the rigidity)',
       too_generous: 'Others say → "gives too much" (visible to everyone around them)',
-      head_in_sand: 'Others say → "head in the sand" (they know it too, which adds shame)',
+      head_in_sand: 'Others say → "doesn\'t deal with the money stuff" (avoidance visible to everyone, may include delegating all financial decisions)',
       always_stressed: 'Others say → "always stressed about money" (it\'s pervasive)',
       big_spender: 'Others say → "lives large" (perception may not match inner experience)',
+      always_pays: 'Others say → "always has to be the one paying" (compulsive generosity or need to control social money dynamics — give or perform tension)',
     },
     stress_frequency: {
       daily: 'Money stress frequency → every single day (high urgency, pervasive impact)',

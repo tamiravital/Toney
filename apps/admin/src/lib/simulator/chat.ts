@@ -2,12 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import {
   buildSystemPromptBlocks,
   buildSystemPromptFromBriefing,
-  analyzeExchange,
-  runStrategist,
-  generateInitialBriefing,
+  prepareSession,
 } from '@toney/coaching';
-import type { StrategistOutput } from '@toney/coaching';
-import type { Profile, BehavioralIntel, CoachMemory, SystemPromptBlock, CoachingBriefing, Win } from '@toney/types';
+import type { Profile, CoachMemory, SystemPromptBlock, CoachingBriefing, UserKnowledge, Win, RewireCard } from '@toney/types';
 import {
   getSimProfile,
   getLatestSimBriefing,
@@ -16,17 +13,11 @@ import {
   getSimSessionMessages,
   saveSimMessage,
   updateSimSessionMessageCount,
-  getSimBehavioralIntel,
+  getSimUserKnowledge,
   getSimCoachMemories,
   getSimWins,
   getSimRewireCards,
-  getSimFocusCard,
-  getSimObserverSignals,
-  saveSimBriefing,
-  applySimIntelUpdates,
-  applySimFocusCardPrescription,
-  updateSimJourneyNarrative,
-  saveSimObserverSignals,
+  saveSimBriefingFromPreparation,
 } from '@/lib/queries/simulator';
 
 const anthropic = new Anthropic({
@@ -48,7 +39,6 @@ export interface SimChatResult {
     content: string;
     timestamp: string;
   };
-  observerSignals: { signal_type: string; content: string; urgency_flag: boolean }[];
   usage: {
     input_tokens: number;
     output_tokens: number;
@@ -68,10 +58,10 @@ export async function processSimChat(
   // Load profile from sim_profiles
   const profile = await getSimProfile(userId);
 
-  // ── v2: Try to load Strategist briefing ──
+  // ── Try to load Strategist briefing ──
   let briefing: CoachingBriefing | null = await getLatestSimBriefing(userId);
 
-  // ── v2: Session boundary detection ──
+  // ── Session boundary detection ──
   const lastMessageTime = await getLastSimMessageTime(userId);
   const hoursSinceLastMessage = lastMessageTime
     ? (Date.now() - lastMessageTime.getTime()) / (1000 * 60 * 60)
@@ -81,7 +71,7 @@ export async function processSimChat(
   // If new session and we have a briefing, run Strategist for session boundary
   if (isNewSession && briefing) {
     try {
-      await runSimStrategist(userId, sessionId, profile, 'session_start');
+      await runSimStrategist(userId, profile);
       briefing = await getLatestSimBriefing(userId);
     } catch { /* Strategist failed — use existing briefing */ }
   }
@@ -91,10 +81,7 @@ export async function processSimChat(
     const sessionCount = await countSimSessions(userId);
     if (sessionCount <= 1) {
       try {
-        const result = await generateInitialBriefing(profile);
-        await saveSimBriefing(userId, null, result);
-        await applySimIntelUpdates(userId, result);
-        await applySimFocusCardPrescription(userId, result);
+        await runSimStrategist(userId, profile);
         briefing = await getLatestSimBriefing(userId);
       } catch { /* Strategist failed — fall through to legacy */ }
     }
@@ -104,11 +91,9 @@ export async function processSimChat(
   let systemPromptBlocks: SystemPromptBlock[];
 
   if (briefing) {
-    // v2 path: use Strategist briefing
     systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
   } else {
     // Legacy fallback: load raw data and build prompt
-    const behavioralIntel = await getSimBehavioralIntel(userId);
     const recentWins = await getSimWins(userId, 5);
     const rewireCards = await getSimRewireCards(userId, 10);
     const coachMemories = await getSimCoachMemories(userId, 30);
@@ -117,7 +102,6 @@ export async function processSimChat(
 
     systemPromptBlocks = buildSystemPromptBlocks({
       profile: profile as Profile,
-      behavioralIntel: behavioralIntel as BehavioralIntel | null,
       recentWins: recentWins as Win[],
       rewireCardTitles: rewireCards.map(c => c.title),
       coachMemories: coachMemories as CoachMemory[],
@@ -169,36 +153,6 @@ export async function processSimChat(
   // Update session message count
   await updateSimSessionMessageCount(sessionId, 2);
 
-  // ── Run Observer inline (awaited, not fire-and-forget) ──
-  let observerSignals: { signal_type: string; content: string; urgency_flag: boolean }[] = [];
-  try {
-    // Load recent messages for Observer context (last 6)
-    const recentMsgs = await getSimSessionMessages(sessionId, 6);
-    if (recentMsgs.length >= 2) {
-      const messages = recentMsgs.map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }));
-
-      // Load Observer context from sim_* tables
-      const hypothesis = briefing?.hypothesis || null;
-      const focusCard = await getSimFocusCard(userId);
-      const focusCardContent = focusCard ? `${focusCard.title}: ${focusCard.content}` : null;
-
-      const result = await analyzeExchange({
-        recentMessages: messages,
-        hypothesis,
-        focusCardContent,
-        tensionType: profile.tension_type || null,
-      });
-
-      observerSignals = result.signals;
-
-      // Save signals to sim_observer_signals
-      await saveSimObserverSignals(userId, sessionId, result.signals);
-    }
-  } catch { /* Observer is non-critical */ }
-
   return {
     message: {
       id: savedAssistantMsg.id,
@@ -214,7 +168,6 @@ export async function processSimChat(
       content: message,
       timestamp: savedUserMsg.created_at,
     },
-    observerSignals,
     usage: {
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
@@ -235,11 +188,10 @@ export async function generateCoachGreeting(
   const profile = await getSimProfile(userId);
   let briefing = await getLatestSimBriefing(userId);
 
-  // If no briefing, generate initial one
+  // If no briefing, generate one via prepareSession
   if (!briefing) {
     try {
-      const result = await generateInitialBriefing(profile);
-      await saveSimBriefing(userId, null, result);
+      await runSimStrategist(userId, profile);
       briefing = await getLatestSimBriefing(userId);
     } catch { /* fall through to legacy */ }
   }
@@ -249,13 +201,11 @@ export async function generateCoachGreeting(
   if (briefing) {
     systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
   } else {
-    const behavioralIntel = await getSimBehavioralIntel(userId);
     const recentWins = await getSimWins(userId, 5);
     const rewireCards = await getSimRewireCards(userId, 10);
     const coachMemories = await getSimCoachMemories(userId, 30);
     systemPromptBlocks = buildSystemPromptBlocks({
       profile: profile as Profile,
-      behavioralIntel: behavioralIntel as BehavioralIntel | null,
       recentWins: recentWins as Win[],
       rewireCardTitles: rewireCards.map(c => c.title),
       coachMemories: coachMemories as CoachMemory[],
@@ -294,47 +244,61 @@ export async function generateCoachGreeting(
 }
 
 // ────────────────────────────────────────────
-// Strategist runner (mirrors mobile /api/strategist logic)
+// Strategist runner (uses prepareSession — same as mobile pipeline)
 // ────────────────────────────────────────────
 
 async function runSimStrategist(
   userId: string,
-  sessionId: string | null,
   profile: Profile,
-  trigger: 'session_start' | 'session_end' | 'urgent'
 ): Promise<void> {
   // Load full context from sim_* tables
-  const behavioralIntel = await getSimBehavioralIntel(userId);
-  const coachMemories = await getSimCoachMemories(userId, 30);
-  const wins = await getSimWins(userId, 10);
-  const rewireCards = await getSimRewireCards(userId, 20);
-  const previousBriefing = await getLatestSimBriefing(userId);
-  const observerSignals = sessionId
-    ? await getSimObserverSignals(userId, sessionId)
-    : [];
+  const [userKnowledge, wins, rewireCards, previousBriefing] = await Promise.all([
+    getSimUserKnowledge(userId),
+    getSimWins(userId, 10),
+    getSimRewireCards(userId, 20),
+    getLatestSimBriefing(userId),
+  ]);
 
-  // Session transcript (for session_end/urgent)
-  let sessionTranscript: { role: 'user' | 'assistant'; content: string }[] = [];
-  if (sessionId && (trigger === 'session_end' || trigger === 'urgent')) {
-    const msgs = await getSimSessionMessages(sessionId);
-    sessionTranscript = msgs.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-  }
+  // Recent session notes
+  let recentSessionNotes: string[] = [];
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const supabase = createAdminClient();
+    const { data: recentSessions } = await supabase
+      .from('sim_sessions')
+      .select('session_notes')
+      .eq('user_id', userId)
+      .not('session_notes', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    if (recentSessions) {
+      recentSessionNotes = recentSessions
+        .map((s: { session_notes: string | null }) => s.session_notes)
+        .filter(Boolean) as string[];
+    }
+  } catch { /* no notes */ }
 
-  const result: StrategistOutput = await runStrategist({
+  const preparation = await prepareSession({
     profile,
-    behavioralIntel,
-    coachMemories,
-    wins,
-    rewireCards,
+    userKnowledge: userKnowledge as UserKnowledge[],
+    recentWins: wins as Win[],
+    rewireCards: rewireCards as RewireCard[],
     previousBriefing,
-    observerSignals,
-    sessionTranscript,
-    isFirstBriefing: !previousBriefing,
+    recentSessionNotes,
   });
 
-  // Save outputs to sim_* tables
-  await saveSimBriefing(userId, sessionId, result);
-  await applySimIntelUpdates(userId, result);
-  await applySimFocusCardPrescription(userId, result);
-  await updateSimJourneyNarrative(userId, result);
+  // Save briefing to sim_coaching_briefings
+  await saveSimBriefingFromPreparation(userId, preparation, previousBriefing);
+
+  // Update tension on sim_profiles if first session determined it
+  if (preparation.tensionLabel) {
+    try {
+      const { createAdminClient } = await import('@/lib/supabase/admin');
+      const supabase = createAdminClient();
+      await supabase.from('sim_profiles').update({
+        tension_type: preparation.tensionLabel,
+        secondary_tension_type: preparation.secondaryTensionLabel || null,
+      }).eq('id', userId);
+    } catch { /* non-critical */ }
+  }
 }

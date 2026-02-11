@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       message: chatData.message,
-      observerSignals: chatData.observerSignals || [],
     });
   } catch (error) {
     console.error('Simulator message error:', error);

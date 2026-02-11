@@ -1,24 +1,20 @@
 // ============================================================
-// Coaching Engine v2 — Types
+// Coaching Engine v3 — Types
 // ============================================================
 
-// --- Observer ---
+// --- User Knowledge ---
 
-export type ObserverSignalType =
-  | 'deflection'
-  | 'breakthrough'
-  | 'emotional'
-  | 'practice_checkin'
-  | 'topic_shift';
-
-export interface ObserverSignal {
+export interface UserKnowledge {
   id: string;
   user_id: string;
   session_id?: string | null;
-  message_id?: string | null;
-  signal_type: ObserverSignalType;
+  category: 'trigger' | 'breakthrough' | 'resistance' | 'coaching_note' | 'vocabulary' | 'fact' | 'decision' | 'commitment' | 'life_event';
   content: string;
-  urgency_flag: boolean;
+  source: 'reflection' | 'coach' | 'user' | 'onboarding';
+  importance: 'high' | 'medium' | 'low';
+  active: boolean;
+  expires_at?: string | null;
+  tags: string[];
   created_at: string;
 }
 
@@ -30,9 +26,9 @@ export interface CoachingBriefing {
   session_id?: string | null;
   briefing_content: string;
   hypothesis?: string | null;
-  session_strategy?: string | null;
-  journey_narrative?: string | null;
-  prescribed_focus_card_id?: string | null;
+  leverage_point?: string | null;
+  curiosities?: string | null;
+  tension_narrative?: string | null;
   growth_edges: Record<string, unknown>;
   version: number;
   created_at: string;
@@ -44,8 +40,6 @@ export type SessionStatus = 'active' | 'completed' | 'abandoned';
 
 // --- Focus Card ---
 
-export type FocusCardPrescriber = 'coach' | 'strategist' | 'user';
-
 export interface FocusCardStatus {
   card_id: string;
   title: string;
@@ -53,7 +47,6 @@ export interface FocusCardStatus {
   category: string;
   times_completed: number;
   last_completed_at?: string | null;
-  focus_set_at?: string | null;
 }
 
 // --- Session Notes ---

@@ -1,14 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, BehavioralIntel, RewireCard, CoachingBriefing, SystemPromptBlock } from '@toney/types';
-import { planSession } from '../strategist/planSession';
-import { generateInitialBriefing } from '../strategist/strategist';
+import { Profile, UserKnowledge, RewireCard, Win, CoachingBriefing, SystemPromptBlock } from '@toney/types';
+import { prepareSession, SessionPreparation } from '../strategist/prepareSession';
 import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prompts/systemPromptBuilder';
 
 // ────────────────────────────────────────────
 // Open Session Pipeline
 // ────────────────────────────────────────────
 // Orchestrates everything that happens when a session starts:
-//   1. Plan the session (Sonnet) — or generate initial briefing if first session
+//   1. Prepare the session (Sonnet) — one path for all sessions
 //   2. Build the Coach's system prompt from the briefing
 //   3. Generate the Coach's opening message (Sonnet) — can stream or block
 //
@@ -19,14 +18,16 @@ import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prom
 export interface OpenSessionInput {
   /** User profile */
   profile: Profile;
-  /** Current behavioral intel */
-  behavioralIntel?: BehavioralIntel | null;
-  /** Recent session notes as stored JSON strings (most recent first) */
-  recentSessionNotes?: string[];
+  /** Existing user knowledge entries (active) */
+  userKnowledge?: UserKnowledge[] | null;
+  /** Recent wins */
+  recentWins?: Win[] | null;
   /** User's rewire cards */
-  rewireCards?: RewireCard[];
-  /** Previous briefing (for version number and continuity) */
+  rewireCards?: RewireCard[] | null;
+  /** Previous briefing (for continuity — its existence means not first session) */
   previousBriefing?: CoachingBriefing | null;
+  /** Recent session notes as stored JSON strings (most recent first) */
+  recentSessionNotes?: string[] | null;
 }
 
 export interface PlanSessionOutput {
@@ -34,17 +35,19 @@ export interface PlanSessionOutput {
   briefingContent: string;
   /** One-sentence coaching thesis */
   hypothesis: string;
-  /** What this session should accomplish */
-  sessionStrategy: string;
-  /** Updated journey narrative */
-  journeyNarrative: string;
-  /** Growth edge assessment */
-  growthEdges: Record<string, unknown>;
+  /** Strength + goal + what's in the way */
+  leveragePoint: string;
+  /** What to explore this session */
+  curiosities: string;
+  /** Evolving understanding of their pattern */
+  tensionNarrative: string;
+  /** Growth edge assessment (bucket arrays) */
+  growthEdges?: Record<string, string[]>;
   /** System prompt blocks for the Coach (ready to use) */
   systemPromptBlocks: SystemPromptBlock[];
   /** Tension type determined by Strategist (first session) */
   tensionType?: string | null;
-  /** Secondary tension type */
+  /** Secondary tension type (first session) */
   secondaryTensionType?: string | null;
 }
 
@@ -54,57 +57,34 @@ export interface OpenSessionOutput extends PlanSessionOutput {
 }
 
 /**
- * Step 1+2: Plan the session and build system prompt blocks.
+ * Step 1+2: Prepare the session and build system prompt blocks.
  * Does NOT generate the opening message — caller can stream that separately.
  */
 export async function planSessionStep(input: OpenSessionInput): Promise<PlanSessionOutput> {
   const isFirstSession = !input.previousBriefing;
 
-  let briefingContent: string;
-  let hypothesis: string;
-  let sessionStrategy: string;
-  let journeyNarrative: string;
-  let growthEdges: Record<string, unknown>;
-  let tensionType: string | null = null;
-  let secondaryTensionType: string | null = null;
+  const preparation: SessionPreparation = await prepareSession({
+    profile: input.profile,
+    userKnowledge: input.userKnowledge,
+    recentWins: input.recentWins,
+    rewireCards: input.rewireCards,
+    previousBriefing: input.previousBriefing,
+    recentSessionNotes: input.recentSessionNotes,
+  });
 
-  if (isFirstSession) {
-    const result = await generateInitialBriefing(input.profile);
-    briefingContent = result.briefing_content;
-    hypothesis = result.hypothesis;
-    sessionStrategy = result.session_strategy;
-    journeyNarrative = result.journey_narrative;
-    growthEdges = result.growth_edges;
-    tensionType = result.tension_type || null;
-    secondaryTensionType = result.secondary_tension_type || null;
-  } else {
-    const plan = await planSession({
-      profile: input.profile,
-      behavioralIntel: input.behavioralIntel,
-      recentSessionNotes: input.recentSessionNotes,
-      rewireCards: input.rewireCards,
-      previousBriefing: input.previousBriefing,
-      isFirstSession: false,
-    });
-    briefingContent = plan.briefing;
-    hypothesis = plan.hypothesis;
-    sessionStrategy = plan.sessionStrategy;
-    journeyNarrative = plan.journeyNarrative;
-    growthEdges = plan.growthEdges;
-  }
-
-  const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefingContent);
+  const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(preparation.briefing);
   systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession));
 
   return {
-    briefingContent,
-    hypothesis,
-    sessionStrategy,
-    journeyNarrative,
-    growthEdges,
+    briefingContent: preparation.briefing,
+    hypothesis: preparation.hypothesis,
+    leveragePoint: preparation.leveragePoint,
+    curiosities: preparation.curiosities,
+    tensionNarrative: preparation.tensionNarrative,
+    growthEdges: preparation.growthEdges,
     systemPromptBlocks,
-    tensionType,
-    secondaryTensionType,
+    tensionType: preparation.tensionLabel,
+    secondaryTensionType: preparation.secondaryTensionLabel,
   };
 }
 

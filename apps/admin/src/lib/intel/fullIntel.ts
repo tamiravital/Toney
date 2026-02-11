@@ -1,40 +1,25 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { runStrategist } from '@toney/coaching';
-import type { Profile, BehavioralIntel, CoachMemory, Win, RewireCard, CoachingBriefing } from '@toney/types';
-import type { StrategistOutput } from '@toney/coaching';
-import {
-  saveProdBriefing,
-  applyProdIntelUpdates,
-  applyProdFocusCardPrescription,
-  updateProdJourneyNarrative,
-} from '@/lib/queries/intel';
+import { prepareSession, reflectOnSession, buildKnowledgeUpdates } from '@toney/coaching';
+import type { Profile, UserKnowledge, Win, RewireCard, CoachingBriefing } from '@toney/types';
+import type { SessionPreparation } from '@toney/coaching';
+import { saveProdBriefing } from '@/lib/queries/intel';
 
 // ────────────────────────────────────────────
-// Load current intel state from DB
+// Load current state from DB
 // ────────────────────────────────────────────
 
-async function loadCurrentIntel(supabase: ReturnType<typeof createAdminClient>, userId: string) {
-  let behavioralIntel: BehavioralIntel | null = null;
+async function loadCurrentState(supabase: ReturnType<typeof createAdminClient>, userId: string) {
+  let userKnowledge: UserKnowledge[] = [];
   try {
     const { data } = await supabase
-      .from('behavioral_intel')
-      .select('*')
-      .eq('user_id', userId)
-      .limit(1);
-    behavioralIntel = (data && data.length > 0) ? data[0] as BehavioralIntel : null;
-  } catch { /* none yet */ }
-
-  let coachMemories: CoachMemory[] = [];
-  try {
-    const { data } = await supabase
-      .from('coach_memories')
+      .from('user_knowledge')
       .select('*')
       .eq('user_id', userId)
       .eq('active', true)
-      .order('importance', { ascending: true })
-      .limit(30);
-    coachMemories = (data || []) as CoachMemory[];
-  } catch { /* none */ }
+      .order('created_at', { ascending: false })
+      .limit(100);
+    userKnowledge = (data || []) as UserKnowledge[];
+  } catch { /* none yet */ }
 
   let wins: Win[] = [];
   try {
@@ -74,19 +59,35 @@ async function loadCurrentIntel(supabase: ReturnType<typeof createAdminClient>, 
     previousBriefing = (data && data.length > 0) ? data[0] as CoachingBriefing : null;
   } catch { /* none */ }
 
-  return { behavioralIntel, coachMemories, wins, rewireCards, previousBriefing };
+  let recentSessionNotes: string[] = [];
+  try {
+    const { data: recentSessions } = await supabase
+      .from('sessions')
+      .select('session_notes')
+      .eq('user_id', userId)
+      .not('session_notes', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    if (recentSessions) {
+      recentSessionNotes = recentSessions
+        .map((s: { session_notes: string | null }) => s.session_notes)
+        .filter(Boolean) as string[];
+    }
+  } catch { /* none */ }
+
+  return { userKnowledge, wins, rewireCards, previousBriefing, recentSessionNotes };
 }
 
 // ────────────────────────────────────────────
 // Run full intel pipeline — session by session
-// Uses real session transcripts (no summarization step).
+// Uses real session transcripts. Runs reflect + prepareSession per session.
 // Intel accumulates session by session, like the real coaching flow.
 // ────────────────────────────────────────────
 
 export async function runFullIntel(
   userId: string,
   onProgress: (msg: string) => void,
-): Promise<StrategistOutput> {
+): Promise<SessionPreparation> {
   const supabase = createAdminClient();
 
   // Load profile
@@ -113,7 +114,7 @@ export async function runFullIntel(
 
   onProgress(`Found ${sessions.length} sessions. Processing...`);
 
-  let lastResult: StrategistOutput | null = null;
+  let lastResult: SessionPreparation | null = null;
 
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i];
@@ -135,30 +136,65 @@ export async function runFullIntel(
       continue;
     }
 
-    onProgress(`Session ${i + 1} of ${sessions.length} (${dateStr}, ${sessionMessages.length} msgs) — running Strategist...`);
+    onProgress(`Session ${i + 1} of ${sessions.length} (${dateStr}, ${sessionMessages.length} msgs) — reflecting...`);
 
-    // Reload current intel from DB (includes everything saved from previous sessions)
-    const { behavioralIntel, coachMemories, wins, rewireCards, previousBriefing } =
-      await loadCurrentIntel(supabase, userId);
+    // Step 1: Reflect on this session (extract knowledge)
+    const { userKnowledge: existingKnowledge } = await loadCurrentState(supabase, userId);
 
-    // Run Strategist with real session transcript
-    const result = await runStrategist({
-      profile: profile as Profile,
-      behavioralIntel,
-      coachMemories,
-      wins,
-      rewireCards,
-      previousBriefing,
-      observerSignals: [],
-      sessionTranscript: sessionMessages,
-      isFirstBriefing: !previousBriefing,
+    const reflection = await reflectOnSession({
+      messages: sessionMessages,
+      tensionType: (profile as Profile).tension_type || null,
+      hypothesis: null,
+      currentStageOfChange: (profile as Profile).stage_of_change || null,
     });
 
-    // Save this session's outputs — next iteration will read the updated data
+    // Step 2: Build and save knowledge entries
+    const knowledgeUpdate = buildKnowledgeUpdates(reflection, session.id, existingKnowledge);
+
+    if (knowledgeUpdate.newEntries.length > 0) {
+      const rows = knowledgeUpdate.newEntries.map(entry => ({
+        user_id: userId,
+        ...entry,
+      }));
+      try {
+        await supabase.from('user_knowledge').insert(rows);
+      } catch { /* non-critical */ }
+    }
+
+    if (knowledgeUpdate.stageOfChange) {
+      try {
+        await supabase.from('profiles').update({
+          stage_of_change: knowledgeUpdate.stageOfChange,
+        }).eq('id', userId);
+      } catch { /* non-critical */ }
+    }
+
+    onProgress(`Session ${i + 1} — running Strategist...`);
+
+    // Step 3: Run prepareSession with updated knowledge
+    const currentState = await loadCurrentState(supabase, userId);
+
+    const result = await prepareSession({
+      profile: profile as Profile,
+      userKnowledge: currentState.userKnowledge,
+      recentWins: currentState.wins,
+      rewireCards: currentState.rewireCards,
+      previousBriefing: currentState.previousBriefing,
+      recentSessionNotes: currentState.recentSessionNotes,
+    });
+
+    // Save briefing
     await saveProdBriefing(userId, session.id, result);
-    await applyProdIntelUpdates(userId, result);
-    await applyProdFocusCardPrescription(userId, result);
-    await updateProdJourneyNarrative(userId, result);
+
+    // Update tension if first session determined it
+    if (result.tensionLabel) {
+      try {
+        await supabase.from('profiles').update({
+          tension_type: result.tensionLabel,
+          secondary_tension_type: result.secondaryTensionLabel || null,
+        }).eq('id', userId);
+      } catch { /* non-critical */ }
+    }
 
     lastResult = result;
     onProgress(`Session ${i + 1} of ${sessions.length} complete.`);

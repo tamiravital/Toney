@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Profile, BehavioralIntel, CoachMemory } from '@toney/types';
+import type { Profile, UserKnowledge, CoachMemory } from '@toney/types';
 import { BASE_USER_PROMPT } from './presets';
 
 const anthropic = new Anthropic({
@@ -79,20 +79,15 @@ Vary your length. Not every message needs to be deep. Sometimes just "yeah" is t
 export async function synthesizeCharacterProfile(
   profile: Partial<Profile>,
   userMessages: string[],
-  behavioralIntel: BehavioralIntel | null,
+  userKnowledge: UserKnowledge[],
   coachMemories: CoachMemory[],
 ): Promise<string> {
   const messagesBlock = userMessages.length > 0
     ? `Here are their actual messages from the app (user messages only, chronological):\n\n${userMessages.map((m, i) => `${i + 1}. "${m}"`).join('\n')}`
     : 'No messages available — use the profile data to infer character.';
 
-  const intelBlock = behavioralIntel
-    ? `Behavioral intel extracted from their sessions:
-- Triggers: ${(behavioralIntel.triggers || []).join(', ') || 'none identified'}
-- Resistance patterns: ${(behavioralIntel.resistance_patterns || []).join(', ') || 'none identified'}
-- Breakthroughs: ${(behavioralIntel.breakthroughs || []).join(', ') || 'none yet'}
-- Stage of change: ${behavioralIntel.stage_of_change || 'unknown'}
-- Journey narrative: ${behavioralIntel.journey_narrative || 'none yet'}`
+  const intelBlock = userKnowledge.length > 0
+    ? `Knowledge extracted from their sessions:\n${userKnowledge.map(k => `- [${k.category}] ${k.content}`).join('\n')}`
     : '';
 
   const memoriesBlock = coachMemories.length > 0

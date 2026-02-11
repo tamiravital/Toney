@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { closeSessionPipeline } from '@toney/coaching';
-import type { BehavioralIntel } from '@toney/types';
 
 /**
  * POST /api/session/close
@@ -24,14 +23,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
     }
 
-    // ── Load data ──
-    const { data: messageRows } = await supabase
-      .from('messages')
-      .select('role, content')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
+    // ── Load data in parallel ──
+    const [messagesResult, profileResult, briefingResult, cardsResult, knowledgeResult] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('role, content')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('profiles')
+        .select('tension_type, stage_of_change')
+        .eq('id', user.id)
+        .single(),
+      supabase
+        .from('coaching_briefings')
+        .select('hypothesis')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      supabase
+        .from('rewire_cards')
+        .select('title, category')
+        .eq('session_id', sessionId),
+      supabase
+        .from('user_knowledge')
+        .select('content, category')
+        .eq('user_id', user.id)
+        .eq('active', true),
+    ]);
 
-    const messages = (messageRows || []).map((m: { role: string; content: string }) => ({
+    const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
@@ -40,68 +62,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No messages in session' }, { status: 400 });
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tension_type')
-      .eq('id', user.id)
-      .single();
-
-    let currentIntel: BehavioralIntel | null = null;
-    try {
-      const { data } = await supabase
-        .from('behavioral_intel')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      currentIntel = data as BehavioralIntel | null;
-    } catch { /* no intel yet */ }
-
-    let hypothesis: string | null = null;
-    try {
-      const { data: briefing } = await supabase
-        .from('coaching_briefings')
-        .select('hypothesis')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (briefing) hypothesis = briefing.hypothesis;
-    } catch { /* no briefing yet */ }
-
-    // Load actually-saved cards for this session (not LLM-guessed)
-    let savedCards: { title: string; category: string }[] = [];
-    try {
-      const { data: sessionCards } = await supabase
-        .from('rewire_cards')
-        .select('title, category')
-        .eq('session_id', sessionId);
-      savedCards = (sessionCards || []).map((c: { title: string; category: string }) => ({
-        title: c.title,
-        category: c.category,
-      }));
-    } catch { /* no cards saved */ }
+    const savedCards = (cardsResult.data || []).map((c: { title: string; category: string }) => ({
+      title: c.title,
+      category: c.category,
+    }));
 
     // ── Pipeline ──
     const result = await closeSessionPipeline({
+      sessionId,
       messages,
-      tensionType: profile?.tension_type || null,
-      hypothesis,
-      currentIntel,
+      tensionType: profileResult.data?.tension_type || null,
+      hypothesis: briefingResult.data?.hypothesis || null,
+      currentStageOfChange: profileResult.data?.stage_of_change || null,
+      existingKnowledge: knowledgeResult.data || null,
       savedCards,
     });
 
     // ── Save results ──
-    await Promise.all([
+    const saveOps: PromiseLike<unknown>[] = [
       supabase.from('sessions').update({
         session_notes: JSON.stringify(result.sessionNotes),
         session_status: 'completed',
         ended_at: new Date().toISOString(),
       }).eq('id', sessionId),
+    ];
 
-      currentIntel
-        ? supabase.from('behavioral_intel').update(result.personModelUpdate).eq('user_id', user.id)
-        : supabase.from('behavioral_intel').insert({ user_id: user.id, ...result.personModelUpdate }),
-    ]);
+    // Insert new knowledge entries
+    if (result.knowledgeUpdate.newEntries.length > 0) {
+      const rows = result.knowledgeUpdate.newEntries.map(entry => ({
+        user_id: user.id,
+        ...entry,
+      }));
+      saveOps.push(supabase.from('user_knowledge').insert(rows));
+    }
+
+    // Update stage of change on profile
+    if (result.knowledgeUpdate.stageOfChange) {
+      saveOps.push(
+        supabase.from('profiles').update({
+          stage_of_change: result.knowledgeUpdate.stageOfChange,
+        }).eq('id', user.id),
+      );
+    }
+
+    await Promise.all(saveOps);
 
     // ── Response ──
     return NextResponse.json({ sessionNotes: result.sessionNotes });

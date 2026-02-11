@@ -232,7 +232,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           if (user) {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('onboarding_completed, tension_type, secondary_tension_type, tension_score, tone, depth, learning_styles')
+              .select('onboarding_completed, tension_type, secondary_tension_type, tone, depth, learning_styles')
               .eq('id', user.id)
               .single();
 
@@ -243,7 +243,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               if (profile.tension_type) {
                 const tension: IdentifiedTension = {
                   primary: profile.tension_type as TensionType,
-                  primaryScore: profile.tension_score ?? 5,
+                  primaryScore: 5,
                   primaryDetails: tensionDetails[profile.tension_type as TensionType],
                   ...(profile.secondary_tension_type && {
                     secondary: profile.secondary_tension_type as TensionType,

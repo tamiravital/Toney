@@ -15,8 +15,8 @@ export interface Profile {
   avatar_url?: string | null;
   tension_type?: TensionType | null;
   secondary_tension_type?: TensionType | null;
-  tension_score?: number | null;
   onboarding_answers?: Record<string, string> | null;
+  stage_of_change?: string | null;
   tone: number;
   depth: DepthLevel;
   learning_styles: LearningStyle[];
