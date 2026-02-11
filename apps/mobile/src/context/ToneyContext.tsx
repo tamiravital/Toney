@@ -122,6 +122,10 @@ interface ToneyContextValue {
   openSession: (previousSessionId?: string, preserveMessages?: boolean) => Promise<void>;
   startNewSession: () => Promise<void>;
   loadingChat: boolean;
+  isFirstSession: boolean;
+  previousSessionMessages: Message[];
+  previousSessionCollapsed: boolean;
+  setPreviousSessionCollapsed: (collapsed: boolean) => void;
 
   // Rewire
   savedInsights: Insight[];
@@ -180,6 +184,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [sessionHasCard, setSessionHasCard] = useState(false);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('active');
   const [sessionNotes, setSessionNotes] = useState<SessionNotesOutput | null>(null);
+  const [isFirstSession, setIsFirstSession] = useState(true); // safe default — hides End Session until hydration proves otherwise
+  const [previousSessionMessages, setPreviousSessionMessages] = useState<Message[]>([]);
+  const [previousSessionCollapsed, setPreviousSessionCollapsed] = useState(true);
 
   // Rewire
   const [savedInsights, setSavedInsights] = useState<Insight[]>([]);
@@ -289,13 +296,21 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const { data: recentSession } = await supabase
-              .from('sessions')
-              .select('id')
-              .eq('user_id', user.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
+            const [{ data: recentSession }, { count: sessionCount }] = await Promise.all([
+              supabase
+                .from('sessions')
+                .select('id')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single(),
+              supabase
+                .from('sessions')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user.id),
+            ]);
+
+            setIsFirstSession((sessionCount || 0) <= 1);
 
             if (recentSession) {
               setCurrentSessionId(recentSession.id);
@@ -459,6 +474,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     setSessionHasCard(false);
     setSessionNotes(null);
+    setPreviousSessionMessages([]);
+    setPreviousSessionCollapsed(true);
     if (!currentSessionId) {
       setSessionStatus('active');
       setMessages([]);
@@ -789,21 +806,15 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionStatus('active');
     setSessionNotes(null);
 
-    // When preserving messages, skip the message-load effect triggered by sessionId change
+    // When preserving messages, capture current messages as previous session (collapsed)
     if (preserveMessages) {
       skipMessageLoadRef.current = true;
-    }
-
-    // Insert a visual divider if preserving old messages, otherwise clear
-    if (preserveMessages) {
-      const dividerMsg: Message = {
-        id: `divider-${Date.now()}`,
-        role: 'divider',
-        content: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, dividerMsg]);
+      const currentNonDividerMessages = messages.filter(m => m.role !== 'divider');
+      setPreviousSessionMessages(currentNonDividerMessages);
+      setPreviousSessionCollapsed(true);
+      setMessages([]);
     } else {
+      setPreviousSessionMessages([]);
       setMessages([]);
     }
 
@@ -843,6 +854,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 setCurrentSessionId(event.sessionId);
                 sessionIdRef.current = event.sessionId;
                 sessionIdReceived = true;
+                setIsFirstSession(false);
               } else if (event.type === 'delta') {
                 if (!sessionIdReceived) continue;
                 // Hide loading state on first text chunk
@@ -1108,6 +1120,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionHasCard(false);
     setSessionStatus('active');
     setSessionNotes(null);
+    setIsFirstSession(true);
+    setPreviousSessionMessages([]);
+    setPreviousSessionCollapsed(true);
   }, []);
 
   const retakeQuiz = useCallback(() => {
@@ -1168,6 +1183,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         openSession,
         startNewSession,
         loadingChat,
+        isFirstSession,
+        previousSessionMessages,
+        previousSessionCollapsed,
+        setPreviousSessionCollapsed,
         savedInsights,
         setSavedInsights,
         updateInsight,

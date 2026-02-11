@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, ComponentPropsWithoutRef } from 'react';
-import { Send, Square, Plus } from 'lucide-react';
+import { Send, Square, Plus, ChevronRight, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import DraftCard from './DraftCard';
@@ -105,6 +105,10 @@ export default function ChatScreen() {
     startNewSession,
     loadingChat,
     setActiveTab,
+    isFirstSession,
+    previousSessionMessages,
+    previousSessionCollapsed,
+    setPreviousSessionCollapsed,
   } = useToney();
 
   const isSessionEnded = sessionStatus === 'completed' || sessionStatus === 'ending';
@@ -115,20 +119,25 @@ export default function ChatScreen() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // End Session visibility: card saved OR 20+ messages, never on first session unless card saved
+  const nonDividerCount = messages.filter(m => m.role !== 'divider').length;
+  const showEndSession = sessionStatus === 'active' && (
+    sessionHasCard || (!isFirstSession && nonDividerCount >= 20)
+  );
+
+  const handleTogglePrevious = () => {
+    setPreviousSessionCollapsed(!previousSessionCollapsed);
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Header with optional End Session button */}
+      {/* Header with session control button */}
       <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
-        {messages.filter(m => m.role !== 'divider').length >= 4 && sessionStatus === 'active' && (
+        {showEndSession && (
           <button
             onClick={endSession}
-            disabled={!sessionHasCard}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              sessionHasCard
-                ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95'
-                : 'text-gray-300 bg-gray-50 cursor-not-allowed'
-            }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95 transition-all"
           >
             <Square className="w-3 h-3" />
             End Session
@@ -137,12 +146,67 @@ export default function ChatScreen() {
         {sessionStatus === 'ending' && (
           <span className="text-xs text-gray-400 font-medium">Wrapping up...</span>
         )}
+        {sessionStatus === 'completed' && (
+          <button
+            onClick={startNewSession}
+            disabled={loadingChat}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <Plus className="w-3 h-3" />
+            Start Session
+          </button>
+        )}
       </div>
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4 hide-scrollbar">
+        {/* Collapsible previous session messages */}
+        {previousSessionMessages.length > 0 && (
+          <div>
+            <button
+              onClick={handleTogglePrevious}
+              className="flex items-center gap-3 py-2 my-2 w-full"
+            >
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400 font-medium whitespace-nowrap flex items-center gap-1">
+                {previousSessionCollapsed ? (
+                  <ChevronRight className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
+                Previous session
+              </span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </button>
+
+            {!previousSessionCollapsed && (
+              <div className="space-y-4 opacity-50">
+                {previousSessionMessages.map((msg) => (
+                  <div key={msg.id}>
+                    <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className="w-10/12">
+                        {msg.role === 'user' ? (
+                          <div className="p-4 rounded-2xl text-sm leading-relaxed bg-indigo-600 text-white rounded-br-md whitespace-pre-line">
+                            {msg.content}
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md">
+                            <ReactMarkdown components={markdownComponents}>
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1')}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Loading state — Toney is preparing the session */}
-        {messages.length === 0 && (
+        {messages.length === 0 && previousSessionMessages.length === 0 && (
           <div className="flex justify-center items-center py-16">
             <div className="text-center">
               <div className="flex justify-center mb-3">
@@ -238,7 +302,7 @@ export default function ChatScreen() {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input */}
+      {/* Input or post-session footer */}
       {!isSessionEnded ? (
         <div className="flex-shrink-0 px-4 py-3 border-t border-gray-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="flex items-end gap-2">
@@ -272,16 +336,8 @@ export default function ChatScreen() {
           </div>
         </div>
       ) : (
-        <div className="flex-shrink-0 px-4 py-4 border-t border-gray-100 bg-gray-50 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={startNewSession}
-              disabled={loadingChat}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
-            >
-              <Plus className="w-4 h-4" />
-              New Session
-            </button>
+        <div className="flex-shrink-0 px-4 py-3 border-t border-gray-100 bg-gray-50 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-center">
             <button
               onClick={() => setActiveTab('home')}
               className="text-sm text-gray-400 hover:text-gray-600 transition-all"
