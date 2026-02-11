@@ -68,8 +68,9 @@ export async function getTensionDistribution(): Promise<TensionDistribution[]> {
 export async function getStageDistribution(): Promise<StageDistribution[]> {
   const supabase = createAdminClient();
   const { data } = await supabase
-    .from('behavioral_intel')
-    .select('stage_of_change');
+    .from('profiles')
+    .select('stage_of_change')
+    .not('stage_of_change', 'is', null);
 
   if (!data || data.length === 0) return [];
 

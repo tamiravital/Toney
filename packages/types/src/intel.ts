@@ -6,28 +6,6 @@ export type StageOfChange =
   | 'maintenance'
   | 'relapse';
 
-export interface EmotionalVocabulary {
-  used_words: string[];
-  avoided_words: string[];
-  deflection_phrases: string[];
-}
-
-export interface BehavioralIntel {
-  id: string;
-  user_id: string;
-  triggers: string[];
-  emotional_vocabulary: EmotionalVocabulary;
-  resistance_patterns: string[];
-  breakthroughs: string[];
-  coaching_notes: string[];
-  stage_of_change: StageOfChange;
-  updated_at: string;
-  // v2 fields (Strategist-managed)
-  journey_narrative?: string | null;
-  growth_edges?: Record<string, unknown> | null;
-  last_strategist_run?: string | null;
-}
-
 export type RewireCardCategory = 'reframe' | 'truth' | 'plan' | 'practice' | 'conversation_kit';
 
 export interface RewireCard {
@@ -45,7 +23,7 @@ export interface RewireCard {
   usefulness_score?: number | null;
   auto_generated: boolean;
   created_at: string;
-  // v2 fields (Focus card lifecycle)
+  // Focus card lifecycle
   is_focus?: boolean;
   focus_set_at?: string | null;
   graduated_at?: string | null;
@@ -70,19 +48,4 @@ export interface Insight {
   savedAt: Date;
   fromChat: boolean;
   tags: string[];
-}
-
-export type MemoryType = 'fact' | 'decision' | 'life_event' | 'commitment' | 'topic';
-export type MemoryImportance = 'high' | 'medium' | 'low';
-
-export interface CoachMemory {
-  id: string;
-  user_id: string;
-  session_id?: string;
-  memory_type: MemoryType;
-  content: string;
-  importance: MemoryImportance;
-  active: boolean;
-  created_at: string;
-  expires_at?: string;
 }

@@ -1,5 +1,4 @@
-export { buildSystemPrompt, buildSystemPromptBlocks, buildSystemPromptFromBriefing, buildLegacyBriefing, buildSessionOpeningBlock } from './prompts/systemPromptBuilder';
-export type { PromptContext } from './prompts/systemPromptBuilder';
+export { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from './prompts/systemPromptBuilder';
 export { prepareSession } from './strategist';
 export type { PrepareSessionInput, SessionPreparation } from './strategist';
 export { reflectOnSession } from './strategist';

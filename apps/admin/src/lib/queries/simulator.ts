@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { Profile, CoachMemory, CoachingBriefing, RewireCard, UserKnowledge, Win } from '@toney/types';
+import type { Profile, CoachingBriefing, RewireCard, UserKnowledge, Win } from '@toney/types';
 import type { SessionPreparation } from '@toney/coaching';
 
 // ============================================================
@@ -81,8 +81,6 @@ export async function deleteSimProfile(id: string): Promise<void> {
   await supabase.from('sim_runs').delete().eq('sim_profile_id', id);
   await supabase.from('sim_sessions').delete().eq('user_id', id);
   await supabase.from('sim_coaching_briefings').delete().eq('user_id', id);
-  await supabase.from('sim_behavioral_intel').delete().eq('user_id', id);
-  await supabase.from('sim_coach_memories').delete().eq('user_id', id);
   await supabase.from('sim_rewire_cards').delete().eq('user_id', id);
   await supabase.from('sim_wins').delete().eq('user_id', id);
   try { await supabase.from('sim_user_knowledge').delete().eq('user_id', id); } catch { /* table may not exist yet */ }
@@ -350,18 +348,6 @@ export async function getSimUserKnowledge(userId: string): Promise<UserKnowledge
 }
 
 // ============================================================
-// Sim Behavioral Intel Queries (legacy — kept during transition)
-// ============================================================
-
-export async function getSimBehavioralIntel(userId: string): Promise<Record<string, unknown> | null> {
-  const supabase = createAdminClient();
-  try {
-    const { data } = await supabase.from('sim_behavioral_intel').select('*').eq('user_id', userId).single();
-    return data;
-  } catch { return null; }
-}
-
-// ============================================================
 // Sim Coaching Briefing Queries
 // ============================================================
 
@@ -413,16 +399,8 @@ export async function saveSimBriefingFromPreparation(
 }
 
 // ============================================================
-// Sim Coach Memories / Rewire Cards / Wins / Focus Card
+// Sim Rewire Cards / Wins / Focus Card
 // ============================================================
-
-export async function getSimCoachMemories(userId: string, limit = 30): Promise<CoachMemory[]> {
-  const supabase = createAdminClient();
-  try {
-    const { data } = await supabase.from('sim_coach_memories').select('*').eq('user_id', userId).eq('active', true).order('importance', { ascending: true }).limit(limit);
-    return (data || []) as CoachMemory[];
-  } catch { return []; }
-}
 
 export async function getSimRewireCards(userId: string, limit = 20): Promise<RewireCard[]> {
   const supabase = createAdminClient();
@@ -481,12 +459,9 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     userKnowledge = (data || []) as UserKnowledge[];
   } catch { /* no knowledge */ }
 
-  let memories: { content: string; importance: number; active: boolean }[] = [];
-  try { const { data } = await supabase.from('coach_memories').select('content, importance, active').eq('user_id', userId).eq('active', true).limit(50); memories = data ?? []; } catch { /* no memories */ }
-
   let userPrompt: string;
   try {
-    userPrompt = await synthesizeCharacterProfile(profile, userMessages, userKnowledge, memories as unknown as CoachMemory[]);
+    userPrompt = await synthesizeCharacterProfile(profile, userMessages, userKnowledge);
   } catch {
     userPrompt = `You are roleplaying as a real user of Toney, a money coaching app. Based on your profile, your primary money tension is "${profile.tension_type || 'unknown'}". ${profile.emotional_why ? `You said: "${profile.emotional_why}"` : ''}\n\nRespond naturally as this person would. Keep responses 1-3 sentences. Be authentic — show resistance, vulnerability, deflection, or openness. Don't be overly cooperative.`;
   }
@@ -519,7 +494,6 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     } catch { /* non-critical */ }
   }
 
-  if (memories.length > 0) { try { await supabase.from('sim_coach_memories').insert(memories.map(m => ({ user_id: simProfile.id, content: m.content, importance: String(m.importance), active: m.active }))); } catch { /* non-critical */ } }
   try { const { data: briefing } = await supabase.from('coaching_briefings').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single(); if (briefing) { await supabase.from('sim_coaching_briefings').insert({ user_id: simProfile.id, briefing_content: briefing.briefing_content, hypothesis: briefing.hypothesis, leverage_point: briefing.leverage_point, curiosities: briefing.curiosities, tension_narrative: briefing.tension_narrative, growth_edges: briefing.growth_edges, version: briefing.version }); } } catch { /* no briefing */ }
   try { const { data: cards } = await supabase.from('rewire_cards').select('category, title, content, is_focus, times_completed, auto_generated').eq('user_id', userId).limit(30); if (cards?.length) { await supabase.from('sim_rewire_cards').insert(cards.map(c => ({ user_id: simProfile.id, ...c }))); } } catch { /* no cards */ }
   try { const { data: wins } = await supabase.from('wins').select('content, text, tension_type').eq('user_id', userId).limit(20); if (wins?.length) { await supabase.from('sim_wins').insert(wins.map(w => ({ user_id: simProfile.id, content: w.content || w.text, text: w.text, tension_type: w.tension_type }))); } } catch { /* no wins */ }

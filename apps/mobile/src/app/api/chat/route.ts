@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
-import { buildSystemPromptBlocks, buildSystemPromptFromBriefing } from '@toney/coaching';
-import { Profile, BehavioralIntel, Win, CoachMemory, SystemPromptBlock, CoachingBriefing } from '@toney/types';
+import { buildSystemPromptFromBriefing } from '@toney/coaching';
+import { SystemPromptBlock, CoachingBriefing } from '@toney/types';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -26,17 +26,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing message or sessionId' }, { status: 400 });
     }
 
-    // Load profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    }
-
     // ── Load Strategist briefing ──
     // Session opening (Strategist, session creation) is handled by /api/session/open.
     // By the time /api/chat is called, the briefing should already exist.
@@ -50,82 +39,14 @@ export async function POST(request: NextRequest) {
         .limit(1)
         .single();
       briefing = data as CoachingBriefing | null;
-    } catch { /* no briefing yet — will use legacy path */ }
+    } catch { /* no briefing yet */ }
 
     // ── Build system prompt ──
-    let systemPromptBlocks: SystemPromptBlock[];
-
-    if (briefing) {
-      // v2 path: use Strategist briefing
-      systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
-    } else {
-      // Legacy fallback: load raw data and build prompt
-      let behavioralIntel = null;
-      try {
-        const { data } = await supabase
-          .from('behavioral_intel')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-        behavioralIntel = data;
-      } catch { /* no data yet */ }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let recentWins: any[] = [];
-      try {
-        const { data } = await supabase
-          .from('wins')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        recentWins = data || [];
-      } catch { /* no wins */ }
-
-      let rewireCards: { title: string }[] = [];
-      try {
-        const { data } = await supabase
-          .from('rewire_cards')
-          .select('title')
-          .eq('user_id', user.id)
-          .limit(10);
-        rewireCards = data || [];
-      } catch { /* no cards */ }
-
-      let coachMemories: CoachMemory[] = [];
-      try {
-        const { data } = await supabase
-          .from('coach_memories')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('active', true)
-          .order('importance', { ascending: true })
-          .limit(30);
-        coachMemories = (data || []) as CoachMemory[];
-      } catch { /* no memories */ }
-
-      const { count: sessionCount } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      const isFirstSession = (sessionCount || 0) <= 1;
-
-      systemPromptBlocks = buildSystemPromptBlocks({
-        profile: profile as Profile,
-        behavioralIntel: behavioralIntel as BehavioralIntel | null,
-        recentWins: (recentWins || []).map(w => ({
-          id: w.id,
-          text: w.text,
-          tension_type: w.tension_type,
-          date: new Date(w.created_at),
-        })) as Win[],
-        rewireCardTitles: (rewireCards || []).map(c => c.title),
-        coachMemories,
-        isFirstSession,
-        messageCount: 0,
-      });
+    if (!briefing) {
+      return NextResponse.json({ error: 'No coaching briefing found. Open a session first.' }, { status: 400 });
     }
+
+    const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefing.briefing_content);
 
     // Load session history (last 50 messages)
     const { data: historyRows } = await supabase

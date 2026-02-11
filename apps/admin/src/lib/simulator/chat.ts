@@ -1,10 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
-  buildSystemPromptBlocks,
   buildSystemPromptFromBriefing,
   prepareSession,
 } from '@toney/coaching';
-import type { Profile, CoachMemory, SystemPromptBlock, CoachingBriefing, UserKnowledge, Win, RewireCard } from '@toney/types';
+import type { Profile, SystemPromptBlock, CoachingBriefing, UserKnowledge, Win, RewireCard } from '@toney/types';
 import {
   getSimProfile,
   getLatestSimBriefing,
@@ -14,7 +13,6 @@ import {
   saveSimMessage,
   updateSimSessionMessageCount,
   getSimUserKnowledge,
-  getSimCoachMemories,
   getSimWins,
   getSimRewireCards,
   saveSimBriefingFromPreparation,
@@ -88,27 +86,11 @@ export async function processSimChat(
   }
 
   // ── Build system prompt ──
-  let systemPromptBlocks: SystemPromptBlock[];
-
-  if (briefing) {
-    systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
-  } else {
-    // Legacy fallback: load raw data and build prompt
-    const recentWins = await getSimWins(userId, 5);
-    const rewireCards = await getSimRewireCards(userId, 10);
-    const coachMemories = await getSimCoachMemories(userId, 30);
-    const sessionCount = await countSimSessions(userId);
-    const isFirstSession = sessionCount <= 1;
-
-    systemPromptBlocks = buildSystemPromptBlocks({
-      profile: profile as Profile,
-      recentWins: recentWins as Win[],
-      rewireCardTitles: rewireCards.map(c => c.title),
-      coachMemories: coachMemories as CoachMemory[],
-      isFirstSession,
-      messageCount: 0,
-    });
+  if (!briefing) {
+    throw new Error('No coaching briefing found. Run Strategist first.');
   }
+
+  const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefing.briefing_content);
 
   // Load session history (last 50 messages)
   const historyRows = await getSimSessionMessages(sessionId, 50);
@@ -196,23 +178,12 @@ export async function generateCoachGreeting(
     } catch { /* fall through to legacy */ }
   }
 
-  // Build system prompt (same logic as processSimChat)
-  let systemPromptBlocks: SystemPromptBlock[];
-  if (briefing) {
-    systemPromptBlocks = buildSystemPromptFromBriefing(briefing.briefing_content);
-  } else {
-    const recentWins = await getSimWins(userId, 5);
-    const rewireCards = await getSimRewireCards(userId, 10);
-    const coachMemories = await getSimCoachMemories(userId, 30);
-    systemPromptBlocks = buildSystemPromptBlocks({
-      profile: profile as Profile,
-      recentWins: recentWins as Win[],
-      rewireCardTitles: rewireCards.map(c => c.title),
-      coachMemories: coachMemories as CoachMemory[],
-      isFirstSession: false,
-      messageCount: 0,
-    });
+  // Build system prompt
+  if (!briefing) {
+    throw new Error('No coaching briefing found. Run Strategist first.');
   }
+
+  const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefing.briefing_content);
 
   // Trigger message — not saved to DB, just used to prompt the Coach
   const triggerMessage = `[The user just opened the app to start a new conversation. This is a returning user you know well. Greet them warmly and contextually based on what you know about them. Reference something specific from your knowledge of them. Keep it 2-4 sentences — like a coach welcoming someone back. Don't overwhelm them with questions. One gentle invitation to share what's on their mind is enough.]`;

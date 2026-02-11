@@ -68,14 +68,15 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', focusCard.id);
 
-      // Save reflection as a coach memory (if provided)
+      // Save reflection as user knowledge (if provided)
       if (reflection?.trim()) {
         await supabase
-          .from('coach_memories')
+          .from('user_knowledge')
           .insert({
             user_id: user.id,
-            memory_type: 'fact',
+            category: 'coaching_note',
             content: `Focus card "${focusCard.title}" reflection: ${reflection.trim()}`,
+            source: 'focus_card',
             importance: 'medium',
             active: true,
           });

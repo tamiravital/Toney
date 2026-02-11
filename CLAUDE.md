@@ -73,7 +73,7 @@ toney/
 │   │       └── pipelines/        # openSessionPipeline, closeSessionPipeline (pure functions)
 │   └── config-typescript/        # @toney/config-typescript — shared tsconfig
 │
-├── supabase/migrations/          # Shared database schema + RLS (001-015)
+├── supabase/migrations/          # Shared database schema + RLS (001-017)
 └── _prototype/                   # Original prototype (reference only)
 ```
 
@@ -85,26 +85,26 @@ The coaching engine uses two agents. All agent logic lives in `packages/coaching
 
 | Agent | Model | Temp | When it runs | What it does |
 |-------|-------|------|-------------|--------------|
-| **Coach** | Sonnet 4.5 | 0.7 | Every user message | The main chat endpoint (`/api/chat`). Reads the Strategist briefing. Falls back to legacy prompt path (`buildSystemPromptBlocks`) when no briefing exists. Prompt-cached. |
-| **Strategist** (decomposed) | Sonnet 4.5 / Haiku | varies | Session open + close | Decomposed into pipeline functions. Open: `planSession()` (Sonnet). Close: `reflectOnSession()` + `generateSessionNotes()` (Haiku, parallel) → `updatePersonModel()` (pure code). |
+| **Coach** | Sonnet 4.5 | 0.7 | Every user message | The main chat endpoint (`/api/chat`). Reads the Strategist briefing. Requires a briefing to exist (no legacy fallback). Prompt-cached. |
+| **Strategist** (decomposed) | Sonnet 4.5 / Haiku | varies | Session open + close | Decomposed into pipeline functions. Open: `prepareSession()` (Sonnet). Close: `reflectOnSession()` + `generateSessionNotes()` (Haiku, parallel) → `buildKnowledgeUpdates()` (pure code). |
 
 ### Data Flow
 ```
 User message → Coach (/api/chat, reads static briefing) → Response
                               ↑
-                    [session open: Strategist plans]
+                    [session open: Strategist prepares]
                               ↓
-                    coaching_briefings + behavioral_intel
+                    coaching_briefings + user_knowledge
                               ↑
-                    [session close: reflect + notes + merge]
+                    [session close: reflect + notes + knowledge updates]
 ```
 
-The Coach reads a static briefing for the entire session. The Strategist runs at session boundaries (open and close) to update the briefing and person model.
+The Coach reads a static briefing for the entire session. The Strategist runs at session boundaries (open and close) to update the briefing and user knowledge.
 
 ### Prompt Caching
 System prompt is structured as `SystemPromptBlock[]` with `cache_control: { type: 'ephemeral' }`:
 - Block 1: Core coaching principles (~1500 tokens, cached across ALL users)
-- Block 2: Strategist briefing OR legacy context (cached within a session)
+- Block 2: Strategist briefing (cached within a session)
 - Messages: `cache_control` on second-to-last message for incremental caching
 
 ~80% input cost reduction vs v1 (uncached single prompt).
@@ -129,39 +129,24 @@ The Strategist is decomposed into pipeline functions triggered at session bounda
 | Event | Route | What runs |
 |-------|-------|-----------|
 | **Session open** | `POST /api/session/open` | `planSessionStep()` → builds briefing → streams opening message. If `previousSessionId` passed, runs `closeSessionPipeline()` first (deferred close). |
-| **Session close** | `POST /api/session/close` | `closeSessionPipeline()`: `reflectOnSession()` + `generateSessionNotes()` in parallel (Haiku) → `updatePersonModel()` (pure code merge). |
-| **First session** | `POST /api/session/open` | `generateInitialBriefing()` (legacy Strategist path) — determines tension from quiz answers. |
+| **Session close** | `POST /api/session/close` | `closeSessionPipeline()`: `reflectOnSession()` + `generateSessionNotes()` in parallel (Haiku) → `buildKnowledgeUpdates()` (pure code). |
+| **First session** | `POST /api/session/open` | `prepareSession()` — unified path for all sessions. Detects first session by absence of previous briefing. Determines tension from quiz answers. |
 
-### Strategist Output — Full Spec
+### Strategist Output
 
-The Strategist produces a `StrategistOutput` with these fields. Each field is saved to a specific table:
-
-**Saved to `coaching_briefings` table (one row per run, versioned):**
+The Strategist (`prepareSession()`) produces a `SessionPreparation` saved to `coaching_briefings`:
 
 | Field | Type | What it is |
 |-------|------|-----------|
 | `briefing_content` | text | Full 7-section narrative document (see sections below) |
 | `hypothesis` | text | One-sentence coaching thesis for this person right now |
-| `session_strategy` | text | 1-2 sentences on what this session should accomplish |
-| `journey_narrative` | text | 2-3 sentence story arc of their coaching journey |
+| `leverage_point` | text | Their strength + goal + what's in the way — the fulcrum for change |
+| `curiosities` | text | What the Coach should explore — open questions, not directives |
+| `tension_narrative` | text | Evolving understanding of their pattern — deeper than a label |
 | `growth_edges` | JSONB | 7 growth lenses with status per lens (see below) |
 | `version` | integer | Auto-incrementing per user |
 
-**Merged into `behavioral_intel` table (one row per user, cumulative):**
-
-| Field | Type | Merge behavior |
-|-------|------|---------------|
-| `triggers` | string[] | Appended (deduplicated) |
-| `emotional_vocabulary.used_words` | string[] | Appended (deduplicated) |
-| `emotional_vocabulary.avoided_words` | string[] | Appended (deduplicated) |
-| `emotional_vocabulary.deflection_phrases` | string[] | Appended (deduplicated) |
-| `resistance_patterns` | string[] | Appended (deduplicated) |
-| `breakthroughs` | string[] | Appended (deduplicated) |
-| `coaching_notes` | string[] | Appended (deduplicated) |
-| `stage_of_change` | enum | Replaced (not appended) |
-| `journey_narrative` | text | Replaced (also in coaching_briefings) |
-| `growth_edges` | JSONB | Replaced (also in coaching_briefings) |
-| `last_strategist_run` | timestamp | Set to now |
+Session close produces `UserKnowledge` entries via `reflectOnSession()` + `buildKnowledgeUpdates()`. Each entry is tagged with category, source, importance, and session_id. Dedup is code-level (skip if identical content+category already exists). `stage_of_change` is stored on `profiles`.
 
 ### Coaching Briefing Sections
 The `briefing_content` is a narrative document (not arrays/bullet points) with 7 sections:
@@ -183,37 +168,31 @@ The `briefing_content` is a narrative document (not arrays/bullet points) with 7
 - **Decision confidence** — Can they make money decisions without spiraling or freezing?
 - **Future orientation** — Can they plan without anxiety? Do they trust the future?
 
-### Coach Memories
-Specific facts, decisions, life events, and commitments the Coach remembers across sessions. Stored in `coach_memories` table.
-- Each memory has `importance` ranking (`high` | `medium` | `low`) and `active` flag
-- Up to 30 active memories fed to the Strategist
-- Can expire (set `active: false`)
-- Examples: "Has a partner named David", "Committed to checking balance weekly", "Lost her job in January"
-
 ## Shared Packages
 
 ### @toney/types
-All TypeScript type definitions: `TensionType`, `Profile`, `Message`, `Session`, `BehavioralIntel`, `Win`, `RewireCard`, `CoachMemory`, `CoachingBriefing`, `SystemPromptBlock`, plus admin aggregate types.
+All TypeScript type definitions: `TensionType`, `Profile`, `Message`, `Session`, `Win`, `RewireCard`, `UserKnowledge`, `CoachingBriefing`, `SystemPromptBlock`, plus admin aggregate types.
 
 ### @toney/constants
 Tension details/colors, onboarding questions, style options, stage/engagement colors. Exports `tensionColor()`, `stageColor()`, `identifyTension()`, `ALL_TENSIONS`, `ALL_STAGES`.
 
 ### @toney/coaching
 2-agent coaching engine. Exports:
-- **Coach**: `buildSystemPromptBlocks()`, `buildSystemPromptFromBriefing()`, `buildLegacyBriefing()`, `buildSystemPrompt()` (legacy compat), `buildSessionOpeningBlock()`
-- **Strategist**: `runStrategist()`, `generateInitialBriefing()`, `reflectOnSession()`, `updatePersonModel()`, `planSession()`
+- **Coach**: `buildSystemPromptFromBriefing()`, `buildSessionOpeningBlock()`
+- **Strategist**: `prepareSession()`, `reflectOnSession()`, `buildKnowledgeUpdates()`, `mergeGrowthEdges()`
 - **Pipelines**: `openSessionPipeline()`, `closeSessionPipeline()`, `planSessionStep()`
 - **Session**: `detectSessionBoundary()`
 - **Session Notes**: `generateSessionNotes()`
-- **Types**: `StrategistContext`, `StrategistOutput`, `ReflectionInput`, `SessionReflection`, `PersonModelUpdate`, `SessionPlanInput`, `SessionPlan`, `OpenSessionInput`, `OpenSessionOutput`, `CloseSessionInput`, `CloseSessionOutput`, `SessionNotesInput`, `PromptContext`
+- **Types**: `PrepareSessionInput`, `SessionPreparation`, `ReflectionInput`, `SessionReflection`, `KnowledgeUpdate`, `OpenSessionInput`, `OpenSessionOutput`, `CloseSessionInput`, `CloseSessionOutput`, `SessionNotesInput`
 
 ## Key Architecture Decisions
 
 ### Prompt System
-`packages/coaching/src/prompts/systemPromptBuilder.ts` assembles the system prompt from 10 modules:
-`safetyRails`, `awareMethod`, `tensionPrompts`, `tonePrompts`, `depthPrompts`, `learningStylePrompts`, `biasDetection`, `stageMatching`, `motivationalInterviewing`, `firstSession`
+`packages/coaching/src/prompts/systemPromptBuilder.ts` builds system prompt as two cache-optimized blocks:
+- Block 1: Core coaching principles (static, cached across all users)
+- Block 2: Strategist briefing content (per-user, cached within session)
 
-When a Strategist briefing exists, the Coach reads the briefing instead of legacy-assembled context. Legacy path is a fallback for users who haven't triggered a Strategist run yet.
+The Coach requires a Strategist briefing to exist. No legacy fallback path.
 
 ### Coaching Tone
 Tone is a continuous 1-10 scale (not discrete buckets). 1-4 = Gentle, 5-6 = Balanced, 7-10 = Direct.
@@ -224,17 +203,14 @@ Tone is a continuous 1-10 scale (not discrete buckets). 1-4 = Gentle, 5-6 = Bala
 ### Mobile-First PWA
 All mobile UI constrained to `max-w-[430px]` centered on desktop.
 
-## Data Model (8 tables)
-- `profiles` — user settings (tension_type, tone, depth, learning_style, etc.)
+## Data Model (7 tables)
+- `profiles` — user settings (tension_type, tone, depth, learning_style, stage_of_change, etc.)
 - `sessions` — chat sessions (+ session_number, session_notes, session_status)
 - `messages` — individual chat messages (session_id FK)
 - `rewire_cards` — saved insight cards (+ is_focus, focus_set_at, graduated_at, times_completed, last_completed_at, prescribed_by)
 - `wins` — small victories (text, tension_type)
-- `behavioral_intel` — one row per user, cumulative coaching intelligence:
-  - `triggers` (string[]), `emotional_vocabulary` ({used_words, avoided_words, deflection_phrases}), `resistance_patterns` (string[]), `breakthroughs` (string[]), `coaching_notes` (string[]), `stage_of_change` (enum)
-  - v2 fields: `journey_narrative` (text), `growth_edges` (JSONB), `last_strategist_run` (timestamp)
-- `coach_memories` — specific facts/decisions/commitments (content, importance, active, expires_at)
-- `coaching_briefings` — Strategist output per session (briefing_content, hypothesis, session_strategy, journey_narrative, growth_edges, version)
+- `user_knowledge` — tagged knowledge entries (category, content, source, importance, active, tags, session_id). One row per entry, deduped by content+category.
+- `coaching_briefings` — Strategist output per session (briefing_content, hypothesis, leverage_point, curiosities, tension_narrative, growth_edges, version)
 
 Profile auto-created on signup via DB trigger.
 

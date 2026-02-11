@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 import { planSessionStep, closeSessionPipeline } from '@toney/coaching';
 import { Profile, UserKnowledge, RewireCard, Win, CoachingBriefing } from '@toney/types';
 
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
 /**
  * POST /api/session/open
  *
@@ -28,93 +32,8 @@ export async function POST(request: NextRequest) {
       previousSessionId = body.previousSessionId || null;
     } catch { /* empty body is fine */ }
 
-    // ── Deferred close of previous session ──
-    if (previousSessionId) {
-      try {
-        const [oldMessagesResult, oldProfileResult, oldBriefingResult, oldCardsResult, oldKnowledgeResult] = await Promise.all([
-          supabase
-            .from('messages')
-            .select('role, content')
-            .eq('session_id', previousSessionId)
-            .order('created_at', { ascending: true }),
-          supabase
-            .from('profiles')
-            .select('tension_type, stage_of_change')
-            .eq('id', user.id)
-            .single(),
-          supabase
-            .from('coaching_briefings')
-            .select('hypothesis')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single(),
-          supabase
-            .from('rewire_cards')
-            .select('title, category')
-            .eq('session_id', previousSessionId),
-          supabase
-            .from('user_knowledge')
-            .select('content, category')
-            .eq('user_id', user.id)
-            .eq('active', true),
-        ]);
-
-        const oldMessages = (oldMessagesResult.data || []).map((m: { role: string; content: string }) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }));
-
-        if (oldMessages.length > 0) {
-          const savedCards = (oldCardsResult.data || []).map((c: { title: string; category: string }) => ({
-            title: c.title,
-            category: c.category,
-          }));
-
-          const closeResult = await closeSessionPipeline({
-            sessionId: previousSessionId,
-            messages: oldMessages,
-            tensionType: oldProfileResult.data?.tension_type || null,
-            hypothesis: oldBriefingResult.data?.hypothesis || null,
-            currentStageOfChange: oldProfileResult.data?.stage_of_change || null,
-            existingKnowledge: oldKnowledgeResult.data || null,
-            savedCards,
-          });
-
-          // Save close results
-          const closeSaveOps: PromiseLike<unknown>[] = [
-            supabase.from('sessions').update({
-              session_notes: JSON.stringify(closeResult.sessionNotes),
-              session_status: 'completed',
-              ended_at: new Date().toISOString(),
-            }).eq('id', previousSessionId),
-          ];
-
-          if (closeResult.knowledgeUpdate.newEntries.length > 0) {
-            const rows = closeResult.knowledgeUpdate.newEntries.map(entry => ({
-              user_id: user.id,
-              ...entry,
-            }));
-            closeSaveOps.push(supabase.from('user_knowledge').insert(rows));
-          }
-
-          if (closeResult.knowledgeUpdate.stageOfChange) {
-            closeSaveOps.push(
-              supabase.from('profiles').update({
-                stage_of_change: closeResult.knowledgeUpdate.stageOfChange,
-              }).eq('id', user.id),
-            );
-          }
-
-          await Promise.all(closeSaveOps);
-        }
-      } catch (err) {
-        console.error('Deferred session close failed:', err);
-        // Non-fatal — continue opening new session
-      }
-    }
-
     // ── Load data in parallel ──
+    // Load everything we need for both deferred close and new session open.
     const [profileResult, knowledgeResult, winsResult, cardsResult, briefingResult, notesResult] = await Promise.all([
       supabase
         .from('profiles')
@@ -159,6 +78,75 @@ export async function POST(request: NextRequest) {
     const profile = profileResult.data as Profile | null;
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    // ── Deferred close of previous session ──
+    if (previousSessionId) {
+      try {
+        const [oldMessagesResult, oldCardsResult] = await Promise.all([
+          supabase
+            .from('messages')
+            .select('role, content')
+            .eq('session_id', previousSessionId)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('rewire_cards')
+            .select('title, category')
+            .eq('session_id', previousSessionId),
+        ]);
+
+        const oldMessages = (oldMessagesResult.data || []).map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }));
+
+        if (oldMessages.length > 0) {
+          const savedCards = (oldCardsResult.data || []).map((c: { title: string; category: string }) => ({
+            title: c.title,
+            category: c.category,
+          }));
+
+          const closeResult = await closeSessionPipeline({
+            sessionId: previousSessionId,
+            messages: oldMessages,
+            tensionType: profile.tension_type || null,
+            hypothesis: (briefingResult.data as CoachingBriefing | null)?.hypothesis || null,
+            currentStageOfChange: profile.stage_of_change || null,
+            existingKnowledge: knowledgeResult.data || null,
+            savedCards,
+          });
+
+          // Save close results
+          const closeSaveOps: PromiseLike<unknown>[] = [
+            supabase.from('sessions').update({
+              session_notes: JSON.stringify(closeResult.sessionNotes),
+              session_status: 'completed',
+              ended_at: new Date().toISOString(),
+            }).eq('id', previousSessionId),
+          ];
+
+          if (closeResult.knowledgeUpdate.newEntries.length > 0) {
+            const rows = closeResult.knowledgeUpdate.newEntries.map(entry => ({
+              user_id: user.id,
+              ...entry,
+            }));
+            closeSaveOps.push(supabase.from('user_knowledge').insert(rows));
+          }
+
+          if (closeResult.knowledgeUpdate.stageOfChange) {
+            closeSaveOps.push(
+              supabase.from('profiles').update({
+                stage_of_change: closeResult.knowledgeUpdate.stageOfChange,
+              }).eq('id', user.id),
+            );
+          }
+
+          await Promise.all(closeSaveOps);
+        }
+      } catch (err) {
+        console.error('Deferred session close failed:', err);
+        // Non-fatal — continue opening new session
+      }
     }
 
     // Create session row
@@ -221,10 +209,6 @@ export async function POST(request: NextRequest) {
     ]).catch(err => console.error('Save plan results failed:', err));
 
     // ── Pipeline Step 2: Stream opening message (Sonnet) ──
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1500,

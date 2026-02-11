@@ -1,5 +1,17 @@
 # Toney — Changelog
 
+## 2026-02-11 (session 6) — Legacy Cleanup + API Optimizations
+- **Dropped legacy tables**: `behavioral_intel`, `coach_memories`, `sim_behavioral_intel`, `sim_coach_memories` — all replaced by `user_knowledge`
+- **No legacy fallback**: Chat route now requires a briefing (returns 400 if missing). No more `behavioral_intel`/`coach_memories` reading.
+- Removed `useHomeIntel` hook and all legacy intel display from HomeScreen
+- Focus card reflections save to `user_knowledge` instead of `coach_memories`
+- Admin simulator and overview queries cleaned of all legacy references
+- `systemPromptBuilder.ts` reduced from 515 → 135 lines (core principles + briefing only)
+- Removed `BehavioralIntel`, `CoachMemory`, `EmotionalVocabulary`, `MemoryType`, `MemoryImportance` types
+- **API optimizations**: removed dead profile load from chat route, moved Anthropic client to module level in session/open, fixed stale comments
+- Migration 017: DROP TABLE for all 4 legacy tables
+- Production tables: 7 (down from 9)
+
 ## 2026-02-11 (session 3) — Strategist Revamp + Data Model Redesign
 - **Unified Strategist**: `prepareSession()` replaces two divergent code paths (`generateInitialBriefing` for first session, `planSession` for returning sessions). One function handles all sessions — inputs grow richer over time.
 - **New data model**: `user_knowledge` table replaces `behavioral_intel` arrays + `coach_memories`. Each knowledge entry is tagged with category (trigger, breakthrough, resistance, vocabulary, fact, etc.), source, and importance. Deduped by content+category.

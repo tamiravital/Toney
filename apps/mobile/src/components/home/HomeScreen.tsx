@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { Settings, Flame, Sparkles, Eye, TrendingUp, Lightbulb, MessageCircle, FileText } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { useHomeIntel, IntelCard } from '@/hooks/useHomeIntel';
 import { useLastSession } from '@/hooks/useLastSession';
 import { tensionColor } from '@toney/constants';
 import SessionNotesView from '@/components/chat/SessionNotesView';
 
-const intelTypeConfig: Record<IntelCard['type'], { icon: typeof Eye; label: string; color: string }> = {
+type IntelCardType = 'pattern' | 'growth' | 'insight';
+interface IntelCard { id: string; type: IntelCardType; content: string; }
+
+const intelTypeConfig: Record<IntelCardType, { icon: typeof Eye; label: string; color: string }> = {
   pattern: { icon: Eye, label: 'Pattern spotted', color: 'text-purple-600 bg-purple-50' },
   growth: { icon: TrendingUp, label: 'Growth marker', color: 'text-emerald-600 bg-emerald-50' },
   insight: { icon: Lightbulb, label: 'Coaching insight', color: 'text-amber-600 bg-amber-50' },
@@ -16,7 +18,6 @@ const intelTypeConfig: Record<IntelCard['type'], { icon: typeof Eye; label: stri
 
 export default function HomeScreen() {
   const { identifiedTension, streak, wins, savedInsights, setActiveTab, setShowSettings } = useToney();
-  const { intelCards } = useHomeIntel();
   const { notes: lastNotes } = useLastSession();
   const [showNotes, setShowNotes] = useState(false);
 
@@ -29,23 +30,20 @@ export default function HomeScreen() {
     return 'Good evening';
   })();
 
-  // Build onboarding-derived intel for users with no behavioral intel yet
-  const displayIntel: IntelCard[] = intelCards.length > 0
-    ? intelCards
-    : identifiedTension
-      ? [
-          {
-            id: 'onboard-tension',
-            type: 'pattern' as const,
-            content: `You tend to ${identifiedTension.primary} with money${identifiedTension.primaryDetails?.first_step ? ` — ${identifiedTension.primaryDetails.first_step.toLowerCase()}` : ''}`,
-          },
-          ...(identifiedTension.secondary ? [{
-            id: 'onboard-secondary',
-            type: 'insight' as const,
-            content: `Secondary pattern: you also tend to ${identifiedTension.secondary}`,
-          }] : []),
-        ]
-      : [];
+  const displayIntel: IntelCard[] = identifiedTension
+    ? [
+        {
+          id: 'onboard-tension',
+          type: 'pattern' as const,
+          content: `You tend to ${identifiedTension.primary} with money${identifiedTension.primaryDetails?.first_step ? ` — ${identifiedTension.primaryDetails.first_step.toLowerCase()}` : ''}`,
+        },
+        ...(identifiedTension.secondary ? [{
+          id: 'onboard-secondary',
+          type: 'insight' as const,
+          content: `Secondary pattern: you also tend to ${identifiedTension.secondary}`,
+        }] : []),
+      ]
+    : [];
 
   // Show 3 most recent rewire cards
   const recentCards = savedInsights.slice(0, 3);

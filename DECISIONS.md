@@ -4,6 +4,12 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Drop behavioral_intel and coach_memories with no fallback (2026-02-11)
+Removed both legacy tables and all code that read from them. The chat route's legacy fallback (reading behavioral_intel when no briefing exists) was the last consumer. Since prepareSession() now handles all sessions including first sessions, every user gets a briefing at session open — the fallback path is unreachable. Keeping dead fallback code added complexity and gave the false impression that the old system was still active. Migration 017 drops all 4 tables (prod + sim mirrors).
+
+### Keep sessions and coaching_briefings as separate tables (2026-02-11)
+Considered merging coaching_briefings columns into the sessions table (1:1 relationship today). Kept them separate for three reasons: (1) Different query patterns — chat route needs "latest briefing for this user" which is a clean single-row query on coaching_briefings; if it were a column on sessions, you'd need WHERE briefing_content IS NOT NULL ORDER BY created_at DESC LIMIT 1. (2) Briefing lifecycle is decoupled from sessions — the Coach reads the previous session's briefing until the new one is generated. (3) Versioning is cross-session (version field increments across all sessions). The separation costs one extra table but keeps queries clean and leaves room for mid-session re-planning.
+
 ### Unified prepareSession() replaces two Strategist paths (2026-02-11)
 The old system had `generateInitialBriefing()` for first sessions and `planSession()` for returning sessions — two completely different LLM prompts, different output shapes, different code paths. This meant changes to coaching strategy had to be applied in two places, and the first session experience was architecturally different from every subsequent session. The new `prepareSession()` handles all sessions with one LLM call. First session is detected by `!previousBriefing && (!userKnowledge || userKnowledge.length === 0)`. Inputs simply grow richer over time — first session gets quiz answers + goals, returning sessions also get knowledge entries, previous briefing, wins, and session notes. Same prompt, same output shape, same code path.
 

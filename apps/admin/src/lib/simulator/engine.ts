@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Profile, UserKnowledge, CoachMemory } from '@toney/types';
+import type { Profile, UserKnowledge } from '@toney/types';
 import { BASE_USER_PROMPT } from './presets';
 
 const anthropic = new Anthropic({
@@ -80,7 +80,6 @@ export async function synthesizeCharacterProfile(
   profile: Partial<Profile>,
   userMessages: string[],
   userKnowledge: UserKnowledge[],
-  coachMemories: CoachMemory[],
 ): Promise<string> {
   const messagesBlock = userMessages.length > 0
     ? `Here are their actual messages from the app (user messages only, chronological):\n\n${userMessages.map((m, i) => `${i + 1}. "${m}"`).join('\n')}`
@@ -88,10 +87,6 @@ export async function synthesizeCharacterProfile(
 
   const intelBlock = userKnowledge.length > 0
     ? `Knowledge extracted from their sessions:\n${userKnowledge.map(k => `- [${k.category}] ${k.content}`).join('\n')}`
-    : '';
-
-  const memoriesBlock = coachMemories.length > 0
-    ? `Things the coach remembers about them:\n${coachMemories.map(m => `- ${m.content}`).join('\n')}`
     : '';
 
   const profileBlock = `Profile data:
@@ -111,8 +106,6 @@ ${profileBlock}
 ${messagesBlock}
 
 ${intelBlock}
-
-${memoriesBlock}
 
 Based on ALL of this, write a character description. Follow this exact format:
 
