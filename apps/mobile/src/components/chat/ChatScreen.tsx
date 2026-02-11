@@ -123,7 +123,12 @@ export default function ChatScreen() {
         {messages.filter(m => m.role !== 'divider').length >= 4 && sessionStatus === 'active' && (
           <button
             onClick={endSession}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 hover:text-gray-700 transition-all active:scale-95"
+            disabled={!sessionHasCard}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              sessionHasCard
+                ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95'
+                : 'text-gray-300 bg-gray-50 cursor-not-allowed'
+            }`}
           >
             <Square className="w-3 h-3" />
             End Session
