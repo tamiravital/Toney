@@ -47,6 +47,7 @@ toney/
 │   │       │   └── api/
 │   │       │       ├── chat/     # Coach agent endpoint (Sonnet, every message)
 │   │       │       ├── session/  # Session open + close pipelines
+│   │       │       ├── seed/     # Seed understanding after onboarding
 │   │       │       └── focus/    # Focus card API (GET current, POST complete/skip)
 │   │       ├── components/       # onboarding, chat, home, layout, rewire, wins, auth
 │   │       ├── context/          # ToneyContext (global state)
@@ -67,13 +68,13 @@ toney/
 │   ├── coaching/                 # @toney/coaching — 2-agent engine (see below)
 │   │   └── src/
 │   │       ├── prompts/          # Coach prompt builder (SystemPromptBlock[], cache-optimized)
-│   │       ├── strategist/       # Strategist: planSession, reflect, personModel, constants
+│   │       ├── strategist/       # Strategist: prepareSession, evolveUnderstanding, seedUnderstanding
 │   │       ├── session/          # Session boundary detection (>12h gap = new session)
 │   │       ├── session-notes/    # User-facing session notes (Haiku)
 │   │       └── pipelines/        # openSessionPipeline, closeSessionPipeline (pure functions)
 │   └── config-typescript/        # @toney/config-typescript — shared tsconfig
 │
-├── supabase/migrations/          # Shared database schema + RLS (001-017)
+├── supabase/migrations/          # Shared database schema + RLS (001-018)
 └── _prototype/                   # Original prototype (reference only)
 ```
 
@@ -86,20 +87,31 @@ The coaching engine uses two agents. All agent logic lives in `packages/coaching
 | Agent | Model | Temp | When it runs | What it does |
 |-------|-------|------|-------------|--------------|
 | **Coach** | Sonnet 4.5 | 0.7 | Every user message | The main chat endpoint (`/api/chat`). Reads the Strategist briefing. Requires a briefing to exist (no legacy fallback). Prompt-cached. |
-| **Strategist** (decomposed) | Sonnet 4.5 / Haiku | varies | Session open + close | Decomposed into pipeline functions. Open: `prepareSession()` (Sonnet). Close: `reflectOnSession()` + `generateSessionNotes()` (Haiku, parallel) → `buildKnowledgeUpdates()` (pure code). |
+| **Strategist** (decomposed) | Sonnet 4.5 / Haiku | varies | Session open + close | Decomposed into pipeline functions. Open: `prepareSession()` (Sonnet). Close: `evolveUnderstanding()` (Sonnet) + `generateSessionNotes()` (Haiku) in parallel. |
+
+### Understanding Narrative — How Toney Learns
+
+The system maintains a single evolving clinical narrative (`profiles.understanding`) that represents everything Toney knows about a person. This replaces the old category-based knowledge extraction.
+
+**How it works:**
+1. After onboarding, `seedUnderstanding()` creates an initial narrative from quiz answers + goals
+2. After each session, `evolveUnderstanding()` reads the current narrative + transcript and produces an updated one
+3. At session open, `prepareSession()` reads the pre-formed narrative — no reconstruction from fragments
+
+The narrative is written in third person, 300-800 words, covering: triggers, breakthroughs, resistance patterns, emotional vocabulary, coaching observations, growth dimensions, and stage of change. It evolves — doesn't replace. Each update deepens what's known and integrates new observations in context.
+
+A snapshot of the understanding BEFORE each evolution is stored in `sessions.narrative_snapshot` for trajectory tracking.
 
 ### Data Flow
 ```
-User message → Coach (/api/chat, reads static briefing) → Response
-                              ↑
-                    [session open: Strategist prepares]
-                              ↓
-                    coaching_briefings + user_knowledge
-                              ↑
-                    [session close: reflect + notes + knowledge updates]
+[Onboarding] → seedUnderstanding() → profiles.understanding (initial narrative + tension)
+                                            ↓
+[Session open] → prepareSession() ← reads understanding → coaching_briefings (briefing for Coach)
+                                            ↓
+[Every message] → Coach (/api/chat) ← reads briefing → Response
+                                            ↓
+[Session close] → evolveUnderstanding() + generateSessionNotes() → updated profiles.understanding + session notes
 ```
-
-The Coach reads a static briefing for the entire session. The Strategist runs at session boundaries (open and close) to update the briefing and user knowledge.
 
 ### Prompt Caching
 System prompt is structured as `SystemPromptBlock[]` with `cache_control: { type: 'ephemeral' }`:
@@ -124,13 +136,13 @@ Cards are co-created in-chat via `[CARD:category]...[/CARD]` markers, rendered a
 - Hook: `useFocusCard()` — `fetchFocusCard()`, `completeFocusCard(reflection?)`, `skipFocusCard()`
 
 ### Session Lifecycle
-The Strategist is decomposed into pipeline functions triggered at session boundaries:
 
 | Event | Route | What runs |
 |-------|-------|-----------|
 | **Session open** | `POST /api/session/open` | `planSessionStep()` → builds briefing → streams opening message. If `previousSessionId` passed, runs `closeSessionPipeline()` first (deferred close). |
-| **Session close** | `POST /api/session/close` | `closeSessionPipeline()`: `reflectOnSession()` + `generateSessionNotes()` in parallel (Haiku) → `buildKnowledgeUpdates()` (pure code). |
-| **First session** | `POST /api/session/open` | `prepareSession()` — unified path for all sessions. Detects first session by absence of previous briefing. Determines tension from quiz answers. |
+| **Session close** | `POST /api/session/close` | `closeSessionPipeline()`: `evolveUnderstanding()` (Sonnet) + `generateSessionNotes()` (Haiku) in parallel via `Promise.allSettled`. |
+| **First session** | `POST /api/session/open` | `prepareSession()` — unified path for all sessions. Detects first session by absence of previous briefing. |
+| **After onboarding** | `POST /api/seed` | `seedUnderstanding()` — creates initial understanding + determines tension type from quiz answers. |
 
 ### Strategist Output
 
@@ -138,35 +150,25 @@ The Strategist (`prepareSession()`) produces a `SessionPreparation` saved to `co
 
 | Field | Type | What it is |
 |-------|------|-----------|
-| `briefing_content` | text | Full 7-section narrative document (see sections below) |
+| `briefing` | text | Full narrative briefing document the Coach reads |
 | `hypothesis` | text | One-sentence coaching thesis for this person right now |
-| `leverage_point` | text | Their strength + goal + what's in the way — the fulcrum for change |
+| `leveragePoint` | text | Their strength + goal + what's in the way — the fulcrum for change |
 | `curiosities` | text | What the Coach should explore — open questions, not directives |
-| `tension_narrative` | text | Evolving understanding of their pattern — deeper than a label |
-| `growth_edges` | JSONB | 7 growth lenses with status per lens (see below) |
-| `version` | integer | Auto-incrementing per user |
+| `tensionLabel` | text | Tension type (first session only, from seed) |
+| `secondaryTensionLabel` | text | Secondary tension (first session only, from seed) |
 
-Session close produces `UserKnowledge` entries via `reflectOnSession()` + `buildKnowledgeUpdates()`. Each entry is tagged with category, source, importance, and session_id. Dedup is code-level (skip if identical content+category already exists). `stage_of_change` is stored on `profiles`.
+Session close produces an evolved understanding narrative via `evolveUnderstanding()`, which may also shift the `stage_of_change` on `profiles`.
 
-### Coaching Briefing Sections
-The `briefing_content` is a narrative document (not arrays/bullet points) with 7 sections:
-- **WHO THEY ARE** — tension, life context, emotional why in their own words, cross-answer hypothesis
-- **WHERE THEY ARE IN THEIR JOURNEY** — narrative arc, what shifted, what's stabilizing vs raw, stage of change from behavior
-- **WHAT WE KNOW** — triggers (specific situations), emotional vocabulary (used/avoided/deflection), resistance patterns, breakthroughs, what coaching approaches work
-- **THEIR FOCUS RIGHT NOW** — active Focus card, completion data, whether it's landing
-- **WHERE GROWTH IS AVAILABLE** — which growth lenses are active/stabilizing/not ready, next edge
-- **SESSION STRATEGY** — what to accomplish, what to check in on, what NOT to push, how to handle urgency
-- **COACHING STYLE** — tone, depth, learning style, what language resonates vs falls flat
-
-### Growth Lenses (Strategist thinking framework, not user-facing)
-7 dimensions stored as JSONB in `growth_edges` with status `active` | `stabilizing` | `not_ready` per lens:
-- **Self-receiving** — Can they spend on themselves without guilt? Accept gifts, rest?
-- **Earning mindset** — Do they believe they can generate income? Ask for what they're worth?
-- **Money identity** — Do they see themselves as someone who can have/make/manage money?
-- **Money relationships** — Can they have healthy money conversations with partners, family, friends?
-- **Financial awareness** — Do they know their numbers? Engaged or avoiding?
-- **Decision confidence** — Can they make money decisions without spiraling or freezing?
-- **Future orientation** — Can they plan without anxiety? Do they trust the future?
+### Coaching Briefing Assembly
+The briefing document includes:
+- **WHO THEY ARE AND WHERE THEY ARE** — the understanding narrative (pre-formed, not reconstructed)
+- **HYPOTHESIS** — coaching thesis for this session
+- **LEVERAGE POINT** — strength + goal + obstacle
+- **CURIOSITIES** — what to explore
+- **THEIR TOOLKIT** — rewire cards they've saved
+- **RECENT WINS** — what they've logged
+- **WHAT THEY SHARED** — quiz answers + goals
+- **COACHING STYLE** — tone, depth, learning styles
 
 ## Shared Packages
 
@@ -179,13 +181,16 @@ Tension details/colors, onboarding questions, style options, stage/engagement co
 ### @toney/coaching
 2-agent coaching engine. Exports:
 - **Coach**: `buildSystemPromptFromBriefing()`, `buildSessionOpeningBlock()`
-- **Strategist**: `prepareSession()`, `reflectOnSession()`, `buildKnowledgeUpdates()`, `mergeGrowthEdges()`
+- **Strategist**: `prepareSession()`, `evolveUnderstanding()`, `seedUnderstanding()`
 - **Pipelines**: `openSessionPipeline()`, `closeSessionPipeline()`, `planSessionStep()`
 - **Session**: `detectSessionBoundary()`
 - **Session Notes**: `generateSessionNotes()`
-- **Types**: `PrepareSessionInput`, `SessionPreparation`, `ReflectionInput`, `SessionReflection`, `KnowledgeUpdate`, `OpenSessionInput`, `OpenSessionOutput`, `CloseSessionInput`, `CloseSessionOutput`, `SessionNotesInput`
+- **Types**: `PrepareSessionInput`, `SessionPreparation`, `EvolveUnderstandingInput`, `EvolveUnderstandingOutput`, `SeedUnderstandingInput`, `SeedUnderstandingOutput`, `OpenSessionInput`, `OpenSessionOutput`, `CloseSessionInput`, `CloseSessionOutput`, `SessionNotesInput`
 
 ## Key Architecture Decisions
+
+### Understanding Narrative (not knowledge fragments)
+The system maintains a single evolving narrative on `profiles.understanding` instead of shredded category-based knowledge entries. The LLM thinks in narrative, not categories. `evolveUnderstanding()` (Sonnet) reads the current narrative + transcript and produces an updated one. No reconstruction from fragments at session open.
 
 ### Prompt System
 `packages/coaching/src/prompts/systemPromptBuilder.ts` builds system prompt as two cache-optimized blocks:
@@ -204,13 +209,13 @@ Tone is a continuous 1-10 scale (not discrete buckets). 1-4 = Gentle, 5-6 = Bala
 All mobile UI constrained to `max-w-[430px]` centered on desktop.
 
 ## Data Model (7 tables)
-- `profiles` — user settings (tension_type, tone, depth, learning_style, stage_of_change, etc.)
-- `sessions` — chat sessions (+ session_number, session_notes, session_status)
+- `profiles` — user settings (tension_type, tone, depth, learning_style, stage_of_change, understanding)
+- `sessions` — chat sessions (+ session_number, session_notes, session_status, narrative_snapshot)
 - `messages` — individual chat messages (session_id FK)
 - `rewire_cards` — saved insight cards (+ is_focus, focus_set_at, graduated_at, times_completed, last_completed_at, prescribed_by)
 - `wins` — small victories (text, tension_type)
-- `user_knowledge` — tagged knowledge entries (category, content, source, importance, active, tags, session_id). One row per entry, deduped by content+category.
-- `coaching_briefings` — Strategist output per session (briefing_content, hypothesis, leverage_point, curiosities, tension_narrative, growth_edges, version)
+- `user_knowledge` — tagged knowledge entries (used by focus card reflections only)
+- `coaching_briefings` — Strategist output per session (briefing_content, hypothesis, leverage_point, curiosities, version)
 
 Profile auto-created on signup via DB trigger.
 
@@ -231,6 +236,7 @@ Profile auto-created on signup via DB trigger.
 - **No topics** — topics were removed in v2. No `activeTopic`, `topicConversations`, `selectTopic()`, or `OnboardingTopicPicker`. Sessions are time-bounded.
 - **`finishOnboarding()`** takes no arguments — onboarding goes: welcome → 7-question quiz → straight to chat
 - Chat route: no `topicKey` parameter, no `[TOPIC_OPENER]` logic
+- `user_knowledge` table still exists but is only written to by focus card reflections — the main coaching pipeline uses `profiles.understanding`
 
 ## Deployment (Vercel)
 - **GitHub repo:** `tamiravital/Toney` (private)

@@ -39,7 +39,7 @@ export default async function RunDetailPage({
     : [];
 
   // Load coaching briefing
-  let briefing: { briefing_content: string; hypothesis?: string | null; leverage_point?: string | null; tension_narrative?: string | null } | null = null;
+  let briefing: { briefing_content: string; hypothesis?: string | null; leverage_point?: string | null; curiosities?: string | null } | null = null;
 
   if (simProfile.id) {
     briefing = await getLatestSimBriefing(simProfile.id);
@@ -143,10 +143,10 @@ export default async function RunDetailPage({
                 <p className="text-sm text-gray-700 mt-1">{briefing.leverage_point}</p>
               </div>
             )}
-            {briefing.tension_narrative && (
+            {briefing.curiosities && (
               <div>
-                <span className="text-xs font-medium text-indigo-600">Tension Narrative:</span>
-                <p className="text-sm text-gray-700 mt-1">{briefing.tension_narrative}</p>
+                <span className="text-xs font-medium text-indigo-600">Curiosities:</span>
+                <p className="text-sm text-gray-700 mt-1">{briefing.curiosities}</p>
               </div>
             )}
             <div>

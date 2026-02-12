@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
-import { planSessionStep, closeSessionPipeline } from '@toney/coaching';
-import { Profile, UserKnowledge, RewireCard, Win, CoachingBriefing } from '@toney/types';
+import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney/coaching';
+import { Profile, RewireCard, Win, CoachingBriefing } from '@toney/types';
+import { formatAnswersReadable } from '@toney/constants';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -33,20 +34,12 @@ export async function POST(request: NextRequest) {
     } catch { /* empty body is fine */ }
 
     // ── Load data in parallel ──
-    // Load everything we need for both deferred close and new session open.
-    const [profileResult, knowledgeResult, winsResult, cardsResult, briefingResult, notesResult] = await Promise.all([
+    const [profileResult, winsResult, cardsResult, briefingResult, notesResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single(),
-      supabase
-        .from('user_knowledge')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('active', true)
-        .order('created_at', { ascending: false })
-        .limit(100),
       supabase
         .from('wins')
         .select('*')
@@ -78,6 +71,40 @@ export async function POST(request: NextRequest) {
     const profile = profileResult.data as Profile | null;
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    // ── Legacy user: seed understanding if missing ──
+    if (!profile.understanding && profile.onboarding_completed) {
+      try {
+        const readableAnswers = profile.onboarding_answers
+          ? formatAnswersReadable(profile.onboarding_answers as Record<string, string>)
+          : '';
+
+        if (readableAnswers) {
+          const seedResult = await seedUnderstanding({
+            quizAnswers: readableAnswers,
+            whatBroughtYou: profile.what_brought_you,
+            emotionalWhy: profile.emotional_why,
+            lifeStage: profile.life_stage,
+            incomeType: profile.income_type,
+            relationshipStatus: profile.relationship_status,
+          });
+
+          profile.understanding = seedResult.understanding;
+
+          // Save understanding + tension to profile
+          await supabase.from('profiles').update({
+            understanding: seedResult.understanding,
+            ...(seedResult.tensionLabel && !profile.tension_type && {
+              tension_type: seedResult.tensionLabel,
+              secondary_tension_type: seedResult.secondaryTensionLabel || null,
+            }),
+          }).eq('id', user.id);
+        }
+      } catch (err) {
+        console.error('Legacy user seed failed:', err);
+        // Non-fatal — prepareSession handles null understanding
+      }
     }
 
     // ── Deferred close of previous session ──
@@ -112,7 +139,7 @@ export async function POST(request: NextRequest) {
             tensionType: profile.tension_type || null,
             hypothesis: (briefingResult.data as CoachingBriefing | null)?.hypothesis || null,
             currentStageOfChange: profile.stage_of_change || null,
-            existingKnowledge: knowledgeResult.data || null,
+            currentUnderstanding: profile.understanding || null,
             savedCards,
           });
 
@@ -122,26 +149,24 @@ export async function POST(request: NextRequest) {
               session_notes: JSON.stringify(closeResult.sessionNotes),
               session_status: 'completed',
               ended_at: new Date().toISOString(),
+              narrative_snapshot: profile.understanding || null,
             }).eq('id', previousSessionId),
+
+            supabase.from('profiles').update({
+              understanding: closeResult.understanding.understanding,
+              ...(closeResult.understanding.stageOfChange && {
+                stage_of_change: closeResult.understanding.stageOfChange,
+              }),
+            }).eq('id', user.id),
           ];
 
-          if (closeResult.knowledgeUpdate.newEntries.length > 0) {
-            const rows = closeResult.knowledgeUpdate.newEntries.map(entry => ({
-              user_id: user.id,
-              ...entry,
-            }));
-            closeSaveOps.push(supabase.from('user_knowledge').insert(rows));
-          }
-
-          if (closeResult.knowledgeUpdate.stageOfChange) {
-            closeSaveOps.push(
-              supabase.from('profiles').update({
-                stage_of_change: closeResult.knowledgeUpdate.stageOfChange,
-              }).eq('id', user.id),
-            );
-          }
-
           await Promise.all(closeSaveOps);
+
+          // Update local profile reference with evolved understanding
+          profile.understanding = closeResult.understanding.understanding;
+          if (closeResult.understanding.stageOfChange) {
+            profile.stage_of_change = closeResult.understanding.stageOfChange;
+          }
         }
       } catch (err) {
         console.error('Deferred session close failed:', err);
@@ -162,7 +187,6 @@ export async function POST(request: NextRequest) {
 
     const sessionId = session.id;
 
-    const userKnowledge = (knowledgeResult.data || []) as UserKnowledge[];
     const recentWins = (winsResult.data || []) as Win[];
     const rewireCards = (cardsResult.data || []) as RewireCard[];
     const previousBriefing = briefingResult.data as CoachingBriefing | null;
@@ -173,14 +197,14 @@ export async function POST(request: NextRequest) {
     // ── Pipeline Step 1: Prepare session (Sonnet) ──
     const plan = await planSessionStep({
       profile,
-      userKnowledge,
+      understanding: profile.understanding,
       recentWins,
       rewireCards,
       previousBriefing,
       recentSessionNotes,
     });
 
-    // Save briefing + tension — don't wait for these
+    // Save briefing — don't wait for these
     let version = 1;
     if (previousBriefing) {
       version = (previousBriefing.version || 0) + 1;
@@ -195,8 +219,7 @@ export async function POST(request: NextRequest) {
         hypothesis: plan.hypothesis,
         leverage_point: plan.leveragePoint,
         curiosities: plan.curiosities,
-        tension_narrative: plan.tensionNarrative,
-        growth_edges: plan.growthEdges || {},
+        growth_edges: {},
         version,
       }),
       supabase.from('sessions').update({ message_count: 1 }).eq('id', sessionId),

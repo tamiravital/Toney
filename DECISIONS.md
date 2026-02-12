@@ -4,6 +4,18 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Understanding narrative replaces knowledge fragments (2026-02-11)
+Replaced the category-based knowledge extraction pipeline (`reflectOnSession()` → `buildKnowledgeUpdates()` → `user_knowledge` rows → reconstruct in `prepareSession()`) with a single evolving clinical narrative on `profiles.understanding`. The LLM thinks in narrative, not categories — forcing observations into `newTriggers[]`, `newBreakthroughs[]` strips the connections between them. The Strategist at session open was reconstructing who the person is from fragments — wasted work when the understanding already exists. New flow: `seedUnderstanding()` after onboarding → `evolveUnderstanding()` at each session close → `prepareSession()` reads the pre-formed narrative. Deleted `reflect.ts` and `personModel.ts`. `user_knowledge` table kept (focus card reflections still write to it) but no longer part of the main coaching pipeline.
+
+### Sonnet for evolveUnderstanding, not Haiku (2026-02-11)
+`evolveUnderstanding()` uses Sonnet (not Haiku). This is real clinical thinking — integrating new observations into an existing narrative, deciding what to deepen vs. what to add vs. what's no longer true. Worth the cost. The old `reflectOnSession()` used Haiku because it was pure extraction; narrative evolution requires judgment.
+
+### Growth edges absorbed into narrative (2026-02-11)
+Growth edges (7 lenses with active/stabilizing/not_ready status as structured JSONB) are no longer tracked separately. They're woven into the understanding narrative. "Financial awareness is growing — she checked her accounts twice" beats `{ active: ["financial_awareness"] }`. The growth lenses still exist as a thinking framework in `constants.ts` — they guide how `evolveUnderstanding()` thinks about growth dimensions. They're just not stored as structured data.
+
+### Seed understanding after onboarding, before first session (2026-02-11)
+`seedUnderstanding()` runs after onboarding quiz completion via `POST /api/seed`, creating the initial understanding narrative + determining tension type. This means `prepareSession()` never needs special-casing for "no understanding exists yet" — understanding always exists by session open. Legacy users without understanding get seeded inline at next session open.
+
 ### Drop behavioral_intel and coach_memories with no fallback (2026-02-11)
 Removed both legacy tables and all code that read from them. The chat route's legacy fallback (reading behavioral_intel when no briefing exists) was the last consumer. Since prepareSession() now handles all sessions including first sessions, every user gets a briefing at session open — the fallback path is unreachable. Keeping dead fallback code added complexity and gave the false impression that the old system was still active. Migration 017 drops all 4 tables (prod + sim mirrors).
 

@@ -1,5 +1,19 @@
 # Toney — Changelog
 
+## 2026-02-11 (session 7) — Understanding Narrative Architecture
+- **Understanding narrative replaces knowledge extraction**: Single evolving clinical narrative on `profiles.understanding` replaces the `reflectOnSession()` → `buildKnowledgeUpdates()` → `user_knowledge` rows pipeline
+- **New `evolveUnderstanding()`** (Sonnet): Reads current narrative + session transcript → produces evolved narrative. Replaces Haiku reflection + code-based knowledge updates.
+- **New `seedUnderstanding()`** (Sonnet): Creates initial narrative from onboarding quiz answers + goals. Called via `POST /api/seed` after onboarding.
+- **`prepareSession()` simplified**: Reads pre-formed understanding narrative instead of reconstructing from 100+ knowledge fragments. No more first-session vs ongoing-session branching.
+- **Close pipeline simplified**: `evolveUnderstanding()` + `generateSessionNotes()` in parallel (Promise.allSettled). Was: `reflectOnSession()` + `generateSessionNotes()` → `buildKnowledgeUpdates()`.
+- **Narrative snapshots**: `sessions.narrative_snapshot` stores understanding BEFORE each evolution for trajectory tracking
+- Deleted `reflect.ts` and `personModel.ts` — replaced by `evolveUnderstanding.ts`
+- Admin fullIntel rewritten: seed → evolve → prepare loop (wins/cards loaded once, briefing tracked in-memory)
+- HomeScreen "intel" variables renamed to "observations"
+- Migration 018: `understanding` column on profiles/sim_profiles, `narrative_snapshot` on sessions/sim_sessions
+- Documentation updated: CLAUDE.md rewritten, MEMORY.md and DECISIONS.md updated
+- 22 files changed, ~1000 lines changed, ~310 deleted. Net: simpler system.
+
 ## 2026-02-11 (session 6) — Legacy Cleanup + API Optimizations
 - **Dropped legacy tables**: `behavioral_intel`, `coach_memories`, `sim_behavioral_intel`, `sim_coach_memories` — all replaced by `user_knowledge`
 - **No legacy fallback**: Chat route now requires a briefing (returns 400 if missing). No more `behavioral_intel`/`coach_memories` reading.

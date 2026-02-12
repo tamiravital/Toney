@@ -1,21 +1,19 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { RewireCard, Win, CoachingBriefing, UserKnowledge } from '@toney/types';
+import type { RewireCard, Win, CoachingBriefing } from '@toney/types';
 import type { SessionPreparation } from '@toney/coaching';
 
 // ────────────────────────────────────────────
 // Read queries
 // ────────────────────────────────────────────
 
-export async function getUserKnowledge(userId: string): Promise<UserKnowledge[]> {
+export async function getUserUnderstanding(userId: string): Promise<string | null> {
   const supabase = createAdminClient();
   const { data } = await supabase
-    .from('user_knowledge')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('active', true)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  return (data || []) as UserKnowledge[];
+    .from('profiles')
+    .select('understanding')
+    .eq('id', userId)
+    .single();
+  return data?.understanding || null;
 }
 
 export async function getUserRewireCards(userId: string): Promise<RewireCard[]> {
@@ -101,8 +99,7 @@ export async function saveProdBriefing(userId: string, sessionId: string | null,
       hypothesis: preparation.hypothesis,
       leverage_point: preparation.leveragePoint,
       curiosities: preparation.curiosities,
-      tension_narrative: preparation.tensionNarrative,
-      growth_edges: preparation.growthEdges || {},
+      growth_edges: {},
       version,
     });
 }

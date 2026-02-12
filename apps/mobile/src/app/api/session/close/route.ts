@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Load data in parallel ──
-    const [messagesResult, profileResult, briefingResult, cardsResult, knowledgeResult] = await Promise.all([
+    const [messagesResult, profileResult, briefingResult, cardsResult] = await Promise.all([
       supabase
         .from('messages')
         .select('role, content')
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         .order('created_at', { ascending: true }),
       supabase
         .from('profiles')
-        .select('tension_type, stage_of_change')
+        .select('tension_type, stage_of_change, understanding')
         .eq('id', user.id)
         .single(),
       supabase
@@ -46,11 +46,6 @@ export async function POST(request: NextRequest) {
         .from('rewire_cards')
         .select('title, category')
         .eq('session_id', sessionId),
-      supabase
-        .from('user_knowledge')
-        .select('content, category')
-        .eq('user_id', user.id)
-        .eq('active', true),
     ]);
 
     const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -74,36 +69,28 @@ export async function POST(request: NextRequest) {
       tensionType: profileResult.data?.tension_type || null,
       hypothesis: briefingResult.data?.hypothesis || null,
       currentStageOfChange: profileResult.data?.stage_of_change || null,
-      existingKnowledge: knowledgeResult.data || null,
+      currentUnderstanding: profileResult.data?.understanding || null,
       savedCards,
     });
 
     // ── Save results ──
     const saveOps: PromiseLike<unknown>[] = [
+      // Session: notes + status + narrative snapshot (understanding BEFORE evolution)
       supabase.from('sessions').update({
         session_notes: JSON.stringify(result.sessionNotes),
         session_status: 'completed',
         ended_at: new Date().toISOString(),
+        narrative_snapshot: profileResult.data?.understanding || null,
       }).eq('id', sessionId),
+
+      // Profile: evolved understanding + optional stage shift
+      supabase.from('profiles').update({
+        understanding: result.understanding.understanding,
+        ...(result.understanding.stageOfChange && {
+          stage_of_change: result.understanding.stageOfChange,
+        }),
+      }).eq('id', user.id),
     ];
-
-    // Insert new knowledge entries
-    if (result.knowledgeUpdate.newEntries.length > 0) {
-      const rows = result.knowledgeUpdate.newEntries.map(entry => ({
-        user_id: user.id,
-        ...entry,
-      }));
-      saveOps.push(supabase.from('user_knowledge').insert(rows));
-    }
-
-    // Update stage of change on profile
-    if (result.knowledgeUpdate.stageOfChange) {
-      saveOps.push(
-        supabase.from('profiles').update({
-          stage_of_change: result.knowledgeUpdate.stageOfChange,
-        }).eq('id', user.id),
-      );
-    }
 
     await Promise.all(saveOps);
 

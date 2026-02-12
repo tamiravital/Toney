@@ -7,10 +7,10 @@ import { useLastSession } from '@/hooks/useLastSession';
 import { tensionColor } from '@toney/constants';
 import SessionNotesView from '@/components/chat/SessionNotesView';
 
-type IntelCardType = 'pattern' | 'growth' | 'insight';
-interface IntelCard { id: string; type: IntelCardType; content: string; }
+type ObservationType = 'pattern' | 'growth' | 'insight';
+interface Observation { id: string; type: ObservationType; content: string; }
 
-const intelTypeConfig: Record<IntelCardType, { icon: typeof Eye; label: string; color: string }> = {
+const observationConfig: Record<ObservationType, { icon: typeof Eye; label: string; color: string }> = {
   pattern: { icon: Eye, label: 'Pattern spotted', color: 'text-purple-600 bg-purple-50' },
   growth: { icon: TrendingUp, label: 'Growth marker', color: 'text-emerald-600 bg-emerald-50' },
   insight: { icon: Lightbulb, label: 'Coaching insight', color: 'text-amber-600 bg-amber-50' },
@@ -30,7 +30,7 @@ export default function HomeScreen() {
     return 'Good evening';
   })();
 
-  const displayIntel: IntelCard[] = identifiedTension
+  const observations: Observation[] = identifiedTension
     ? [
         {
           id: 'onboard-tension',
@@ -110,16 +110,16 @@ export default function HomeScreen() {
         </div>
       )}
 
-      {/* What Toney sees — intel section */}
-      {displayIntel.length > 0 && (
+      {/* What Toney sees */}
+      {observations.length > 0 && (
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-3">
             <Eye className="w-4 h-4 text-gray-400" />
             <h3 className="font-semibold text-gray-900 text-sm">What Toney sees</h3>
           </div>
           <div className="space-y-2">
-            {displayIntel.map(card => {
-              const config = intelTypeConfig[card.type];
+            {observations.map(card => {
+              const config = observationConfig[card.type];
               const TypeIcon = config.icon;
               return (
                 <div

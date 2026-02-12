@@ -3,7 +3,7 @@ import {
   buildSystemPromptFromBriefing,
   prepareSession,
 } from '@toney/coaching';
-import type { Profile, SystemPromptBlock, CoachingBriefing, UserKnowledge, Win, RewireCard } from '@toney/types';
+import type { Profile, SystemPromptBlock, CoachingBriefing, Win, RewireCard } from '@toney/types';
 import {
   getSimProfile,
   getLatestSimBriefing,
@@ -12,7 +12,6 @@ import {
   getSimSessionMessages,
   saveSimMessage,
   updateSimSessionMessageCount,
-  getSimUserKnowledge,
   getSimWins,
   getSimRewireCards,
   saveSimBriefingFromPreparation,
@@ -223,8 +222,7 @@ async function runSimStrategist(
   profile: Profile,
 ): Promise<void> {
   // Load full context from sim_* tables
-  const [userKnowledge, wins, rewireCards, previousBriefing] = await Promise.all([
-    getSimUserKnowledge(userId),
+  const [wins, rewireCards, previousBriefing] = await Promise.all([
     getSimWins(userId, 10),
     getSimRewireCards(userId, 20),
     getLatestSimBriefing(userId),
@@ -251,7 +249,7 @@ async function runSimStrategist(
 
   const preparation = await prepareSession({
     profile,
-    userKnowledge: userKnowledge as UserKnowledge[],
+    understanding: profile.understanding,
     recentWins: wins as Win[],
     rewireCards: rewireCards as RewireCard[],
     previousBriefing,

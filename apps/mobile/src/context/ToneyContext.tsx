@@ -1058,7 +1058,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Save profile to Supabase — tension_type determined by Strategist at session open
+    // Save profile to Supabase, then seed understanding
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -1072,6 +1072,29 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             onboarding_completed: true,
             ...(goalsText && { what_brought_you: goalsText }),
           }).eq('id', user.id);
+
+          // Seed understanding — determines tension + creates initial narrative
+          try {
+            const seedRes = await fetch('/api/seed', { method: 'POST' });
+            if (seedRes.ok) {
+              const seedData = await seedRes.json();
+              if (seedData.tensionType) {
+                const tension: IdentifiedTension = {
+                  primary: seedData.tensionType as TensionType,
+                  primaryScore: 5,
+                  primaryDetails: tensionDetails[seedData.tensionType as TensionType],
+                  ...(seedData.secondaryTensionType && {
+                    secondary: seedData.secondaryTensionType as TensionType,
+                    secondaryDetails: tensionDetails[seedData.secondaryTensionType as TensionType],
+                  }),
+                };
+                saveJSON('toney_tension', tension);
+                setIdentifiedTension(tension);
+              }
+            }
+          } catch {
+            // Non-fatal — session open handles missing understanding
+          }
         }
       } catch {
         // Supabase save failed — localStorage still has the data

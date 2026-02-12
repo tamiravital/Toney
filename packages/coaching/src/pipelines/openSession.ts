@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, UserKnowledge, RewireCard, Win, CoachingBriefing, SystemPromptBlock } from '@toney/types';
+import { Profile, RewireCard, Win, CoachingBriefing, SystemPromptBlock } from '@toney/types';
 import { prepareSession, SessionPreparation } from '../strategist/prepareSession';
 import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prompts/systemPromptBuilder';
 
@@ -7,7 +7,7 @@ import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prom
 // Open Session Pipeline
 // ────────────────────────────────────────────
 // Orchestrates everything that happens when a session starts:
-//   1. Prepare the session (Sonnet) — one path for all sessions
+//   1. Prepare the session (Sonnet) — plans from the understanding narrative
 //   2. Build the Coach's system prompt from the briefing
 //   3. Generate the Coach's opening message (Sonnet) — can stream or block
 //
@@ -18,8 +18,8 @@ import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prom
 export interface OpenSessionInput {
   /** User profile */
   profile: Profile;
-  /** Existing user knowledge entries (active) */
-  userKnowledge?: UserKnowledge[] | null;
+  /** The pre-formed understanding narrative (from profiles.understanding) */
+  understanding?: string | null;
   /** Recent wins */
   recentWins?: Win[] | null;
   /** User's rewire cards */
@@ -39,13 +39,9 @@ export interface PlanSessionOutput {
   leveragePoint: string;
   /** What to explore this session */
   curiosities: string;
-  /** Evolving understanding of their pattern */
-  tensionNarrative: string;
-  /** Growth edge assessment (bucket arrays) */
-  growthEdges?: Record<string, string[]>;
   /** System prompt blocks for the Coach (ready to use) */
   systemPromptBlocks: SystemPromptBlock[];
-  /** Tension type determined by Strategist (first session) */
+  /** Tension type determined by Strategist (first session, from seed) */
   tensionType?: string | null;
   /** Secondary tension type (first session) */
   secondaryTensionType?: string | null;
@@ -65,7 +61,7 @@ export async function planSessionStep(input: OpenSessionInput): Promise<PlanSess
 
   const preparation: SessionPreparation = await prepareSession({
     profile: input.profile,
-    userKnowledge: input.userKnowledge,
+    understanding: input.understanding,
     recentWins: input.recentWins,
     rewireCards: input.rewireCards,
     previousBriefing: input.previousBriefing,
@@ -80,8 +76,6 @@ export async function planSessionStep(input: OpenSessionInput): Promise<PlanSess
     hypothesis: preparation.hypothesis,
     leveragePoint: preparation.leveragePoint,
     curiosities: preparation.curiosities,
-    tensionNarrative: preparation.tensionNarrative,
-    growthEdges: preparation.growthEdges,
     systemPromptBlocks,
     tensionType: preparation.tensionLabel,
     secondaryTensionType: preparation.secondaryTensionLabel,

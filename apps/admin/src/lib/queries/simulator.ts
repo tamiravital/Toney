@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { Profile, CoachingBriefing, RewireCard, UserKnowledge, Win } from '@toney/types';
+import type { Profile, CoachingBriefing, RewireCard, Win } from '@toney/types';
 import type { SessionPreparation } from '@toney/coaching';
 
 // ============================================================
@@ -20,6 +20,7 @@ export interface SimProfile {
   emotional_why: string | null;
   onboarding_answers: Record<string, unknown> | null;
   onboarding_completed: boolean;
+  understanding: string | null;
   user_prompt: string | null;
   source_user_id: string | null;
   created_at: string;
@@ -226,6 +227,7 @@ export async function createSimProfile(config: Partial<Profile> & {
       emotional_why: config.emotional_why ?? null,
       onboarding_answers: config.onboarding_answers ?? null,
       onboarding_completed: true,
+      understanding: config.understanding ?? null,
       user_prompt: config.user_prompt ?? null,
       source_user_id: config.source_user_id ?? null,
     })
@@ -333,7 +335,7 @@ export async function getLastSimMessageTime(userId: string): Promise<Date | null
 // Sim User Knowledge Queries
 // ============================================================
 
-export async function getSimUserKnowledge(userId: string): Promise<UserKnowledge[]> {
+export async function getSimUserKnowledge(userId: string): Promise<Record<string, unknown>[]> {
   const supabase = createAdminClient();
   try {
     const { data } = await supabase
@@ -343,7 +345,7 @@ export async function getSimUserKnowledge(userId: string): Promise<UserKnowledge
       .eq('active', true)
       .order('created_at', { ascending: false })
       .limit(100);
-    return (data || []) as UserKnowledge[];
+    return (data || []) as Record<string, unknown>[];
   } catch { return []; }
 }
 
@@ -392,8 +394,7 @@ export async function saveSimBriefingFromPreparation(
     hypothesis: preparation.hypothesis,
     leverage_point: preparation.leveragePoint,
     curiosities: preparation.curiosities,
-    tension_narrative: preparation.tensionNarrative,
-    growth_edges: preparation.growthEdges || {},
+    growth_edges: {},
     version,
   });
 }
@@ -452,11 +453,11 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     }
   } catch { /* no messages */ }
 
-  // Load user knowledge (new)
-  let userKnowledge: UserKnowledge[] = [];
+  // Load user knowledge for character synthesis (still used by simulator engine)
+  let userKnowledge: { category: string; content: string }[] = [];
   try {
-    const { data } = await supabase.from('user_knowledge').select('*').eq('user_id', userId).eq('active', true).limit(100);
-    userKnowledge = (data || []) as UserKnowledge[];
+    const { data } = await supabase.from('user_knowledge').select('category, content').eq('user_id', userId).eq('active', true).limit(100);
+    userKnowledge = (data || []) as { category: string; content: string }[];
   } catch { /* no knowledge */ }
 
   let userPrompt: string;
@@ -473,28 +474,12 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     learning_styles: profile.learning_styles, life_stage: profile.life_stage,
     income_type: profile.income_type, relationship_status: profile.relationship_status,
     emotional_why: profile.emotional_why, onboarding_answers: profile.onboarding_answers,
+    understanding: profile.understanding,
     user_prompt: userPrompt, source_user_id: userId,
   });
 
-  // Clone user_knowledge to sim_user_knowledge
-  if (userKnowledge.length > 0) {
-    try {
-      await supabase.from('sim_user_knowledge').insert(
-        userKnowledge.map(k => ({
-          user_id: simProfile.id,
-          session_id: null,
-          category: k.category,
-          content: k.content,
-          source: k.source,
-          importance: k.importance,
-          active: k.active,
-          tags: k.tags,
-        }))
-      );
-    } catch { /* non-critical */ }
-  }
 
-  try { const { data: briefing } = await supabase.from('coaching_briefings').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single(); if (briefing) { await supabase.from('sim_coaching_briefings').insert({ user_id: simProfile.id, briefing_content: briefing.briefing_content, hypothesis: briefing.hypothesis, leverage_point: briefing.leverage_point, curiosities: briefing.curiosities, tension_narrative: briefing.tension_narrative, growth_edges: briefing.growth_edges, version: briefing.version }); } } catch { /* no briefing */ }
+  try { const { data: briefing } = await supabase.from('coaching_briefings').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single(); if (briefing) { await supabase.from('sim_coaching_briefings').insert({ user_id: simProfile.id, briefing_content: briefing.briefing_content, hypothesis: briefing.hypothesis, leverage_point: briefing.leverage_point, curiosities: briefing.curiosities, growth_edges: {}, version: briefing.version }); } } catch { /* no briefing */ }
   try { const { data: cards } = await supabase.from('rewire_cards').select('category, title, content, is_focus, times_completed, auto_generated').eq('user_id', userId).limit(30); if (cards?.length) { await supabase.from('sim_rewire_cards').insert(cards.map(c => ({ user_id: simProfile.id, ...c }))); } } catch { /* no cards */ }
   try { const { data: wins } = await supabase.from('wins').select('content, text, tension_type').eq('user_id', userId).limit(20); if (wins?.length) { await supabase.from('sim_wins').insert(wins.map(w => ({ user_id: simProfile.id, content: w.content || w.text, text: w.text, tension_type: w.tension_type }))); } } catch { /* no wins */ }
 

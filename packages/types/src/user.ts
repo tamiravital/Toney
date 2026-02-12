@@ -25,6 +25,7 @@ export interface Profile {
   relationship_status?: string | null;
   emotional_why?: string | null;
   what_brought_you?: string | null;
+  understanding?: string | null;
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

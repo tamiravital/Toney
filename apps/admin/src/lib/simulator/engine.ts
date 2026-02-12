@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Profile, UserKnowledge } from '@toney/types';
+import type { Profile } from '@toney/types';
 import { BASE_USER_PROMPT } from './presets';
 
 const anthropic = new Anthropic({
@@ -79,7 +79,7 @@ Vary your length. Not every message needs to be deep. Sometimes just "yeah" is t
 export async function synthesizeCharacterProfile(
   profile: Partial<Profile>,
   userMessages: string[],
-  userKnowledge: UserKnowledge[],
+  userKnowledge: { category: string; content: string }[],
 ): Promise<string> {
   const messagesBlock = userMessages.length > 0
     ? `Here are their actual messages from the app (user messages only, chronological):\n\n${userMessages.map((m, i) => `${i + 1}. "${m}"`).join('\n')}`

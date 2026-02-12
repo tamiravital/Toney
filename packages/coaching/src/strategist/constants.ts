@@ -2,7 +2,7 @@
 // Shared Strategist Constants
 // ────────────────────────────────────────────
 // Single source of truth for growth lenses and tension guidance.
-// Used by planSession, reflectOnSession, and the monolithic Strategist.
+// Used by prepareSession, evolveUnderstanding, and the Coach prompt.
 
 export const GROWTH_LENS_NAMES = [
   'self_receiving',
