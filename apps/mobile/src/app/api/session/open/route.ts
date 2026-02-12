@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     // ── Deferred close of previous session ──
     if (previousSessionId) {
       try {
-        const [oldMessagesResult, oldCardsResult] = await Promise.all([
+        const [oldMessagesResult, oldCardsResult, oldSessionResult, oldPrevNotesResult] = await Promise.all([
           supabase
             .from('messages')
             .select('role, content')
@@ -120,6 +120,21 @@ export async function POST(request: NextRequest) {
             .from('rewire_cards')
             .select('title, category')
             .eq('session_id', previousSessionId),
+          supabase
+            .from('sessions')
+            .select('session_number')
+            .eq('id', previousSessionId)
+            .single(),
+          supabase
+            .from('sessions')
+            .select('session_notes')
+            .eq('user_id', user.id)
+            .eq('session_status', 'completed')
+            .not('session_notes', 'is', null)
+            .neq('id', previousSessionId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single(),
         ]);
 
         const oldMessages = (oldMessagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -133,6 +148,15 @@ export async function POST(request: NextRequest) {
             category: c.category,
           }));
 
+          const oldSessionNumber = oldSessionResult.data?.session_number || null;
+          let oldPreviousHeadline: string | null = null;
+          if (oldPrevNotesResult.data?.session_notes) {
+            try {
+              const parsed = JSON.parse(oldPrevNotesResult.data.session_notes);
+              oldPreviousHeadline = parsed.headline || null;
+            } catch { /* ignore */ }
+          }
+
           const closeResult = await closeSessionPipeline({
             sessionId: previousSessionId,
             messages: oldMessages,
@@ -141,6 +165,8 @@ export async function POST(request: NextRequest) {
             currentStageOfChange: profile.stage_of_change || null,
             currentUnderstanding: profile.understanding || null,
             savedCards,
+            sessionNumber: oldSessionNumber,
+            previousHeadline: oldPreviousHeadline,
           });
 
           // Save close results

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Load data in parallel ──
-    const [messagesResult, profileResult, briefingResult, cardsResult] = await Promise.all([
+    const [messagesResult, profileResult, briefingResult, cardsResult, sessionResult, prevNotesResult] = await Promise.all([
       supabase
         .from('messages')
         .select('role, content')
@@ -46,6 +46,20 @@ export async function POST(request: NextRequest) {
         .from('rewire_cards')
         .select('title, category')
         .eq('session_id', sessionId),
+      supabase
+        .from('sessions')
+        .select('session_number')
+        .eq('id', sessionId)
+        .single(),
+      supabase
+        .from('sessions')
+        .select('session_notes')
+        .eq('user_id', user.id)
+        .eq('session_status', 'completed')
+        .not('session_notes', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
     ]);
 
     const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -62,6 +76,15 @@ export async function POST(request: NextRequest) {
       category: c.category,
     }));
 
+    const sessionNumber = sessionResult.data?.session_number || null;
+    let previousHeadline: string | null = null;
+    if (prevNotesResult.data?.session_notes) {
+      try {
+        const parsed = JSON.parse(prevNotesResult.data.session_notes);
+        previousHeadline = parsed.headline || null;
+      } catch { /* ignore */ }
+    }
+
     // ── Pipeline ──
     const result = await closeSessionPipeline({
       sessionId,
@@ -71,6 +94,8 @@ export async function POST(request: NextRequest) {
       currentStageOfChange: profileResult.data?.stage_of_change || null,
       currentUnderstanding: profileResult.data?.understanding || null,
       savedCards,
+      sessionNumber,
+      previousHeadline,
     });
 
     // ── Save results ──

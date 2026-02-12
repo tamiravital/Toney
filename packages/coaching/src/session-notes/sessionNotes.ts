@@ -16,6 +16,12 @@ export interface SessionNotesInput {
   sessionNumber?: number | null;
   /** Actually-saved rewire cards from this session (from DB, not LLM-guessed) */
   savedCards?: { title: string; category: string }[];
+  /** Understanding narrative — who this person is, for trajectory context */
+  understanding?: string | null;
+  /** Current stage of change */
+  stageOfChange?: string | null;
+  /** Previous session's headline for arc awareness */
+  previousHeadline?: string | null;
 }
 
 const SESSION_NOTES_PROMPT = `You are writing session notes for Toney, an AI money coaching app. The user just finished a coaching session and will read these as their personal recap.
@@ -38,7 +44,9 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 - keyMoments: only include if there were genuine moments worth highlighting. If the session was casual or exploratory, omit this field. Don't manufacture moments.
 - Do NOT include any "cardsCreated" field — saved cards are handled separately
 - Don't invent insights that didn't happen
-- Keep it concise — quality over length`;
+- Keep it concise — quality over length
+- If you have context about who this person is (below), connect this session to their larger journey — reference known patterns, note progress. Keep it natural, not clinical.
+- If you know the previous session headline, show movement or contrast — don't repeat it.`;
 
 export async function generateSessionNotes(input: SessionNotesInput): Promise<SessionNotesOutput> {
   const anthropic = new Anthropic({
@@ -59,12 +67,22 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
   if (input.sessionNumber) {
     contextLines.push(`This is session #${input.sessionNumber}`);
   }
+  if (input.stageOfChange) {
+    contextLines.push(`Stage of change: ${input.stageOfChange}`);
+  }
+  if (input.previousHeadline) {
+    contextLines.push(`Previous session headline: "${input.previousHeadline}"`);
+  }
 
   const contextSection = contextLines.length > 0
     ? `\n\nContext:\n${contextLines.join('\n')}\n\n`
     : '\n\n';
 
-  const userMessage = `Write session notes for this coaching session.${contextSection}## Session Transcript\n\n${transcript}`;
+  const understandingSection = input.understanding
+    ? `## Who This Person Is\n${input.understanding}\n\n`
+    : '';
+
+  const userMessage = `Write session notes for this coaching session.${contextSection}${understandingSection}## Session Transcript\n\n${transcript}`;
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',

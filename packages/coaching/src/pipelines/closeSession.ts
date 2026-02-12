@@ -30,6 +30,10 @@ export interface CloseSessionInput {
   currentUnderstanding?: string | null;
   /** Actually-saved rewire cards from this session (from DB, not LLM-guessed) */
   savedCards?: { title: string; category: string }[];
+  /** Session number (for session notes context) */
+  sessionNumber?: number | null;
+  /** Previous session's headline (for arc awareness in notes) */
+  previousHeadline?: string | null;
 }
 
 export interface CloseSessionOutput {
@@ -49,6 +53,10 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       tensionType: input.tensionType,
       hypothesis: input.hypothesis,
       savedCards: input.savedCards,
+      sessionNumber: input.sessionNumber,
+      understanding: input.currentUnderstanding,
+      stageOfChange: input.currentStageOfChange,
+      previousHeadline: input.previousHeadline,
     }),
     evolveUnderstanding({
       currentUnderstanding: input.currentUnderstanding ?? null,
