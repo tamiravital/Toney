@@ -17,14 +17,19 @@ const anthropic = new Anthropic({
  * All orchestration logic lives in @toney/coaching pipelines.
  */
 export async function POST(request: NextRequest) {
+  const t0 = Date.now();
+  const timing = (label: string) => console.log(`[session/open] ${label}: ${Date.now() - t0}ms`);
+
   try {
     const supabase = await createClient();
+    timing('supabase client created');
 
     // ── Auth ──
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    timing('auth complete');
 
     // ── Parse optional previousSessionId ──
     let previousSessionId: string | null = null;
@@ -68,6 +73,8 @@ export async function POST(request: NextRequest) {
         .limit(3),
     ]);
 
+    timing('data loaded (5 parallel queries)');
+
     const profile = profileResult.data as Profile | null;
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
@@ -100,6 +107,7 @@ export async function POST(request: NextRequest) {
               secondary_tension_type: seedResult.secondaryTensionLabel || null,
             }),
           }).eq('id', user.id);
+          timing('legacy seed complete');
         }
       } catch (err) {
         console.error('Legacy user seed failed:', err);
@@ -187,6 +195,7 @@ export async function POST(request: NextRequest) {
           ];
 
           await Promise.all(closeSaveOps);
+          timing('deferred close complete');
 
           // Update local profile reference with evolved understanding
           profile.understanding = closeResult.understanding.understanding;
@@ -206,6 +215,8 @@ export async function POST(request: NextRequest) {
       .insert({ user_id: user.id })
       .select('id')
       .single();
+
+    timing('session row created');
 
     if (!session) {
       return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
@@ -229,6 +240,8 @@ export async function POST(request: NextRequest) {
       previousBriefing,
       recentSessionNotes,
     });
+
+    timing('prepareSession complete (Sonnet)');
 
     // Save briefing — don't wait for these
     let version = 1;
@@ -276,7 +289,12 @@ export async function POST(request: NextRequest) {
         // Send sessionId immediately so the client can set it
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'session', sessionId })}\n\n`));
 
+        let firstDelta = true;
         stream.on('text', (text) => {
+          if (firstDelta) {
+            timing('first stream delta (opening message)');
+            firstDelta = false;
+          }
           fullContent += text;
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`));
         });
@@ -301,6 +319,7 @@ export async function POST(request: NextRequest) {
           // Wait for plan saves to finish
           await savePlanPromise;
 
+          timing('stream complete + saved');
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
           controller.close();
         });
