@@ -1,11 +1,10 @@
 import { TensionType } from './tension';
 
-export type DepthLevel = 'surface' | 'balanced' | 'deep';
 export type LearningStyle = 'analytical' | 'somatic' | 'narrative' | 'experiential';
 
 export interface StyleProfile {
   tone: number;
-  depth: DepthLevel;
+  depth: number;
   learningStyles: LearningStyle[];
 }
 
@@ -18,7 +17,7 @@ export interface Profile {
   onboarding_answers?: Record<string, string> | null;
   stage_of_change?: string | null;
   tone: number;
-  depth: DepthLevel;
+  depth: number;
   learning_styles: LearningStyle[];
   life_stage?: string | null;
   income_type?: string | null;
