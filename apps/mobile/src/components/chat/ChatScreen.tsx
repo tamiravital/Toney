@@ -169,11 +169,13 @@ export default function ChatScreen() {
         const { text } = await res.json();
         if (text) {
           setChatInput(text);
-          // Auto-expand textarea
-          if (inputRef.current) {
-            inputRef.current.style.height = 'auto';
-            inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
-          }
+          // Auto-expand textarea after React renders the new value
+          requestAnimationFrame(() => {
+            if (inputRef.current) {
+              inputRef.current.style.height = 'auto';
+              inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+            }
+          });
         }
       }
     } catch (err) {

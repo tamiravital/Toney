@@ -898,6 +898,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         } else {
           // JSON fallback (error responses)
           const data = await res.json();
+          console.error('[Toney] Chat API returned JSON (non-streaming):', res.status, data);
           if (data.message) {
             const toneyMsg: Message = {
               id: data.message.id || `msg-${Date.now() + 1}`,

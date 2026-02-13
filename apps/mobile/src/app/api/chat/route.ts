@@ -43,7 +43,19 @@ export async function POST(request: NextRequest) {
 
     // ── Build system prompt ──
     if (!briefing) {
-      return NextResponse.json({ error: 'No coaching briefing found. Open a session first.' }, { status: 400 });
+      console.error('[Chat] No briefing found for user', ctx.userId, 'session', sessionId);
+      return NextResponse.json(
+        {
+          message: {
+            id: `msg-error-${Date.now()}`,
+            role: 'assistant',
+            content: "I'm still getting ready — give me a moment and try sending that again?",
+            timestamp: new Date().toISOString(),
+            canSave: false,
+          },
+        },
+        { status: 200 }
+      );
     }
 
     const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefing.briefing_content);
@@ -57,7 +69,7 @@ export async function POST(request: NextRequest) {
       .limit(50);
 
     // Save user message
-    await ctx.supabase
+    const { error: msgError } = await ctx.supabase
       .from(ctx.table('messages'))
       .insert({
         session_id: sessionId,
@@ -65,6 +77,9 @@ export async function POST(request: NextRequest) {
         role: 'user',
         content: message,
       });
+    if (msgError) {
+      console.error('[Chat] Failed to save user message:', msgError);
+    }
 
     // Build message history for Claude with incremental caching
     const rawHistory: { role: 'user' | 'assistant'; content: string }[] = (historyRows || []).map((m: { role: string; content: string }) => ({

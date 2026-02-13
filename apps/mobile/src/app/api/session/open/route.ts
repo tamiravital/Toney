@@ -342,7 +342,11 @@ export async function POST(request: NextRequest) {
             secondary_tension_type: plan.secondaryTensionType || null,
           }).eq('id', ctx.userId)
         : Promise.resolve(),
-    ]).catch(err => console.error('Save plan results failed:', err));
+    ]).then(([briefingRes]) => {
+      if (briefingRes && typeof briefingRes === 'object' && 'error' in briefingRes && briefingRes.error) {
+        console.error('[session/open] Briefing insert failed:', briefingRes.error);
+      }
+    }).catch(err => console.error('Save plan results failed:', err));
 
     // ── Pipeline Step 2: Stream opening message (Sonnet) ──
     const stream = anthropic.messages.stream({
