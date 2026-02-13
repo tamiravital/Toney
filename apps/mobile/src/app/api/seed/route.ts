@@ -51,12 +51,28 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Save to profile ──
-    await ctx.supabase.from(ctx.table('profiles')).update({
+    // Split into two updates: core fields that always exist, and newer columns
+    // that may not exist if migrations haven't been applied (Supabase rejects
+    // the ENTIRE update if any column is unknown).
+    const { error: coreErr } = await ctx.supabase.from(ctx.table('profiles')).update({
       understanding: result.understanding,
-      understanding_snippet: result.snippet || null,
       tension_type: result.tensionLabel,
       secondary_tension_type: result.secondaryTensionLabel || null,
     }).eq('id', ctx.userId);
+
+    if (coreErr) {
+      console.error('[Seed] Core profile update failed:', coreErr);
+    }
+
+    // understanding_snippet may not exist on older schemas
+    if (result.snippet) {
+      const { error: snippetErr } = await ctx.supabase.from(ctx.table('profiles')).update({
+        understanding_snippet: result.snippet,
+      }).eq('id', ctx.userId);
+      if (snippetErr) {
+        console.error('[Seed] Snippet update failed (non-fatal):', snippetErr);
+      }
+    }
 
     // ── Create focus area rows from Q7 goals ──
     const goalsAnswer = (profile.onboarding_answers as Record<string, string>)?.goals;

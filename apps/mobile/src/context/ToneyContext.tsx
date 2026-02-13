@@ -1481,7 +1481,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
       // Save onboarding data via API (can't use browser Supabase for sim_ tables)
       try {
-        await fetch(buildApiUrl('/api/sim/save-onboarding'), {
+        const onboardRes = await fetch(buildApiUrl('/api/sim/save-onboarding'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1492,8 +1492,14 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             whatBroughtYou: goalsText || undefined,
           }),
         });
+        if (!onboardRes.ok) {
+          console.error('[Sim] save-onboarding failed:', onboardRes.status, await onboardRes.text().catch(() => ''));
+        }
         // Seed understanding
         const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
+        if (!seedRes.ok) {
+          console.error('[Sim] seed failed:', seedRes.status, await seedRes.text().catch(() => ''));
+        }
         if (seedRes.ok) {
           const seedData = await seedRes.json();
           if (seedData.tensionType) {
