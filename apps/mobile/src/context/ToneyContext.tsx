@@ -8,10 +8,10 @@ import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
 type OnboardingStep = 'welcome' | 'questions';
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
-type ActiveTab = 'home' | 'chat' | 'rewire' | 'wins';
+type ActiveTab = 'home' | 'chat' | 'rewire' | 'journey';
 type SessionStatus = 'active' | 'ending' | 'completed';
 
-const VALID_TABS = new Set<ActiveTab>(['home', 'chat', 'rewire', 'wins']);
+const VALID_TABS = new Set<ActiveTab>(['home', 'chat', 'rewire', 'journey']);
 
 // localStorage helpers
 function loadJSON<T>(key: string, fallback: T): T {
@@ -143,6 +143,8 @@ interface ToneyContextValue {
   wins: Win[];
   streak: number;
   handleLogWin: (text: string) => void;
+  handleAutoWin: (text: string) => void;
+  deleteWin: (winId: string) => void;
 
   // Focus Areas
   focusAreas: FocusArea[];
@@ -401,6 +403,38 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             if (dbFocusAreas) {
               setFocusAreas(dbFocusAreas as FocusArea[]);
+            }
+
+            // Hydrate wins from Supabase
+            try {
+              const winsRes = await fetch('/api/wins');
+              if (winsRes.ok) {
+                const dbWins = await winsRes.json();
+                if (Array.isArray(dbWins) && dbWins.length > 0) {
+                  setWins(dbWins.map((w: Win) => ({
+                    ...w,
+                    date: new Date(w.created_at || Date.now()),
+                  })));
+                  // Compute streak from win dates
+                  const winDates = new Set(dbWins.map((w: Win) =>
+                    new Date(w.created_at || Date.now()).toDateString()
+                  ));
+                  let streakCount = 0;
+                  const today = new Date();
+                  // Start from today or yesterday
+                  let checkDate = new Date(today);
+                  if (!winDates.has(checkDate.toDateString())) {
+                    checkDate.setDate(checkDate.getDate() - 1);
+                  }
+                  while (winDates.has(checkDate.toDateString())) {
+                    streakCount++;
+                    checkDate.setDate(checkDate.getDate() - 1);
+                  }
+                  setStreak(streakCount);
+                }
+              }
+            } catch {
+              // Non-critical — localStorage wins still available
             }
 
             // Hydrate session suggestions
@@ -1050,13 +1084,68 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSavedInsights(prev => prev.filter(i => i.id !== insightId));
   }, []);
 
-  const handleLogWin = useCallback((text: string) => {
+  const handleLogWin = useCallback(async (text: string) => {
+    const tempId = `win-${Date.now()}`;
     setWins(prev => [
-      { id: `win-${Date.now()}`, text, date: new Date(), tension_type: identifiedTensionState?.primary },
+      { id: tempId, text, date: new Date(), tension_type: identifiedTensionState?.primary, source: 'manual' },
       ...prev,
     ]);
     setStreak(prev => prev + 1);
+
+    try {
+      const res = await fetch('/api/wins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text.trim(),
+          tensionType: identifiedTensionState?.primary || null,
+          source: 'manual',
+        }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id } : w));
+      }
+    } catch { /* non-critical — local state has the win */ }
   }, [identifiedTensionState]);
+
+  const handleAutoWin = useCallback(async (text: string) => {
+    const tempId = `win-${Date.now()}`;
+    setWins(prev => [
+      { id: tempId, text, date: new Date(), tension_type: identifiedTensionState?.primary, session_id: sessionIdRef.current, source: 'coach' },
+      ...prev,
+    ]);
+    setStreak(prev => prev + 1);
+
+    try {
+      const res = await fetch('/api/wins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text.trim(),
+          tensionType: identifiedTensionState?.primary || null,
+          sessionId: sessionIdRef.current,
+          source: 'coach',
+        }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id } : w));
+      }
+    } catch { /* non-critical — local state has the win */ }
+  }, [identifiedTensionState]);
+
+  const deleteWin = useCallback(async (winId: string) => {
+    setWins(prev => prev.filter(w => w.id !== winId));
+
+    try {
+      await fetch('/api/wins', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winId }),
+      });
+    } catch { /* non-critical */ }
+  }, []);
 
   const handleSaveFocusArea = useCallback(async (text: string, sessionId?: string | null) => {
     // Optimistic local add
@@ -1317,6 +1406,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         wins,
         streak,
         handleLogWin,
+        handleAutoWin,
+        deleteWin,
         focusAreas,
         handleSaveFocusArea,
         handleArchiveFocusArea,

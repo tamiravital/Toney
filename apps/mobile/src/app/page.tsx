@@ -9,7 +9,7 @@ import {
 import HomeScreen from '@/components/home/HomeScreen';
 import ChatScreen from '@/components/chat/ChatScreen';
 import RewireScreen from '@/components/rewire/RewireScreen';
-import WinsScreen from '@/components/wins/WinsScreen';
+import JourneyScreen from '@/components/journey/JourneyScreen';
 import SettingsOverlay from '@/components/layout/SettingsOverlay';
 import TabBar from '@/components/layout/TabBar';
 import SignInScreen from '@/components/auth/SignInScreen';
@@ -49,7 +49,7 @@ export default function ToneyApp() {
           {activeTab === 'home' && <HomeScreen />}
           {activeTab === 'chat' && <ChatScreen />}
           {activeTab === 'rewire' && <RewireScreen />}
-          {activeTab === 'wins' && <WinsScreen />}
+          {activeTab === 'journey' && <JourneyScreen />}
           {showSettings && <SettingsOverlay />}
           <TabBar />
         </>

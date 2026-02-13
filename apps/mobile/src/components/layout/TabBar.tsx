@@ -1,11 +1,11 @@
 'use client';
 
-import { Home, MessageCircle, Sparkles, Trophy } from 'lucide-react';
+import { Home, MessageCircle, Sparkles, TrendingUp } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { ComponentType } from 'react';
 
 interface Tab {
-  id: 'home' | 'chat' | 'rewire' | 'wins';
+  id: 'home' | 'chat' | 'rewire' | 'journey';
   label: string;
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
 }
@@ -14,7 +14,7 @@ const tabs: Tab[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'chat', label: 'Chat', icon: MessageCircle },
   { id: 'rewire', label: 'Rewire', icon: Sparkles },
-  { id: 'wins', label: 'Wins', icon: Trophy },
+  { id: 'journey', label: 'Journey', icon: TrendingUp },
 ];
 
 export default function TabBar() {

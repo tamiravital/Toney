@@ -32,11 +32,15 @@ export interface RewireCard {
   prescribed_by?: 'coach' | 'strategist' | 'user';
 }
 
+export type WinSource = 'manual' | 'coach';
+
 export interface Win {
   id: string;
   user_id?: string;
   text: string;
   tension_type?: string | null;
+  session_id?: string | null;
+  source?: WinSource;
   date?: Date;
   created_at?: string;
 }

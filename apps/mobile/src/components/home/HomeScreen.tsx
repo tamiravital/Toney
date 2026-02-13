@@ -208,7 +208,7 @@ export default function HomeScreen() {
             </div>
           </div>
           <button
-            onClick={() => setActiveTab('wins')}
+            onClick={() => setActiveTab('journey')}
             className="text-indigo-600 text-xs font-medium"
           >
             Log a win

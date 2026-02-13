@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import DraftCard from './DraftCard';
 import DraftFocusArea from './DraftFocusArea';
+import DraftWin from './DraftWin';
 import SessionNotesView from './SessionNotesView';
 import type { RewireCardCategory } from '@toney/types';
 
@@ -39,7 +40,12 @@ interface FocusAreaSegment {
   description: string;
 }
 
-type MessageSegment = TextSegment | CardSegment | FocusAreaSegment;
+interface WinSegment {
+  type: 'win';
+  text: string;
+}
+
+type MessageSegment = TextSegment | CardSegment | FocusAreaSegment | WinSegment;
 
 const VALID_CATEGORIES = new Set<RewireCardCategory>(['reframe', 'truth', 'plan', 'practice', 'conversation_kit']);
 
@@ -61,7 +67,7 @@ function extractTitleAndBody(body: string): { title: string; rest: string } {
 function parseMessageContent(raw: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
   // Combined regex: find the next [CARD:...] or [FOCUS] marker
-  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g;
+  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]|\[WIN\]([\s\S]*?)\[\/WIN\]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -82,6 +88,9 @@ function parseMessageContent(raw: string): MessageSegment[] {
       // Focus area match: match[3] = body
       const { title, rest } = extractTitleAndBody(match[3].trim());
       segments.push({ type: 'focus_area', title, description: rest });
+    } else if (match[4] !== undefined) {
+      // Win match: match[4] = win text
+      segments.push({ type: 'win', text: match[4].trim() });
     }
 
     lastIndex = match.index + match[0].length;
@@ -110,6 +119,7 @@ export default function ChatScreen() {
     handleSendMessage,
     handleSaveCard,
     handleSaveFocusArea,
+    handleAutoWin,
     currentSessionId,
     sessionHasCard,
     sessionStatus,
@@ -206,7 +216,7 @@ export default function ChatScreen() {
                         ) : (
                           <div className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md">
                             <ReactMarkdown components={markdownComponents}>
-                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1')}
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN\]([\s\S]*?)\[\/WIN\]/g, '$1')}
                             </ReactMarkdown>
                           </div>
                         )}
@@ -275,6 +285,15 @@ export default function ChatScreen() {
                                 initialTitle={segment.title}
                                 initialDescription={segment.description}
                                 onSave={(text) => handleSaveFocusArea(text, currentSessionId)}
+                              />
+                            );
+                          }
+                          if (segment.type === 'win') {
+                            return (
+                              <DraftWin
+                                key={`${msg.id}-win-${i}`}
+                                text={segment.text}
+                                onAutoSave={(text) => handleAutoWin(text)}
                               />
                             );
                           }
