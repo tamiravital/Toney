@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney/coaching';
-import { Profile, RewireCard, Win, CoachingBriefing } from '@toney/types';
+import { Profile, RewireCard, Win, CoachingBriefing, FocusArea } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
 const anthropic = new Anthropic({
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     } catch { /* empty body is fine */ }
 
     // ── Load data in parallel ──
-    const [profileResult, winsResult, cardsResult, briefingResult, notesResult] = await Promise.all([
+    const [profileResult, winsResult, cardsResult, briefingResult, notesResult, focusAreasResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('*')
@@ -71,9 +71,15 @@ export async function POST(request: NextRequest) {
         .not('session_notes', 'is', null)
         .order('created_at', { ascending: false })
         .limit(3),
+      supabase
+        .from('focus_areas')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('archived_at', null)
+        .order('created_at', { ascending: true }),
     ]);
 
-    timing('data loaded (5 parallel queries)');
+    timing('data loaded (6 parallel queries)');
 
     const profile = profileResult.data as Profile | null;
     if (!profile) {
@@ -175,6 +181,7 @@ export async function POST(request: NextRequest) {
             savedCards,
             sessionNumber: oldSessionNumber,
             previousHeadline: oldPreviousHeadline,
+            activeFocusAreas: ((focusAreasResult.data || []) as { text: string }[]).map(a => ({ text: a.text })),
           });
 
           // Save close results
@@ -230,6 +237,7 @@ export async function POST(request: NextRequest) {
     const recentSessionNotes = (notesResult.data || [])
       .map((s: { session_notes: string | null }) => s.session_notes)
       .filter(Boolean) as string[];
+    const activeFocusAreas = (focusAreasResult.data || []) as FocusArea[];
 
     // ── Pipeline Step 1: Prepare session (Sonnet) ──
     const plan = await planSessionStep({
@@ -239,6 +247,7 @@ export async function POST(request: NextRequest) {
       rewireCards,
       previousBriefing,
       recentSessionNotes,
+      activeFocusAreas,
     });
 
     timing('prepareSession complete (Sonnet)');

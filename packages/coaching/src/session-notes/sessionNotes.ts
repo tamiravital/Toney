@@ -22,6 +22,8 @@ export interface SessionNotesInput {
   stageOfChange?: string | null;
   /** Previous session's headline for arc awareness */
   previousHeadline?: string | null;
+  /** Active focus areas for context */
+  activeFocusAreas?: { text: string }[] | null;
 }
 
 const SESSION_NOTES_PROMPT = `You are writing session notes for Toney, an AI money coaching app. The user just finished a coaching session and will read these as their personal recap.
@@ -72,6 +74,9 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
   }
   if (input.previousHeadline) {
     contextLines.push(`Previous session headline: "${input.previousHeadline}"`);
+  }
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    contextLines.push(`Focus areas they're working on: ${input.activeFocusAreas.map(a => `"${a.text}"`).join(', ')}`);
   }
 
   const contextSection = contextLines.length > 0

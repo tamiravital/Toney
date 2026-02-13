@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
-import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win, RewireCardCategory, SessionNotesOutput } from '@toney/types';
+import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win, FocusArea, RewireCardCategory, SessionNotesOutput } from '@toney/types';
 import { tensionDetails } from '@toney/constants';
 import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
@@ -138,6 +138,11 @@ interface ToneyContextValue {
   streak: number;
   handleLogWin: (text: string) => void;
 
+  // Focus Areas
+  focusAreas: FocusArea[];
+  handleSaveFocusArea: (text: string, sessionId?: string | null) => Promise<void>;
+  handleArchiveFocusArea: (focusAreaId: string) => Promise<void>;
+
   // Auth
   signIn: () => void;
   signOut: () => void;
@@ -194,6 +199,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   // Wins
   const [wins, setWins] = useState<Win[]>([]);
   const [streak, setStreak] = useState(0);
+
+  // Focus Areas
+  const [focusAreas, setFocusAreas] = useState<FocusArea[]>([]);
 
   // ── Hydrate from localStorage + check Supabase session on mount ──
   useEffect(() => {
@@ -360,6 +368,18 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               }));
               setSavedInsights(insights);
               saveJSON('toney_insights', insights);
+            }
+
+            // Hydrate focus areas
+            const { data: dbFocusAreas } = await supabase
+              .from('focus_areas')
+              .select('*')
+              .eq('user_id', user.id)
+              .is('archived_at', null)
+              .order('created_at', { ascending: true });
+
+            if (dbFocusAreas) {
+              setFocusAreas(dbFocusAreas as FocusArea[]);
             }
           }
         } catch {
@@ -1003,6 +1023,48 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStreak(prev => prev + 1);
   }, [identifiedTensionState]);
 
+  const handleSaveFocusArea = useCallback(async (text: string, sessionId?: string | null) => {
+    // Optimistic local add
+    const tempFocusArea: FocusArea = {
+      id: `focus-${Date.now()}`,
+      user_id: '',
+      text,
+      source: 'coach',
+      session_id: sessionId || null,
+      created_at: new Date().toISOString(),
+    };
+    setFocusAreas(prev => [...prev, tempFocusArea]);
+
+    // Save to DB
+    try {
+      const res = await fetch('/api/focus-areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', text, source: 'coach', sessionId: sessionId || null }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setFocusAreas(prev => prev.map(fa =>
+          fa.id === tempFocusArea.id ? { ...fa, id: data.id, user_id: data.user_id } : fa
+        ));
+      }
+    } catch { /* non-critical — local state has the focus area */ }
+  }, []);
+
+  const handleArchiveFocusArea = useCallback(async (focusAreaId: string) => {
+    // Optimistic local remove
+    setFocusAreas(prev => prev.filter(fa => fa.id !== focusAreaId));
+
+    // Save to DB
+    try {
+      await fetch('/api/focus-areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'archive', focusAreaId }),
+      });
+    } catch { /* non-critical */ }
+  }, []);
+
   const signIn = useCallback(() => {
     localStorage.setItem('toney_signed_in', 'true');
     const hasOnboarded = localStorage.getItem('toney_onboarded') === 'true';
@@ -1136,6 +1198,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSavedInsights([]);
     setWins([]);
     setStreak(0);
+    setFocusAreas([]);
     setShowSettings(false);
     setStyleProfile({ ...defaultStyle });
     setTempStyle({ ...defaultStyle });
@@ -1217,6 +1280,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         wins,
         streak,
         handleLogWin,
+        focusAreas,
+        handleSaveFocusArea,
+        handleArchiveFocusArea,
         signIn,
         signOut,
         finishOnboarding,

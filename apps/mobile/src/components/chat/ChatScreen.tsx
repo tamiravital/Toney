@@ -5,6 +5,7 @@ import { Send, Square, Plus, ChevronRight, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import DraftCard from './DraftCard';
+import DraftFocusArea from './DraftFocusArea';
 import SessionNotesView from './SessionNotesView';
 import type { RewireCardCategory } from '@toney/types';
 
@@ -18,7 +19,7 @@ const markdownComponents = {
   li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm leading-relaxed" {...props} />,
 };
 
-// ── Parse [CARD:category]...[/CARD] markers from message content ──
+// ── Parse [CARD:category]...[/CARD] and [FOCUS]...[/FOCUS] markers from message content ──
 
 interface TextSegment {
   type: 'text';
@@ -32,56 +33,67 @@ interface CardSegment {
   content: string;
 }
 
-type MessageSegment = TextSegment | CardSegment;
+interface FocusAreaSegment {
+  type: 'focus_area';
+  title: string;
+  description: string;
+}
+
+type MessageSegment = TextSegment | CardSegment | FocusAreaSegment;
 
 const VALID_CATEGORIES = new Set<RewireCardCategory>(['reframe', 'truth', 'plan', 'practice', 'conversation_kit']);
 
+/** Extract title from bold first line pattern, rest as content/description */
+function extractTitleAndBody(body: string): { title: string; rest: string } {
+  const lines = body.split('\n');
+  if (lines.length === 0) return { title: body, rest: '' };
+  const firstLine = lines[0].trim();
+  const boldMatch = firstLine.match(/^\*\*(.+?)\*\*$/);
+  if (boldMatch) {
+    return { title: boldMatch[1], rest: lines.slice(1).join('\n').trim() };
+  }
+  return {
+    title: firstLine.replace(/^\*\*/, '').replace(/\*\*$/, ''),
+    rest: lines.slice(1).join('\n').trim(),
+  };
+}
+
 function parseMessageContent(raw: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
-  const cardRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]/g;
+  // Combined regex: find the next [CARD:...] or [FOCUS] marker
+  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = cardRegex.exec(raw)) !== null) {
-    // Text before this card
+  while ((match = markerRegex.exec(raw)) !== null) {
+    // Text before this marker
     if (match.index > lastIndex) {
       const text = raw.slice(lastIndex, match.index).trim();
       if (text) segments.push({ type: 'text', content: text });
     }
 
-    const categoryRaw = match[1].toLowerCase() as RewireCardCategory;
-    const category = VALID_CATEGORIES.has(categoryRaw) ? categoryRaw : 'reframe';
-    const cardBody = match[2].trim();
-
-    // Extract title: first line starting with ** or plain first line
-    let title = '';
-    let content = cardBody;
-    const lines = cardBody.split('\n');
-    if (lines.length > 0) {
-      const firstLine = lines[0].trim();
-      // Check for **Title** pattern
-      const boldMatch = firstLine.match(/^\*\*(.+?)\*\*$/);
-      if (boldMatch) {
-        title = boldMatch[1];
-        content = lines.slice(1).join('\n').trim();
-      } else {
-        // Use first line as title, rest as content
-        title = firstLine.replace(/^\*\*/, '').replace(/\*\*$/, '');
-        content = lines.slice(1).join('\n').trim();
-      }
+    if (match[1] !== undefined) {
+      // Card match: match[1] = category, match[2] = body
+      const categoryRaw = match[1].toLowerCase() as RewireCardCategory;
+      const category = VALID_CATEGORIES.has(categoryRaw) ? categoryRaw : 'reframe';
+      const { title, rest } = extractTitleAndBody(match[2].trim());
+      segments.push({ type: 'card', category, title, content: rest });
+    } else if (match[3] !== undefined) {
+      // Focus area match: match[3] = body
+      const { title, rest } = extractTitleAndBody(match[3].trim());
+      segments.push({ type: 'focus_area', title, description: rest });
     }
 
-    segments.push({ type: 'card', category, title, content });
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining text after last card
+  // Remaining text after last marker
   if (lastIndex < raw.length) {
     const text = raw.slice(lastIndex).trim();
     if (text) segments.push({ type: 'text', content: text });
   }
 
-  // If no cards found, return the whole thing as text
+  // If no markers found, return the whole thing as text
   if (segments.length === 0) {
     segments.push({ type: 'text', content: raw });
   }
@@ -97,6 +109,8 @@ export default function ChatScreen() {
     isTyping,
     handleSendMessage,
     handleSaveCard,
+    handleSaveFocusArea,
+    currentSessionId,
     sessionHasCard,
     sessionStatus,
     sessionNotes,
@@ -192,7 +206,7 @@ export default function ChatScreen() {
                         ) : (
                           <div className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md">
                             <ReactMarkdown components={markdownComponents}>
-                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1')}
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1')}
                             </ReactMarkdown>
                           </div>
                         )}
@@ -251,6 +265,16 @@ export default function ChatScreen() {
                                 initialTitle={segment.title}
                                 initialContent={segment.content}
                                 onSave={(title, content, category) => handleSaveCard(title, content, category)}
+                              />
+                            );
+                          }
+                          if (segment.type === 'focus_area') {
+                            return (
+                              <DraftFocusArea
+                                key={`${msg.id}-focus-${i}`}
+                                initialTitle={segment.title}
+                                initialDescription={segment.description}
+                                onSave={(text) => handleSaveFocusArea(text, currentSessionId)}
                               />
                             );
                           }

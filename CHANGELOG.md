@@ -1,5 +1,31 @@
 # Toney — Changelog
 
+## 2026-02-12 — Focus Areas System
+- **Focus Areas**: New coaching entity for tracking what the user is working on — ongoing intentions, not completable goals
+- Focus areas come from three sources: onboarding Q7 goals, Coach suggestions via `[FOCUS]...[/FOCUS]` chat markers, or user-created
+- Home screen shows "What I'm Working On" section with focus areas, source labels, and archive buttons
+- Coach can suggest focus areas in conversation, rendered as interactive DraftFocusArea cards (indigo accent)
+- Strategist reads focus areas and bridges surface goals to deeper coaching work in the briefing
+- Understanding evolution and session notes now receive focus area context
+- Archival model: no completion — focus areas are active or archived (archived_at timestamp)
+- New `focus_areas` table with RLS (migration 019)
+
+## 2026-02-12 (session 10) — Legacy User Backfill
+- **Backfilled understanding narrative for Noga (nogaavital@gmail.com)**: Ran seed → evolve × 9 sessions → prepareSession using the coaching pipeline functions directly. 1,361 messages across 9 sessions processed into a rich 7,600-char understanding narrative. Stage progressed from precontemplation → action.
+- Coaching briefing generated and saved — she can now open the app with full context continuity from all prior sessions
+- Narrative snapshots saved on all 9 sessions for trajectory tracking
+
+## 2026-02-12 (session 9) — Performance Investigation
+- **Timing instrumentation** added to `/api/session/open` — logs elapsed ms at each step (auth, data load, legacy seed, deferred close, session create, prepareSession, first stream delta, stream complete) to diagnose slow session opens
+- Discovered existing Settings screen already has tone slider, depth selector, and learning style chips
+
+## 2026-02-12 — Prompt Tuning + Session Notes + Deploy
+- **Committed + deployed understanding narrative** (`22737af`): 27 files, evolveUnderstanding + seedUnderstanding + migration 018
+- **Coach prompt tuned for narrative briefings**: added briefing bridge (how to read each section), updated coaching flow hints to reference the narrative explicitly, fixed stale "session strategy" reference, broadened session opening from "previous session" to "what's most relevant"
+- **Session notes enriched**: Haiku now receives the understanding narrative, stage of change, and previous session headline — enables trajectory-aware, arc-conscious notes
+- **Migration 018 applied** to live Supabase: `profiles.understanding`, `sessions.narrative_snapshot` + sim mirrors
+- Both apps deployed to Vercel
+
 ## 2026-02-11 (session 7) — Understanding Narrative Architecture
 - **Understanding narrative replaces knowledge extraction**: Single evolving clinical narrative on `profiles.understanding` replaces the `reflectOnSession()` → `buildKnowledgeUpdates()` → `user_knowledge` rows pipeline
 - **New `evolveUnderstanding()`** (Sonnet): Reads current narrative + session transcript → produces evolved narrative. Replaces Haiku reflection + code-based knowledge updates.

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, RewireCard, Win, CoachingBriefing } from '@toney/types';
+import { Profile, RewireCard, Win, CoachingBriefing, FocusArea } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 import { TENSION_GUIDANCE } from './constants';
 
@@ -26,6 +26,8 @@ export interface PrepareSessionInput {
   previousBriefing?: CoachingBriefing | null;
   /** Recent session notes as stored JSON strings (most recent first) */
   recentSessionNotes?: string[] | null;
+  /** Active focus areas */
+  activeFocusAreas?: FocusArea[] | null;
 }
 
 export interface SessionPreparation {
@@ -61,6 +63,8 @@ You have a comprehensive understanding of this person (provided below). Your job
 
 4. **Use what's recent.** If there are session notes or new wins, plan from what just happened. Don't repeat what was already covered unless there's a reason to revisit.
 
+5. **Bridge their focus areas to the real work.** Their declared focus areas are the doorway, not the destination. Your hypothesis should connect what they say they want to what's actually in the way. If they say "start a business," the leverage point might be about risk tolerance or self-worth, not business strategy.
+
 ## Output (JSON only, no other text):
 
 \`\`\`json
@@ -87,6 +91,11 @@ function formatToolkit(cards: RewireCard[]): string {
 function formatWins(wins: Win[]): string {
   if (!wins || wins.length === 0) return 'No wins logged yet.';
   return wins.map(w => `- "${w.text}"`).join('\n');
+}
+
+function formatFocusAreas(areas: FocusArea[]): string {
+  if (!areas || areas.length === 0) return 'No focus areas set yet.';
+  return areas.map(a => `- "${a.text}"`).join('\n');
 }
 
 function formatCoachingStyle(profile: Profile): string {
@@ -130,6 +139,11 @@ function buildUserMessage(input: PrepareSessionInput): string {
   // Wins
   if (input.recentWins && input.recentWins.length > 0) {
     sections.push(`## Recent Wins\n${formatWins(input.recentWins)}`);
+  }
+
+  // Focus areas
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    sections.push(`## Their Focus Areas\n${formatFocusAreas(input.activeFocusAreas)}`);
   }
 
   // Previous briefing summary (just hypothesis + leverage for continuity)
@@ -211,6 +225,10 @@ export async function prepareSession(input: PrepareSessionInput): Promise<Sessio
 
   if (input.recentWins && input.recentWins.length > 0) {
     briefingSections.push(`RECENT WINS:\n${formatWins(input.recentWins)}`);
+  }
+
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    briefingSections.push(`FOCUS AREAS:\n${formatFocusAreas(input.activeFocusAreas)}`);
   }
 
   briefingSections.push(`COACHING STYLE:\n${formatCoachingStyle(p)}`);

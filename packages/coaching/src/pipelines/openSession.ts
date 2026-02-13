@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, RewireCard, Win, CoachingBriefing, SystemPromptBlock } from '@toney/types';
+import { Profile, RewireCard, Win, CoachingBriefing, SystemPromptBlock, FocusArea } from '@toney/types';
 import { prepareSession, SessionPreparation } from '../strategist/prepareSession';
 import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prompts/systemPromptBuilder';
 
@@ -28,6 +28,8 @@ export interface OpenSessionInput {
   previousBriefing?: CoachingBriefing | null;
   /** Recent session notes as stored JSON strings (most recent first) */
   recentSessionNotes?: string[] | null;
+  /** Active focus areas */
+  activeFocusAreas?: FocusArea[] | null;
 }
 
 export interface PlanSessionOutput {
@@ -66,6 +68,7 @@ export async function planSessionStep(input: OpenSessionInput): Promise<PlanSess
     rewireCards: input.rewireCards,
     previousBriefing: input.previousBriefing,
     recentSessionNotes: input.recentSessionNotes,
+    activeFocusAreas: input.activeFocusAreas,
   });
 
   const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(preparation.briefing);

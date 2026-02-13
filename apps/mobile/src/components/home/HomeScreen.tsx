@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Flame, Sparkles, Eye, TrendingUp, Lightbulb, MessageCircle, FileText } from 'lucide-react';
+import { Settings, Flame, Sparkles, Eye, TrendingUp, Lightbulb, MessageCircle, FileText, Target, X } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useLastSession } from '@/hooks/useLastSession';
 import { tensionColor } from '@toney/constants';
@@ -17,7 +17,7 @@ const observationConfig: Record<ObservationType, { icon: typeof Eye; label: stri
 };
 
 export default function HomeScreen() {
-  const { identifiedTension, streak, wins, savedInsights, setActiveTab, setShowSettings } = useToney();
+  const { identifiedTension, streak, wins, savedInsights, focusAreas, handleArchiveFocusArea, setActiveTab, setShowSettings } = useToney();
   const { notes: lastNotes } = useLastSession();
   const [showNotes, setShowNotes] = useState(false);
 
@@ -106,6 +106,40 @@ export default function HomeScreen() {
                 {lastNotes.cardsCreated.length} card{lastNotes.cardsCreated.length !== 1 ? 's' : ''} created
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Focus Areas */}
+      {focusAreas.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="w-4 h-4 text-gray-400" />
+            <h3 className="font-semibold text-gray-900 text-sm">What I&apos;m Working On</h3>
+          </div>
+          <div className="space-y-2">
+            {focusAreas.map(area => (
+              <div
+                key={area.id}
+                className="bg-white border border-gray-100 rounded-2xl p-4 flex items-start gap-3"
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-indigo-50">
+                  <Target className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800 leading-snug">{area.text}</p>
+                  <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider font-medium">
+                    {area.source === 'onboarding' ? 'From onboarding' : area.source === 'coach' ? 'From Toney' : 'Added by you'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleArchiveFocusArea(area.id)}
+                  className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

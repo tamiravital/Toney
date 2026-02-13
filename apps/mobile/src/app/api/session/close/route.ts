@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Load data in parallel ──
-    const [messagesResult, profileResult, briefingResult, cardsResult, sessionResult, prevNotesResult] = await Promise.all([
+    const [messagesResult, profileResult, briefingResult, cardsResult, sessionResult, prevNotesResult, focusAreasResult] = await Promise.all([
       supabase
         .from('messages')
         .select('role, content')
@@ -60,6 +60,11 @@ export async function POST(request: NextRequest) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
+      supabase
+        .from('focus_areas')
+        .select('text')
+        .eq('user_id', user.id)
+        .is('archived_at', null),
     ]);
 
     const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -85,6 +90,8 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore */ }
     }
 
+    const activeFocusAreas = (focusAreasResult.data || []) as { text: string }[];
+
     // ── Pipeline ──
     const result = await closeSessionPipeline({
       sessionId,
@@ -96,6 +103,7 @@ export async function POST(request: NextRequest) {
       savedCards,
       sessionNumber,
       previousHeadline,
+      activeFocusAreas,
     });
 
     // ── Save results ──

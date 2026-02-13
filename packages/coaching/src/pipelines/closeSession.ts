@@ -34,6 +34,8 @@ export interface CloseSessionInput {
   sessionNumber?: number | null;
   /** Previous session's headline (for arc awareness in notes) */
   previousHeadline?: string | null;
+  /** Active focus areas for context */
+  activeFocusAreas?: { text: string }[] | null;
 }
 
 export interface CloseSessionOutput {
@@ -57,6 +59,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       understanding: input.currentUnderstanding,
       stageOfChange: input.currentStageOfChange,
       previousHeadline: input.previousHeadline,
+      activeFocusAreas: input.activeFocusAreas,
     }),
     evolveUnderstanding({
       currentUnderstanding: input.currentUnderstanding ?? null,
@@ -64,6 +67,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       tensionType: input.tensionType,
       hypothesis: input.hypothesis,
       currentStageOfChange: input.currentStageOfChange,
+      activeFocusAreas: input.activeFocusAreas,
     }),
   ]);
 

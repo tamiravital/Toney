@@ -41,6 +41,18 @@ export interface Win {
   created_at?: string;
 }
 
+export type FocusAreaSource = 'onboarding' | 'coach' | 'user';
+
+export interface FocusArea {
+  id: string;
+  user_id: string;
+  text: string;
+  source: FocusAreaSource;
+  session_id?: string | null;
+  archived_at?: string | null;
+  created_at: string;
+}
+
 export interface Insight {
   id: string;
   content: string;

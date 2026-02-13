@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { seedUnderstanding } from '@toney/coaching';
-import { formatAnswersReadable } from '@toney/constants';
+import { formatAnswersReadable, questions } from '@toney/constants';
 
 /**
  * POST /api/seed
@@ -56,6 +56,24 @@ export async function POST() {
       tension_type: result.tensionLabel,
       secondary_tension_type: result.secondaryTensionLabel || null,
     }).eq('id', user.id);
+
+    // ── Create focus area rows from Q7 goals ──
+    const goalsAnswer = (profile.onboarding_answers as Record<string, string>)?.goals;
+    if (goalsAnswer) {
+      const selectedValues = goalsAnswer.split(',').filter(Boolean);
+      const goalsQuestion = questions.find(q => q.id === 'goals');
+      if (goalsQuestion && selectedValues.length > 0) {
+        const focusAreaRows = selectedValues.map(v => {
+          const opt = goalsQuestion.options.find(o => o.value === v);
+          return {
+            user_id: user.id,
+            text: opt ? opt.label : v,
+            source: 'onboarding' as const,
+          };
+        });
+        await supabase.from('focus_areas').insert(focusAreaRows);
+      }
+    }
 
     return NextResponse.json({
       tensionType: result.tensionLabel,

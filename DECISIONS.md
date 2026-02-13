@@ -4,6 +4,24 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Focus areas are ongoing intentions, not completable goals (2026-02-12)
+Rejected binary goal completion. Most onboarding goals ("feel okay spending on myself", "stop fighting about money") are aspirational directions that never truly finish — forcing completion creates pressure and feelings of failure. Focus areas have only two states: active (archived_at IS NULL) and archived (timestamp set). No status column, no completed_at, no percentage. The Coach never marks them "done." Users archive when they feel ready. Naming was deliberate: "goals" creates performance pressure; "focus areas" frames them as directions of attention.
+
+### Focus areas bridge surface goals to deeper coaching work (2026-02-12)
+The Strategist prompt includes an explicit instruction: "Bridge their focus areas to the real work." When a user says "start a business," the Strategist's hypothesis should identify the real blocker (e.g., fear of failure, self-worth tied to income). Focus areas are what the user declares; the hypothesis is what the coach actually works on. This prevents the Coach from becoming a productivity tool that just checks off goals — it stays a coaching tool that uses goals as a window into deeper patterns.
+
+### Focus areas as a separate DB table, not narrative text (2026-02-12)
+Focus areas could live inside the understanding narrative (text-only). Chose a separate table because: (1) lifecycle — areas are created from multiple sources (onboarding, chat, future manual add) and individually archivable, (2) display — the home screen shows them as discrete items with source labels, (3) session linking — each focus area can reference the session where it was suggested, (4) future Journey tab needs queryable data, not regex on narrative text. The narrative still discusses focus areas contextually — the table is the source of truth, the narrative is the interpretation.
+
+### Backfill legacy users with direct pipeline calls, not admin UI (2026-02-12)
+Noga had 9 sessions (1,361 messages) from before the understanding narrative system existed. Rather than requiring the admin dashboard, we ran the same pure functions (`seedUnderstanding` → `evolveUnderstanding` × 9 → `prepareSession`) in a standalone script via `npx tsx`. This is the right pattern for one-off backfills: import the coaching package functions directly, load data with the admin Supabase client, run the pipeline. No new code needed — the functions are already pure and framework-free by design.
+
+### Session notes get understanding narrative context (2026-02-12)
+Haiku was writing session notes in a vacuum — no knowledge of who the person is beyond the current transcript. Now it receives the understanding narrative, stage of change, and previous session headline. This lets notes reference known patterns ("this connects to the avoidance pattern you've been working on") and show trajectory ("last session was about X, this time you went deeper into Y"). Added two prompt rules: connect to the larger journey, and show movement vs. previous headline. Cost: 300-800 extra words in the Haiku user message (cheap, once per session close).
+
+### Coach prompt bridges the briefing explicitly (2026-02-12)
+The Coach prompt's "Use what you know:" hints referenced concepts (breakthroughs, resistance patterns, emotional vocabulary) as if they were discrete data fields — but they're now woven into the understanding narrative. Added a briefing bridge (80 words) at the end of CORE_PRINCIPLES that maps each briefing section to its purpose. Updated coaching flow hints to point at "the narrative" explicitly. Also fixed stale reference to "session strategy" (now hypothesis + curiosities) and broadened session opening from "reference the previous session" to "reference what's most relevant" — the narrative might surface something from several sessions ago.
+
 ### Understanding narrative replaces knowledge fragments (2026-02-11)
 Replaced the category-based knowledge extraction pipeline (`reflectOnSession()` → `buildKnowledgeUpdates()` → `user_knowledge` rows → reconstruct in `prepareSession()`) with a single evolving clinical narrative on `profiles.understanding`. The LLM thinks in narrative, not categories — forcing observations into `newTriggers[]`, `newBreakthroughs[]` strips the connections between them. The Strategist at session open was reconstructing who the person is from fragments — wasted work when the understanding already exists. New flow: `seedUnderstanding()` after onboarding → `evolveUnderstanding()` at each session close → `prepareSession()` reads the pre-formed narrative. Deleted `reflect.ts` and `personModel.ts`. `user_knowledge` table kept (focus card reflections still write to it) but no longer part of the main coaching pipeline.
 

@@ -23,6 +23,8 @@ export interface EvolveUnderstandingInput {
   hypothesis?: string | null;
   /** Current stage of change */
   currentStageOfChange?: string | null;
+  /** Active focus areas for context */
+  activeFocusAreas?: { text: string }[] | null;
 }
 
 export interface EvolveUnderstandingOutput {
@@ -96,6 +98,9 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
   }
   if (input.currentStageOfChange) {
     contextLines.push(`Current stage of change: ${input.currentStageOfChange}`);
+  }
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    contextLines.push(`Active focus areas: ${input.activeFocusAreas.map(a => `"${a.text}"`).join(', ')}`);
   }
 
   const contextSection = contextLines.length > 0
