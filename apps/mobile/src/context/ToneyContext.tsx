@@ -252,11 +252,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               .eq('id', user.id)
               .single();
 
-            if (profile?.display_name) {
-              setDisplayName(profile.display_name);
-              saveJSON('toney_display_name', profile.display_name);
-            }
-
             if (profile?.onboarding_completed) {
               hasOnboarded = true;
               localStorage.setItem('toney_onboarded', 'true');
@@ -317,6 +312,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
+            // Fetch display name if not cached
+            if (!loadJSON<string | null>('toney_display_name', null)) {
+              const { data: nameRow } = await supabase
+                .from('profiles')
+                .select('display_name')
+                .eq('id', user.id)
+                .single();
+              if (nameRow?.display_name) {
+                setDisplayName(nameRow.display_name);
+                saveJSON('toney_display_name', nameRow.display_name);
+              }
+            }
+
             const [{ data: recentSession }, { count: sessionCount }] = await Promise.all([
               supabase
                 .from('sessions')

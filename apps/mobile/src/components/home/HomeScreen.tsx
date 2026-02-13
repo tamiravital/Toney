@@ -1,17 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Flame, MessageCircle, FileText, Target, X, Clock } from 'lucide-react';
+import { Settings, Flame, MessageCircle, FileText, Target, X, Clock, ArrowRight } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useLastSession } from '@/hooks/useLastSession';
 import SessionNotesView from '@/components/chat/SessionNotesView';
 import type { SuggestionLength } from '@toney/types';
 
-const lengthConfig: Record<SuggestionLength, { label: string; bg: string; text: string }> = {
-  quick: { label: '~3 min', bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  medium: { label: '~8 min', bg: 'bg-blue-50', text: 'text-blue-700' },
-  deep: { label: '~12 min', bg: 'bg-purple-50', text: 'text-purple-700' },
-  standing: { label: 'Anytime', bg: 'bg-amber-50', text: 'text-amber-700' },
+const lengthConfig: Record<SuggestionLength, { label: string; color: string }> = {
+  quick: { label: '~3 min', color: 'text-emerald-600' },
+  medium: { label: '~8 min', color: 'text-blue-600' },
+  deep: { label: '~12 min', color: 'text-purple-600' },
+  standing: { label: 'Anytime', color: 'text-amber-600' },
 };
 
 const lengthOrder: SuggestionLength[] = ['standing', 'quick', 'medium', 'deep'];
@@ -39,7 +39,6 @@ export default function HomeScreen() {
   );
 
   const handleSuggestionTap = (suggestionIndex: number) => {
-    // Find the original index in the unsorted suggestions array
     const original = suggestions.indexOf(sortedSuggestions[suggestionIndex]);
     openSession(currentSessionId ?? undefined, false, original);
     setActiveTab('chat');
@@ -63,35 +62,60 @@ export default function HomeScreen() {
 
       {/* Session Suggestions or generic CTA */}
       {sortedSuggestions.length > 0 ? (
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <MessageCircle className="w-4 h-4 text-gray-400" />
-            <h3 className="font-semibold text-gray-900 text-sm">Pick up where you left off</h3>
-          </div>
-          <div className="flex overflow-x-auto gap-3 snap-x snap-mandatory pb-2 hide-scrollbar -mx-6 px-6">
-            {sortedSuggestions.map((s, i) => {
+        <div className="mb-5">
+          {/* Featured suggestion — first card gets the gradient treatment */}
+          <button
+            onClick={() => handleSuggestionTap(0)}
+            className="w-full bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-left mb-3"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white">
+                <Clock className="w-3 h-3" />
+                {lengthConfig[sortedSuggestions[0].length].label}
+              </span>
+              <ArrowRight className="w-4 h-4 text-white/60" />
+            </div>
+            <p className="text-base font-semibold text-white leading-snug mb-1.5">
+              {sortedSuggestions[0].title}
+            </p>
+            <p className="text-sm text-white/75 leading-relaxed line-clamp-2">
+              {sortedSuggestions[0].teaser}
+            </p>
+          </button>
+
+          {/* Remaining suggestions — compact list */}
+          <div className="space-y-2">
+            {sortedSuggestions.slice(1).map((s, i) => {
               const cfg = lengthConfig[s.length];
               return (
                 <button
-                  key={i}
-                  onClick={() => handleSuggestionTap(i)}
-                  className="snap-start flex-shrink-0 w-[260px] bg-white border border-gray-100 rounded-2xl p-4 text-left hover:border-indigo-200 hover:shadow-sm transition-all"
+                  key={i + 1}
+                  onClick={() => handleSuggestionTap(i + 1)}
+                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3.5 text-left hover:border-indigo-200 transition-all flex items-center gap-3"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}>
-                      <Clock className="w-3 h-3" />
-                      {cfg.label}
-                    </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 leading-snug">{s.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{s.teaser}</p>
                   </div>
-                  <p className="text-sm font-semibold text-gray-900 leading-snug mb-1">{s.title}</p>
-                  <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{s.teaser}</p>
+                  <span className={`flex-shrink-0 text-[11px] font-semibold ${cfg.color}`}>
+                    {cfg.label}
+                  </span>
                 </button>
               );
             })}
           </div>
+
+          {/* Free conversation option */}
+          <button
+            onClick={() => setActiveTab('chat')}
+            className="w-full mt-3 py-3 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-all flex items-center justify-center gap-1.5"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Or just start talking
+          </button>
         </div>
       ) : (
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-4">
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-5">
           <p className="text-sm font-medium opacity-80 mb-1">Ready to talk?</p>
           <p className="text-lg font-semibold leading-snug mb-4">
             Start a conversation about what&apos;s on your mind with money.
