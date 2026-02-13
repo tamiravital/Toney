@@ -115,13 +115,16 @@ export async function POST(request: NextRequest) {
           profile.understanding = seedResult.understanding;
 
           // Save understanding + tension to profile
-          await ctx.supabase.from(ctx.table('profiles')).update({
+          const { error: seedSaveErr } = await ctx.supabase.from(ctx.table('profiles')).update({
             understanding: seedResult.understanding,
             ...(seedResult.tensionLabel && !profile.tension_type && {
               tension_type: seedResult.tensionLabel,
               secondary_tension_type: seedResult.secondaryTensionLabel || null,
             }),
           }).eq('id', ctx.userId);
+          if (seedSaveErr) {
+            console.error('[session/open] Legacy seed save failed:', seedSaveErr);
+          }
           timing('legacy seed complete');
         }
       } catch (err) {
