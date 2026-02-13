@@ -56,6 +56,7 @@ export interface FocusArea {
 
 export interface Insight {
   id: string;
+  title?: string;
   content: string;
   category?: RewireCardCategory;
   savedAt: Date;

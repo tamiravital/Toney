@@ -381,6 +381,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const insights: Insight[] = dbCards.map((card: any) => ({
                 id: card.id,
+                title: card.title || undefined,
                 content: card.content,
                 category: card.category as Insight['category'],
                 savedAt: new Date(card.created_at),
@@ -833,11 +834,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     // Add to local state
     const newInsight: Insight = {
       id: `insight-${Date.now()}`,
+      title,
       content,
       category,
       savedAt: new Date(),
       fromChat: true,
-      tags: [identifiedTensionState?.primary ? `tends to ${identifiedTensionState.primary}` : 'Insight'],
+      tags: [],
     };
     setSavedInsights(prev => [newInsight, ...prev]);
     setSessionHasCard(true);

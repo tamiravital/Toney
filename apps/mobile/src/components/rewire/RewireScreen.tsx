@@ -255,15 +255,9 @@ function RewireCard({
         </div>
       </div>
 
-      {/* Tags */}
-      {insight.tags?.length > 0 && (
-        <div className="flex gap-1.5 mb-3">
-          {insight.tags.map((tag) => (
-            <span key={tag} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-              {tag}
-            </span>
-          ))}
-        </div>
+      {/* Title */}
+      {insight.title && (
+        <p className="text-sm font-semibold text-gray-900 mb-2">{insight.title}</p>
       )}
 
       {/* Category-specific content */}
