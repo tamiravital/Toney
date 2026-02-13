@@ -1,27 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Flame, Sparkles, Eye, TrendingUp, Lightbulb, MessageCircle, FileText, Target, X } from 'lucide-react';
+import { Settings, Flame, MessageCircle, FileText, Target, X, Clock } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useLastSession } from '@/hooks/useLastSession';
-import { tensionColor } from '@toney/constants';
 import SessionNotesView from '@/components/chat/SessionNotesView';
+import type { SuggestionLength } from '@toney/types';
 
-type ObservationType = 'pattern' | 'growth' | 'insight';
-interface Observation { id: string; type: ObservationType; content: string; }
-
-const observationConfig: Record<ObservationType, { icon: typeof Eye; label: string; color: string }> = {
-  pattern: { icon: Eye, label: 'Pattern spotted', color: 'text-purple-600 bg-purple-50' },
-  growth: { icon: TrendingUp, label: 'Growth marker', color: 'text-emerald-600 bg-emerald-50' },
-  insight: { icon: Lightbulb, label: 'Coaching insight', color: 'text-amber-600 bg-amber-50' },
+const lengthConfig: Record<SuggestionLength, { label: string; bg: string; text: string }> = {
+  quick: { label: '~3 min', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  medium: { label: '~8 min', bg: 'bg-blue-50', text: 'text-blue-700' },
+  deep: { label: '~12 min', bg: 'bg-purple-50', text: 'text-purple-700' },
+  standing: { label: 'Anytime', bg: 'bg-amber-50', text: 'text-amber-700' },
 };
 
+const lengthOrder: SuggestionLength[] = ['standing', 'quick', 'medium', 'deep'];
+
 export default function HomeScreen() {
-  const { identifiedTension, streak, wins, savedInsights, focusAreas, handleArchiveFocusArea, setActiveTab, setShowSettings } = useToney();
+  const {
+    displayName, suggestions, streak, wins, focusAreas,
+    handleArchiveFocusArea, setActiveTab, setShowSettings,
+    openSession, currentSessionId,
+  } = useToney();
   const { notes: lastNotes } = useLastSession();
   const [showNotes, setShowNotes] = useState(false);
 
-  const colors = identifiedTension ? tensionColor(identifiedTension.primary) : tensionColor('avoid');
+  const firstName = displayName?.split(' ')[0] ?? null;
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -30,54 +34,77 @@ export default function HomeScreen() {
     return 'Good evening';
   })();
 
-  const observations: Observation[] = identifiedTension
-    ? [
-        {
-          id: 'onboard-tension',
-          type: 'pattern' as const,
-          content: `You tend to ${identifiedTension.primary} with money${identifiedTension.primaryDetails?.first_step ? ` — ${identifiedTension.primaryDetails.first_step.toLowerCase()}` : ''}`,
-        },
-        ...(identifiedTension.secondary ? [{
-          id: 'onboard-secondary',
-          type: 'insight' as const,
-          content: `Secondary pattern: you also tend to ${identifiedTension.secondary}`,
-        }] : []),
-      ]
-    : [];
+  const sortedSuggestions = [...suggestions].sort(
+    (a, b) => lengthOrder.indexOf(a.length) - lengthOrder.indexOf(b.length)
+  );
 
-  // Show 3 most recent rewire cards
-  const recentCards = savedInsights.slice(0, 3);
+  const handleSuggestionTap = (suggestionIndex: number) => {
+    // Find the original index in the unsorted suggestions array
+    const original = suggestions.indexOf(sortedSuggestions[suggestionIndex]);
+    openSession(currentSessionId ?? undefined, false, original);
+    setActiveTab('chat');
+  };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-2 hide-scrollbar">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-gray-400 text-sm">{greeting}</p>
-          <h1 className="text-2xl font-bold text-gray-900">Your Space</h1>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {greeting}{firstName ? `, ${firstName}` : ''}
+        </h1>
         <button
           onClick={() => setShowSettings(true)}
-          className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-all"
         >
-          <Settings className="w-5 h-5 text-gray-500" />
+          <Settings className="w-4 h-4 text-gray-500" />
+          <span className="text-xs font-medium text-gray-500">Settings</span>
         </button>
       </div>
 
-      {/* Start Session CTA */}
-      <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-4">
-        <p className="text-sm font-medium opacity-80 mb-1">Ready to talk?</p>
-        <p className="text-lg font-semibold leading-snug mb-4">
-          Start a conversation about what&apos;s on your mind with money.
-        </p>
-        <button
-          onClick={() => setActiveTab('chat')}
-          className="bg-white/20 backdrop-blur text-white py-2.5 px-5 rounded-xl text-sm font-semibold hover:bg-white/30 transition-all flex items-center gap-2"
-        >
-          <MessageCircle className="w-4 h-4" />
-          Start Session
-        </button>
-      </div>
+      {/* Session Suggestions or generic CTA */}
+      {sortedSuggestions.length > 0 ? (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageCircle className="w-4 h-4 text-gray-400" />
+            <h3 className="font-semibold text-gray-900 text-sm">Pick up where you left off</h3>
+          </div>
+          <div className="flex overflow-x-auto gap-3 snap-x snap-mandatory pb-2 hide-scrollbar -mx-6 px-6">
+            {sortedSuggestions.map((s, i) => {
+              const cfg = lengthConfig[s.length];
+              return (
+                <button
+                  key={i}
+                  onClick={() => handleSuggestionTap(i)}
+                  className="snap-start flex-shrink-0 w-[260px] bg-white border border-gray-100 rounded-2xl p-4 text-left hover:border-indigo-200 hover:shadow-sm transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}>
+                      <Clock className="w-3 h-3" />
+                      {cfg.label}
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 leading-snug mb-1">{s.title}</p>
+                  <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{s.teaser}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-4">
+          <p className="text-sm font-medium opacity-80 mb-1">Ready to talk?</p>
+          <p className="text-lg font-semibold leading-snug mb-4">
+            Start a conversation about what&apos;s on your mind with money.
+          </p>
+          <button
+            onClick={() => setActiveTab('chat')}
+            className="bg-white/20 backdrop-blur text-white py-2.5 px-5 rounded-xl text-sm font-semibold hover:bg-white/30 transition-all flex items-center gap-2"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Start Session
+          </button>
+        </div>
+      )}
 
       {/* Last Session preview */}
       {lastNotes && (
@@ -144,38 +171,6 @@ export default function HomeScreen() {
         </div>
       )}
 
-      {/* What Toney sees */}
-      {observations.length > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Eye className="w-4 h-4 text-gray-400" />
-            <h3 className="font-semibold text-gray-900 text-sm">What Toney sees</h3>
-          </div>
-          <div className="space-y-2">
-            {observations.map(card => {
-              const config = observationConfig[card.type];
-              const TypeIcon = config.icon;
-              return (
-                <div
-                  key={card.id}
-                  className="bg-white border border-gray-100 rounded-2xl p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${config.color.split(' ')[1]}`}>
-                      <TypeIcon className={`w-4 h-4 ${config.color.split(' ')[0]}`} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-gray-400 mb-0.5">{config.label}</p>
-                      <p className="text-sm text-gray-800 leading-snug">{card.content}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Streak + Wins */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-4">
         <div className="flex items-center justify-between">
@@ -196,49 +191,6 @@ export default function HomeScreen() {
           </button>
         </div>
       </div>
-
-      {/* Recent rewire cards */}
-      {recentCards.length > 0 ? (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-gray-400" />
-              <h3 className="font-semibold text-gray-900 text-sm">Your Rewire Cards</h3>
-            </div>
-            <button onClick={() => setActiveTab('rewire')} className="text-indigo-600 text-xs font-medium">
-              See all
-            </button>
-          </div>
-          <div className="space-y-2">
-            {recentCards.map(card => (
-              <div key={card.id} className={`${colors.bg} rounded-2xl p-4`}>
-                <p className="text-sm text-gray-700 line-clamp-2">
-                  {card.content?.substring(0, 120)}
-                </p>
-                {card.category && (
-                  <span className="inline-block mt-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                    {card.category}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="mb-4">
-          <div className={`${colors.bg} rounded-2xl p-5 text-center`}>
-            <Sparkles className={`w-6 h-6 ${colors.text} mx-auto mb-2`} />
-            <p className="text-sm text-gray-700 font-medium">No saved insights yet</p>
-            <p className="text-xs text-gray-500 mt-1">Start a chat and save the ideas that resonate</p>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className="mt-3 text-sm font-semibold text-indigo-600"
-            >
-              Start chatting
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Session notes overlay */}
       {showNotes && lastNotes && (

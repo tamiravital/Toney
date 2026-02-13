@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
-import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win, FocusArea, RewireCardCategory, SessionNotesOutput } from '@toney/types';
+import { IdentifiedTension, TensionType, StyleProfile, Message, Insight, Win, FocusArea, RewireCardCategory, SessionNotesOutput, SessionSuggestion } from '@toney/types';
 import { tensionDetails } from '@toney/constants';
 import { questions } from '@toney/constants';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
@@ -81,6 +81,12 @@ interface ToneyContextValue {
   setActiveTab: (tab: ActiveTab) => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
+
+  // Profile
+  displayName: string | null;
+
+  // Session suggestions
+  suggestions: SessionSuggestion[];
 
   // Onboarding
   onboardingStep: OnboardingStep;
@@ -167,6 +173,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [appPhase, setAppPhase] = useState<AppPhase>('loading');
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [showSettings, setShowSettings] = useState(false);
+  const [displayName, setDisplayName] = useState<string | null>(loadJSON<string | null>('toney_display_name', null));
+  const [suggestions, setSuggestions] = useState<SessionSuggestion[]>([]);
 
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
@@ -240,9 +248,14 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           if (user) {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('onboarding_completed, tension_type, secondary_tension_type, tone, depth, learning_styles')
+              .select('onboarding_completed, tension_type, secondary_tension_type, tone, depth, learning_styles, display_name')
               .eq('id', user.id)
               .single();
+
+            if (profile?.display_name) {
+              setDisplayName(profile.display_name);
+              saveJSON('toney_display_name', profile.display_name);
+            }
 
             if (profile?.onboarding_completed) {
               hasOnboarded = true;
@@ -380,6 +393,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             if (dbFocusAreas) {
               setFocusAreas(dbFocusAreas as FocusArea[]);
+            }
+
+            // Hydrate session suggestions
+            try {
+              const res = await fetch('/api/suggestions');
+              if (res.ok) {
+                const { suggestions: s } = await res.json();
+                if (Array.isArray(s) && s.length > 0) {
+                  setSuggestions(s);
+                }
+              }
+            } catch {
+              // Non-critical
             }
           }
         } catch {
@@ -1235,6 +1261,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setActiveTab,
         showSettings,
         setShowSettings,
+        displayName,
+        suggestions,
         onboardingStep,
         setOnboardingStep,
         currentQuestionIndex,
