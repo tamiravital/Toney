@@ -1,4 +1,4 @@
-import { TensionType, DepthLevel, LearningStyle } from '@toney/types';
+import { TensionType, LearningStyle } from '@toney/types';
 
 export interface ToneExample {
   emoji: string;
@@ -31,8 +31,14 @@ export const toneMap: Record<string, number> = {
 };
 
 export function toneLabel(tone: number): string {
-  if (tone <= 4) return "Gentle";
-  if (tone >= 7) return "Direct";
+  if (tone <= 2) return "Gentle";
+  if (tone >= 4) return "Direct";
+  return "Balanced";
+}
+
+export function depthLabel(depth: number): string {
+  if (depth <= 2) return "Surface";
+  if (depth >= 4) return "Deep";
   return "Balanced";
 }
 
@@ -50,18 +56,6 @@ export const learningStyleOptions: LearningStyleOption[] = [
   { value: "experiential", label: "Things to try", emoji: "\u{1F52C}", iconName: "FlaskConical" },
 ];
 
-export interface DepthOption {
-  value: DepthLevel;
-  emoji: string;
-  label: string;
-  desc: string;
-}
-
-export const depthOptions: DepthOption[] = [
-  { value: "surface", emoji: "\u26A1", label: "Quick tactics", desc: "Just help me fix the behavior" },
-  { value: "balanced", emoji: "\u2696\u{FE0F}", label: "Balanced", desc: "Understanding + action" },
-  { value: "deep", emoji: "\u{1F30A}", label: "Deep exploration", desc: "Where this came from, and how to transform it" },
-];
 
 export const suggestedWins: Record<TensionType, string[]> = {
   avoid: [

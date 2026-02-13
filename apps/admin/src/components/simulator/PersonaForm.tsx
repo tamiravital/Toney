@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import type { Profile, TensionType, DepthLevel, LearningStyle } from '@toney/types';
+import type { Profile, TensionType, LearningStyle } from '@toney/types';
 import { ALL_TENSIONS } from '@toney/constants';
 
 const TENSIONS: TensionType[] = ALL_TENSIONS;
-const DEPTHS: DepthLevel[] = ['surface', 'balanced', 'deep'];
 const LEARNING_STYLES: LearningStyle[] = ['analytical', 'somatic', 'narrative', 'experiential'];
 
 interface PersonaFormProps {
@@ -31,10 +30,8 @@ export default function PersonaForm({ initialValues, onSubmit, submitLabel = 'Sa
   const [secondaryTension, setSecondaryTension] = useState<string>(
     initialValues?.profile_config?.secondary_tension_type ?? ''
   );
-  const [tone, setTone] = useState(initialValues?.profile_config?.tone ?? 5);
-  const [depth, setDepth] = useState<DepthLevel>(
-    (initialValues?.profile_config?.depth as DepthLevel) ?? 'balanced'
-  );
+  const [tone, setTone] = useState(initialValues?.profile_config?.tone ?? 3);
+  const [depth, setDepth] = useState(initialValues?.profile_config?.depth ?? 3);
   const [learningStyles, setLearningStyles] = useState<LearningStyle[]>(
     (initialValues?.profile_config?.learning_styles as LearningStyle[]) ?? ['analytical']
   );
@@ -127,41 +124,40 @@ export default function PersonaForm({ initialValues, onSubmit, submitLabel = 'Sa
       {/* Tone */}
       <div>
         <label className={labelClass}>
-          Tone: {tone} — {tone <= 4 ? 'Gentle' : tone <= 6 ? 'Balanced' : 'Direct'}
+          Tone: {tone}/5 — {tone <= 2 ? 'Gentle' : tone >= 4 ? 'Direct' : 'Balanced'}
         </label>
         <input
           type="range"
           min={1}
-          max={10}
+          max={5}
           value={tone}
           onChange={(e) => setTone(Number(e.target.value))}
           className="w-full accent-indigo-600"
         />
         <div className="flex justify-between text-xs text-gray-400 mt-1">
           <span>1 Gentle</span>
-          <span>5 Balanced</span>
-          <span>10 Direct</span>
+          <span>3 Balanced</span>
+          <span>5 Direct</span>
         </div>
       </div>
 
       {/* Depth */}
       <div>
-        <label className={labelClass}>Depth</label>
-        <div className="flex gap-2">
-          {DEPTHS.map(d => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDepth(d)}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-colors
-                ${depth === d
-                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                  : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              {d.charAt(0).toUpperCase() + d.slice(1)}
-            </button>
-          ))}
+        <label className={labelClass}>
+          Depth: {depth}/5 — {depth <= 2 ? 'Surface' : depth >= 4 ? 'Deep' : 'Balanced'}
+        </label>
+        <input
+          type="range"
+          min={1}
+          max={5}
+          value={depth}
+          onChange={(e) => setDepth(Number(e.target.value))}
+          className="w-full accent-indigo-600"
+        />
+        <div className="flex justify-between text-xs text-gray-400 mt-1">
+          <span>1 Surface</span>
+          <span>3 Balanced</span>
+          <span>5 Deep</span>
         </div>
       </div>
 

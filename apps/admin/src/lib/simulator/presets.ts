@@ -1,4 +1,4 @@
-import type { Profile, TensionType, DepthLevel, LearningStyle } from '@toney/types';
+import type { Profile, TensionType, LearningStyle } from '@toney/types';
 
 export interface PresetPersona {
   name: string;
@@ -52,8 +52,8 @@ export const PRESET_PERSONAS: PresetPersona[] = [
     description: 'Avoids checking accounts, overwhelmed by money decisions. Gentle coaching preferred.',
     profile_config: {
       tension_type: 'avoid' as TensionType,
-      tone: 3,
-      depth: 'surface' as DepthLevel,
+      tone: 2,
+      depth: 1,
       learning_styles: ['narrative'] as LearningStyle[],
       life_stage: 'early_career',
       income_type: 'steady_paycheck',
@@ -87,8 +87,8 @@ YOUR SPECIFIC CHARACTER — Maya, 27, junior graphic designer:
     description: 'Controls every dollar obsessively. Wants direct, deep coaching.',
     profile_config: {
       tension_type: 'grip' as TensionType,
-      tone: 8,
-      depth: 'deep' as DepthLevel,
+      tone: 4,
+      depth: 5,
       learning_styles: ['analytical'] as LearningStyle[],
       life_stage: 'established',
       income_type: 'steady_paycheck',
@@ -122,8 +122,8 @@ YOUR SPECIFIC CHARACTER — David, 38, senior product manager at a tech company:
     description: 'Uses spending to numb difficult emotions. Balanced coaching.',
     profile_config: {
       tension_type: 'numb' as TensionType,
-      tone: 5,
-      depth: 'balanced' as DepthLevel,
+      tone: 3,
+      depth: 3,
       learning_styles: ['somatic', 'experiential'] as LearningStyle[],
       life_stage: 'mid_career',
       income_type: 'steady_paycheck',
@@ -157,8 +157,8 @@ YOUR SPECIFIC CHARACTER — Priya, 33, marketing manager:
     description: 'Always puts others first financially. Needs gentle, deep exploration.',
     profile_config: {
       tension_type: 'give' as TensionType,
-      tone: 3,
-      depth: 'deep' as DepthLevel,
+      tone: 2,
+      depth: 5,
       learning_styles: ['narrative'] as LearningStyle[],
       life_stage: 'mid_career',
       income_type: 'variable',
@@ -193,8 +193,8 @@ YOUR SPECIFIC CHARACTER — Carmen, 41, freelance event planner:
     description: 'Driven by FOMO and keeping up appearances. Direct coaching, surface start.',
     profile_config: {
       tension_type: 'chase' as TensionType,
-      tone: 8,
-      depth: 'surface' as DepthLevel,
+      tone: 4,
+      depth: 1,
       learning_styles: ['analytical'] as LearningStyle[],
       life_stage: 'early_career',
       income_type: 'steady_paycheck',

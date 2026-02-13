@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, RotateCcw, LogOut } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { tensionColor, learningStyleOptions } from '@toney/constants';
-import { toneLabel } from '@toney/constants';
-import { DepthLevel, LearningStyle } from '@toney/types';
+import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
+import { LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
 const lifeStageOptions = [
@@ -31,13 +30,40 @@ const relationshipOptions = [
 ];
 
 export default function SettingsOverlay() {
-  const { identifiedTension, styleProfile, setStyleProfile, setShowSettings, signOut, retakeQuiz } = useToney();
+  const { identifiedTension, styleProfile, setStyleProfile, setShowSettings, displayName, setDisplayName, signOut, retakeQuiz } = useToney();
   const [localStyle, setLocalStyle] = useState({ ...styleProfile });
+  const [localDisplayName, setLocalDisplayName] = useState(displayName || '');
   const [lifeStage, setLifeStage] = useState('');
   const [incomeType, setIncomeType] = useState('');
   const [relationship, setRelationship] = useState('');
   const [emotionalWhy, setEmotionalWhy] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Load About You fields from profile on mount
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const loadProfile = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('profiles')
+          .select('life_stage, income_type, relationship_status, emotional_why')
+          .eq('id', user.id)
+          .single();
+        if (data) {
+          if (data.life_stage) setLifeStage(data.life_stage);
+          if (data.income_type) setIncomeType(data.income_type);
+          if (data.relationship_status) setRelationship(data.relationship_status);
+          if (data.emotional_why) setEmotionalWhy(data.emotional_why);
+        }
+      } catch {
+        // Silent fail
+      }
+    };
+    loadProfile();
+  }, []);
 
   const toggleLearningStyle = (style: LearningStyle) => {
     setLocalStyle(prev => {
@@ -52,6 +78,8 @@ export default function SettingsOverlay() {
 
   const handleSave = async () => {
     setStyleProfile(localStyle);
+    const trimmedName = localDisplayName.trim() || null;
+    setDisplayName(trimmedName);
 
     if (isSupabaseConfigured()) {
       setSaving(true);
@@ -60,6 +88,7 @@ export default function SettingsOverlay() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           await supabase.from('profiles').update({
+            display_name: trimmedName,
             tone: localStyle.tone,
             depth: localStyle.depth,
             learning_styles: localStyle.learningStyles || [],
@@ -95,6 +124,18 @@ export default function SettingsOverlay() {
           </button>
         </div>
 
+        {/* Display name */}
+        <div className="mb-6">
+          <h3 className="font-semibold text-gray-900 text-sm mb-2">Display Name</h3>
+          <input
+            type="text"
+            value={localDisplayName}
+            onChange={(e) => setLocalDisplayName(e.target.value)}
+            placeholder="Your name"
+            className="w-full p-3 rounded-xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none"
+          />
+        </div>
+
         {/* Tension info */}
         {tension && colors && (
           <div className={`${colors.bg} rounded-2xl p-4 mb-6`}>
@@ -116,7 +157,7 @@ export default function SettingsOverlay() {
           <input
             type="range"
             min="1"
-            max="10"
+            max="5"
             value={localStyle.tone}
             onChange={(e) => setLocalStyle(prev => ({ ...prev, tone: parseInt(e.target.value) }))}
             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
@@ -131,20 +172,18 @@ export default function SettingsOverlay() {
         {/* Depth */}
         <div className="mb-6">
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Coaching Depth</h3>
-          <div className="space-y-2">
-            {(['surface', 'balanced', 'deep'] as DepthLevel[]).map((d) => (
-              <button
-                key={d}
-                onClick={() => setLocalStyle(prev => ({ ...prev, depth: d }))}
-                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all text-sm ${
-                  localStyle.depth === d
-                    ? 'border-indigo-600 bg-indigo-50'
-                    : 'border-gray-100 hover:border-gray-200'
-                }`}
-              >
-                <span className="font-medium text-gray-900 capitalize">{d}</span>
-              </button>
-            ))}
+          <input
+            type="range"
+            min="1"
+            max="5"
+            value={localStyle.depth}
+            onChange={(e) => setLocalStyle(prev => ({ ...prev, depth: parseInt(e.target.value) }))}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+          />
+          <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+            <span>Surface</span>
+            <span className="font-semibold text-indigo-600">{depthLabel(localStyle.depth)}</span>
+            <span>Deep</span>
           </div>
         </div>
 

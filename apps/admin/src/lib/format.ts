@@ -83,15 +83,16 @@ export function stageLabel(stage: StageOfChange | null | undefined): string {
   return STAGE_LABELS[stage] || stage;
 }
 
-const DEPTH_LABELS: Record<string, string> = {
-  surface: 'Surface',
-  balanced: 'Balanced',
-  deep: 'Deep',
-};
-
-export function depthLabel(depth: string | null | undefined): string {
-  if (!depth) return 'Unknown';
-  return DEPTH_LABELS[depth] || depth;
+export function depthLabel(depth: number | string | null | undefined): string {
+  if (depth == null) return 'Unknown';
+  if (typeof depth === 'number') {
+    if (depth <= 2) return `${depth} — Surface`;
+    if (depth >= 4) return `${depth} — Deep`;
+    return `${depth} — Balanced`;
+  }
+  // Legacy string values
+  const labels: Record<string, string> = { surface: 'Surface', balanced: 'Balanced', deep: 'Deep' };
+  return labels[depth] || depth;
 }
 
 export function toneLabel(tone: number): string {
