@@ -155,8 +155,9 @@ export default function ChatScreen() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Generate a simulated user message (sim mode only)
+  const canGenerate = simMode && !!currentSessionId && !generating && !loadingChat;
   const handleGenerate = async () => {
-    if (!simMode || !currentSessionId || generating) return;
+    if (!canGenerate) return;
     setGenerating(true);
     try {
       const res = await fetch(buildApiUrl(`/api/sim/suggest-message`), {
@@ -508,11 +509,13 @@ export default function ChatScreen() {
             {simMode && (
               <button
                 onClick={handleGenerate}
-                disabled={generating}
-                title="Generate user message"
+                disabled={!canGenerate}
+                title={canGenerate ? "Generate user message" : "Waiting for session..."}
                 className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
                   generating
                     ? 'bg-amber-100 text-amber-400 animate-pulse'
+                    : !canGenerate
+                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
                     : 'bg-amber-50 text-amber-500 hover:bg-amber-100 active:scale-95'
                 }`}
               >
