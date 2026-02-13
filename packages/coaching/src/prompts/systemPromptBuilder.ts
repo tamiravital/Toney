@@ -1,4 +1,4 @@
-import { SystemPromptBlock } from '@toney/types';
+import { SystemPromptBlock, SessionSuggestion } from '@toney/types';
 
 // ────────────────────────────────────────────
 // Core Principles (static, ~200 tokens)
@@ -151,5 +151,29 @@ Your opening should:
 - End by asking if they're up for it, or if something else is on their mind
 
 Don't say "Welcome back to your session" or anything robotic. Just be a coach who remembers them.`,
+  };
+}
+
+/**
+ * Returns a one-time system prompt block for sessions started from a suggestion.
+ * Tells the Coach how to open based on the suggestion the user chose.
+ * Replaces buildSessionOpeningBlock() when a suggestion is available.
+ */
+export function buildSessionOpeningFromSuggestion(suggestion: SessionSuggestion): SystemPromptBlock {
+  return {
+    type: 'text',
+    text: `[SESSION OPENING — SUGGESTION SELECTED] The user chose to explore: "${suggestion.title}"
+
+Their teaser for context: "${suggestion.teaser}"
+
+Opening direction: ${suggestion.openingDirection}
+
+Your opening should:
+- Reference what they chose — they tapped on this because it resonated
+- Follow the opening direction above
+- Keep it to 3-4 sentences. Warm, not clinical.
+- End by inviting them in — not asking "is this ok?" but starting the work
+
+Don't say "Welcome back to your session" or anything robotic. The user picked this — honor that choice by diving in.`,
   };
 }

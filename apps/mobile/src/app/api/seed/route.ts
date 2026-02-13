@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { seedUnderstanding } from '@toney/coaching';
+import { seedUnderstanding, generateSessionSuggestions } from '@toney/coaching';
 import { formatAnswersReadable, questions } from '@toney/constants';
 
 /**
@@ -73,6 +73,25 @@ export async function POST() {
         });
         await supabase.from('focus_areas').insert(focusAreaRows);
       }
+    }
+
+    // ── Generate initial session suggestions (best-effort) ──
+    try {
+      const suggestionsResult = await generateSessionSuggestions({
+        understanding: result.understanding,
+        tensionType: result.tensionLabel,
+        isPostSeed: true,
+      });
+
+      if (suggestionsResult.suggestions.length > 0) {
+        await supabase.from('session_suggestions').insert({
+          user_id: user.id,
+          suggestions: suggestionsResult.suggestions,
+        });
+      }
+    } catch (err) {
+      console.error('Initial suggestions generation failed (non-fatal):', err);
+      // Non-fatal — user just won't have suggestions on first home screen
     }
 
     return NextResponse.json({

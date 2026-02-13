@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { closeSessionPipeline } from '@toney/coaching';
+import type { FocusArea, RewireCard, Win } from '@toney/types';
 
 /**
  * POST /api/session/close
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Load data in parallel ──
-    const [messagesResult, profileResult, briefingResult, cardsResult, sessionResult, prevNotesResult, focusAreasResult] = await Promise.all([
+    const [messagesResult, profileResult, briefingResult, cardsResult, allCardsResult, sessionResult, prevNotesResult, focusAreasResult, winsResult, prevSuggestionsResult] = await Promise.all([
       supabase
         .from('messages')
         .select('role, content')
@@ -42,10 +43,16 @@ export async function POST(request: NextRequest) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
+      // Cards from this session (for notes)
       supabase
         .from('rewire_cards')
         .select('title, category')
         .eq('session_id', sessionId),
+      // All user's cards (for suggestion context)
+      supabase
+        .from('rewire_cards')
+        .select('id, title, category, times_completed')
+        .eq('user_id', user.id),
       supabase
         .from('sessions')
         .select('session_number')
@@ -62,9 +69,24 @@ export async function POST(request: NextRequest) {
         .single(),
       supabase
         .from('focus_areas')
-        .select('text')
+        .select('*')
         .eq('user_id', user.id)
         .is('archived_at', null),
+      // Recent wins (for suggestion context)
+      supabase
+        .from('wins')
+        .select('id, text, tension_type')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10),
+      // Previous suggestion titles (to avoid repetition)
+      supabase
+        .from('session_suggestions')
+        .select('suggestions')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
     ]);
 
     const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -81,6 +103,9 @@ export async function POST(request: NextRequest) {
       category: c.category,
     }));
 
+    const allCards = (allCardsResult.data || []) as RewireCard[];
+    const recentWins = (winsResult.data || []) as Win[];
+
     const sessionNumber = sessionResult.data?.session_number || null;
     let previousHeadline: string | null = null;
     if (prevNotesResult.data?.session_notes) {
@@ -90,7 +115,20 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore */ }
     }
 
-    const activeFocusAreas = (focusAreasResult.data || []) as { text: string }[];
+    const activeFocusAreas = (focusAreasResult.data || []) as FocusArea[];
+
+    // Extract previous suggestion titles (to avoid repetition)
+    let previousSuggestionTitles: string[] = [];
+    if (prevSuggestionsResult.data?.suggestions) {
+      try {
+        const prevSuggestions = typeof prevSuggestionsResult.data.suggestions === 'string'
+          ? JSON.parse(prevSuggestionsResult.data.suggestions)
+          : prevSuggestionsResult.data.suggestions;
+        if (Array.isArray(prevSuggestions)) {
+          previousSuggestionTitles = prevSuggestions.map((s: { title?: string }) => s.title || '').filter(Boolean);
+        }
+      } catch { /* ignore */ }
+    }
 
     // ── Pipeline ──
     const result = await closeSessionPipeline({
@@ -104,6 +142,9 @@ export async function POST(request: NextRequest) {
       sessionNumber,
       previousHeadline,
       activeFocusAreas,
+      rewireCards: allCards,
+      recentWins,
+      previousSuggestionTitles,
     });
 
     // ── Save results ──
@@ -124,6 +165,17 @@ export async function POST(request: NextRequest) {
         }),
       }).eq('id', user.id),
     ];
+
+    // Save suggestions (if any were generated)
+    if (result.suggestions.length > 0) {
+      saveOps.push(
+        supabase.from('session_suggestions').insert({
+          user_id: user.id,
+          suggestions: result.suggestions,
+          generated_after_session_id: sessionId,
+        }),
+      );
+    }
 
     await Promise.all(saveOps);
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney/coaching';
-import { Profile, RewireCard, Win, CoachingBriefing, FocusArea } from '@toney/types';
+import { Profile, RewireCard, Win, CoachingBriefing, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
 const anthropic = new Anthropic({
@@ -31,15 +31,17 @@ export async function POST(request: NextRequest) {
     }
     timing('auth complete');
 
-    // ── Parse optional previousSessionId ──
+    // ── Parse optional body ──
     let previousSessionId: string | null = null;
+    let suggestionIndex: number | null = null;
     try {
       const body = await request.json();
       previousSessionId = body.previousSessionId || null;
+      suggestionIndex = typeof body.suggestionIndex === 'number' ? body.suggestionIndex : null;
     } catch { /* empty body is fine */ }
 
     // ── Load data in parallel ──
-    const [profileResult, winsResult, cardsResult, briefingResult, notesResult, focusAreasResult] = await Promise.all([
+    const [profileResult, winsResult, cardsResult, briefingResult, notesResult, focusAreasResult, suggestionsResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('*')
@@ -77,9 +79,17 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .is('archived_at', null)
         .order('created_at', { ascending: true }),
+      // Load latest suggestions for fast path
+      supabase
+        .from('session_suggestions')
+        .select('suggestions')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
     ]);
 
-    timing('data loaded (6 parallel queries)');
+    timing('data loaded (7 parallel queries)');
 
     const profile = profileResult.data as Profile | null;
     if (!profile) {
@@ -124,7 +134,7 @@ export async function POST(request: NextRequest) {
     // ── Deferred close of previous session ──
     if (previousSessionId) {
       try {
-        const [oldMessagesResult, oldCardsResult, oldSessionResult, oldPrevNotesResult] = await Promise.all([
+        const [oldMessagesResult, oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([
           supabase
             .from('messages')
             .select('role, content')
@@ -146,6 +156,13 @@ export async function POST(request: NextRequest) {
             .eq('session_status', 'completed')
             .not('session_notes', 'is', null)
             .neq('id', previousSessionId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single(),
+          supabase
+            .from('session_suggestions')
+            .select('suggestions')
+            .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(1)
             .single(),
@@ -171,6 +188,19 @@ export async function POST(request: NextRequest) {
             } catch { /* ignore */ }
           }
 
+          // Extract previous suggestion titles
+          let prevSuggestionTitles: string[] = [];
+          if (oldPrevSuggestionsResult.data?.suggestions) {
+            try {
+              const prevSuggs = typeof oldPrevSuggestionsResult.data.suggestions === 'string'
+                ? JSON.parse(oldPrevSuggestionsResult.data.suggestions)
+                : oldPrevSuggestionsResult.data.suggestions;
+              if (Array.isArray(prevSuggs)) {
+                prevSuggestionTitles = prevSuggs.map((s: { title?: string }) => s.title || '').filter(Boolean);
+              }
+            } catch { /* ignore */ }
+          }
+
           const closeResult = await closeSessionPipeline({
             sessionId: previousSessionId,
             messages: oldMessages,
@@ -181,7 +211,10 @@ export async function POST(request: NextRequest) {
             savedCards,
             sessionNumber: oldSessionNumber,
             previousHeadline: oldPreviousHeadline,
-            activeFocusAreas: ((focusAreasResult.data || []) as { text: string }[]).map(a => ({ text: a.text })),
+            activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
+            rewireCards: (cardsResult.data || []) as RewireCard[],
+            recentWins: (winsResult.data || []) as Win[],
+            previousSuggestionTitles: prevSuggestionTitles,
           });
 
           // Save close results
@@ -200,6 +233,17 @@ export async function POST(request: NextRequest) {
               }),
             }).eq('id', user.id),
           ];
+
+          // Save suggestions from deferred close
+          if (closeResult.suggestions.length > 0) {
+            closeSaveOps.push(
+              supabase.from('session_suggestions').insert({
+                user_id: user.id,
+                suggestions: closeResult.suggestions,
+                generated_after_session_id: previousSessionId,
+              }),
+            );
+          }
 
           await Promise.all(closeSaveOps);
           timing('deferred close complete');
@@ -239,7 +283,23 @@ export async function POST(request: NextRequest) {
       .filter(Boolean) as string[];
     const activeFocusAreas = (focusAreasResult.data || []) as FocusArea[];
 
-    // ── Pipeline Step 1: Prepare session (Sonnet) ──
+    // Resolve selected suggestion (if any)
+    let selectedSuggestion: SessionSuggestion | null = null;
+    if (suggestionsResult.data?.suggestions) {
+      try {
+        const allSuggestions = typeof suggestionsResult.data.suggestions === 'string'
+          ? JSON.parse(suggestionsResult.data.suggestions)
+          : suggestionsResult.data.suggestions;
+        if (Array.isArray(allSuggestions) && allSuggestions.length > 0) {
+          const idx = suggestionIndex != null ? suggestionIndex : 0;
+          selectedSuggestion = allSuggestions[idx] || allSuggestions[0];
+        }
+      } catch { /* ignore — fall through to standard path */ }
+    }
+
+    // ── Pipeline Step 1: Prepare session ──
+    // Fast path (selectedSuggestion + not first session): pure code, ~0ms
+    // Standard path: prepareSession (Sonnet), ~3-5s
     const plan = await planSessionStep({
       profile,
       understanding: profile.understanding,
@@ -248,9 +308,10 @@ export async function POST(request: NextRequest) {
       previousBriefing,
       recentSessionNotes,
       activeFocusAreas,
+      selectedSuggestion,
     });
 
-    timing('prepareSession complete (Sonnet)');
+    timing(selectedSuggestion ? 'assembleBriefing complete (fast path)' : 'prepareSession complete (Sonnet)');
 
     // Save briefing — don't wait for these
     let version = 1;

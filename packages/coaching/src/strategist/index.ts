@@ -7,3 +7,7 @@ export type {
   SeedUnderstandingInput,
   SeedUnderstandingOutput,
 } from './evolveUnderstanding';
+export { generateSessionSuggestions } from './generateSuggestions';
+export type { GenerateSuggestionsInput, GenerateSuggestionsOutput } from './generateSuggestions';
+export { assembleBriefingDocument } from './assembleBriefing';
+export type { AssembleBriefingInput } from './assembleBriefing';

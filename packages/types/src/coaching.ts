@@ -62,6 +62,35 @@ export interface SessionNotesOutput {
   cardsCreated?: { title: string; category: string }[];
 }
 
+// --- Session Suggestions ---
+
+export type SuggestionLength = 'quick' | 'medium' | 'deep' | 'standing';
+
+export interface SessionSuggestion {
+  /** Short, compelling title — e.g. "Price your first piece" */
+  title: string;
+  /** 1-2 sentence teaser that makes the user want to tap */
+  teaser: string;
+  /** Estimated engagement: quick (2-5min), medium (5-10min), deep (10-15min), standing (always available) */
+  length: SuggestionLength;
+  /** One-sentence coaching thesis scoped to this thread */
+  hypothesis: string;
+  /** Strength + goal + what's in the way — for this specific direction */
+  leveragePoint: string;
+  /** What to explore if the user picks this */
+  curiosities: string;
+  /** How the Coach should open the session if this suggestion is selected */
+  openingDirection: string;
+}
+
+export interface SessionSuggestionsRow {
+  id: string;
+  user_id: string;
+  suggestions: SessionSuggestion[];
+  generated_after_session_id?: string | null;
+  created_at: string;
+}
+
 // --- System Prompt Blocks (for prompt caching) ---
 
 export interface SystemPromptBlock {

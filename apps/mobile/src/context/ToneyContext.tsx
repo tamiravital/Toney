@@ -119,7 +119,7 @@ interface ToneyContextValue {
   sessionNotes: SessionNotesOutput | null;
   endSession: () => Promise<void>;
   dismissSessionNotes: () => void;
-  openSession: (previousSessionId?: string, preserveMessages?: boolean) => Promise<void>;
+  openSession: (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number) => Promise<void>;
   startNewSession: () => Promise<void>;
   loadingChat: boolean;
   isFirstSession: boolean;
@@ -818,7 +818,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionNotes(null);
   }, []);
 
-  const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean) => {
+  const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number) => {
     if (!isSupabaseConfigured()) return;
 
     setLoadingChat(true);
@@ -844,6 +844,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(previousSessionId && { previousSessionId }),
+          ...(suggestionIndex != null && { suggestionIndex }),
         }),
       });
 

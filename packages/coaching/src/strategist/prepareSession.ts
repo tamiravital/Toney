@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Profile, RewireCard, Win, CoachingBriefing, FocusArea } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 import { TENSION_GUIDANCE } from './constants';
+import { formatToolkit, formatWins, formatFocusAreas, formatCoachingStyle } from './formatters';
 
 // ────────────────────────────────────────────
 // Session Preparation — Plans the session from the understanding
@@ -78,33 +79,6 @@ You have a comprehensive understanding of this person (provided below). Your job
 // ────────────────────────────────────────────
 // User message assembly
 // ────────────────────────────────────────────
-
-function formatToolkit(cards: RewireCard[]): string {
-  if (!cards || cards.length === 0) return 'No cards in toolkit yet.';
-  return cards.map(c => {
-    let line = `- [${c.category}] "${c.title}"`;
-    if (c.times_completed) line += ` — used ${c.times_completed}x`;
-    return line;
-  }).join('\n');
-}
-
-function formatWins(wins: Win[]): string {
-  if (!wins || wins.length === 0) return 'No wins logged yet.';
-  return wins.map(w => `- "${w.text}"`).join('\n');
-}
-
-function formatFocusAreas(areas: FocusArea[]): string {
-  if (!areas || areas.length === 0) return 'No focus areas set yet.';
-  return areas.map(a => `- "${a.text}"`).join('\n');
-}
-
-function formatCoachingStyle(profile: Profile): string {
-  const lines: string[] = [];
-  lines.push(`Tone: ${profile.tone ?? 5}/10 (1=gentle, 10=direct)`);
-  lines.push(`Depth: ${profile.depth || 'balanced'}`);
-  if (profile.learning_styles?.length) lines.push(`Learning styles: ${profile.learning_styles.join(', ')}`);
-  return lines.join('\n');
-}
 
 function buildUserMessage(input: PrepareSessionInput): string {
   const sections: string[] = [];

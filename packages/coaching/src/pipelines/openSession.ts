@@ -1,13 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, RewireCard, Win, CoachingBriefing, SystemPromptBlock, FocusArea } from '@toney/types';
+import { Profile, RewireCard, Win, CoachingBriefing, SystemPromptBlock, FocusArea, SessionSuggestion } from '@toney/types';
 import { prepareSession, SessionPreparation } from '../strategist/prepareSession';
-import { buildSystemPromptFromBriefing, buildSessionOpeningBlock } from '../prompts/systemPromptBuilder';
+import { assembleBriefingDocument } from '../strategist/assembleBriefing';
+import { buildSystemPromptFromBriefing, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from '../prompts/systemPromptBuilder';
 
 // ────────────────────────────────────────────
 // Open Session Pipeline
 // ────────────────────────────────────────────
 // Orchestrates everything that happens when a session starts:
-//   1. Prepare the session (Sonnet) — plans from the understanding narrative
+//
+// Fast path (selectedSuggestion exists + not first session):
+//   1. assembleBriefingDocument() — pure code, instant, no LLM
+//   2. Build system prompt from assembled briefing + suggestion opening
+//   3. Stream Coach opening message using suggestion's openingDirection
+//
+// Standard path (first session or no suggestions):
+//   1. prepareSession() — Sonnet, plans from understanding narrative
 //   2. Build the Coach's system prompt from the briefing
 //   3. Generate the Coach's opening message (Sonnet) — can stream or block
 //
@@ -30,6 +38,8 @@ export interface OpenSessionInput {
   recentSessionNotes?: string[] | null;
   /** Active focus areas */
   activeFocusAreas?: FocusArea[] | null;
+  /** Pre-generated suggestion to use (skips prepareSession Sonnet call) */
+  selectedSuggestion?: SessionSuggestion | null;
 }
 
 export interface PlanSessionOutput {
@@ -57,10 +67,37 @@ export interface OpenSessionOutput extends PlanSessionOutput {
 /**
  * Step 1+2: Prepare the session and build system prompt blocks.
  * Does NOT generate the opening message — caller can stream that separately.
+ *
+ * Fast path: if selectedSuggestion is provided AND it's not the first session,
+ * uses assembleBriefingDocument() (pure code, instant) instead of prepareSession() (Sonnet).
  */
 export async function planSessionStep(input: OpenSessionInput): Promise<PlanSessionOutput> {
   const isFirstSession = !input.previousBriefing;
 
+  // ── Fast path: use pre-generated suggestion ──
+  if (input.selectedSuggestion && !isFirstSession && input.understanding) {
+    const briefingContent = assembleBriefingDocument({
+      understanding: input.understanding,
+      profile: input.profile,
+      suggestion: input.selectedSuggestion,
+      rewireCards: (input.rewireCards || undefined) as RewireCard[] | undefined,
+      recentWins: (input.recentWins || undefined) as Win[] | undefined,
+      activeFocusAreas: (input.activeFocusAreas || undefined) as FocusArea[] | undefined,
+    });
+
+    const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefingContent);
+    systemPromptBlocks.push(buildSessionOpeningFromSuggestion(input.selectedSuggestion));
+
+    return {
+      briefingContent,
+      hypothesis: input.selectedSuggestion.hypothesis,
+      leveragePoint: input.selectedSuggestion.leveragePoint,
+      curiosities: input.selectedSuggestion.curiosities,
+      systemPromptBlocks,
+    };
+  }
+
+  // ── Standard path: run Strategist (Sonnet) ──
   const preparation: SessionPreparation = await prepareSession({
     profile: input.profile,
     understanding: input.understanding,
