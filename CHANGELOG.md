@@ -1,5 +1,22 @@
 # Toney — Changelog
 
+## 2026-02-12 — Home Screen Redesign
+- **Session suggestions on home screen**: Personalized session ideas displayed as a vertical list — featured card with gradient treatment at top, compact rows below, each showing title, teaser, and time estimate
+- **Personalized greeting**: "Good evening, Tamir" using first name from Google sign-in
+- **Settings button**: Labeled pill ("Settings") instead of just a gear icon
+- **"Or just start talking"**: Free conversation link below suggestions for when none of the ideas fit
+- **Removed**: "What Toney Sees" (static tension label), "Your Rewire Cards" (duplicate of Rewire tab)
+- Backfilled session suggestions for both existing users (Tamir: 8, Noga: 9)
+
+## 2026-02-12 — Session Suggestions System
+- **Session suggestions**: After each session closes, Toney generates 4-10 personalized session ideas for next time — each with a title, teaser, estimated length (quick/medium/deep/standing), and full coaching direction
+- **Faster session opens**: When suggestions exist, session open skips the Strategist LLM call entirely (~5-8s → ~2-4s) using pure-code briefing assembly
+- Close pipeline is now sequential: evolve understanding → generate notes → generate suggestions (each step feeds the next)
+- Initial suggestions generated after onboarding so new users have options from the start
+- New GET `/api/suggestions` endpoint for the future home screen UI
+- New `session_suggestions` table (migration 020)
+- Home screen UI shipped separately (see Home Screen Redesign above)
+
 ## 2026-02-12 — Focus Areas System
 - **Focus Areas**: New coaching entity for tracking what the user is working on — ongoing intentions, not completable goals
 - Focus areas come from three sources: onboarding Q7 goals, Coach suggestions via `[FOCUS]...[/FOCUS]` chat markers, or user-created

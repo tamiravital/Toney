@@ -48,7 +48,9 @@ toney/
 │   │       │       ├── chat/     # Coach agent endpoint (Sonnet, every message)
 │   │       │       ├── session/  # Session open + close pipelines
 │   │       │       ├── seed/     # Seed understanding after onboarding
-│   │       │       └── focus/    # Focus card API (GET current, POST complete/skip)
+│   │       │       ├── focus/    # Focus card API (GET current, POST complete/skip)
+│   │       │       ├── focus-areas/ # Focus areas API (GET active, POST create/archive)
+│   │       │       └── suggestions/ # GET session suggestions for home screen
 │   │       ├── components/       # onboarding, chat, home, layout, rewire, wins, auth
 │   │       ├── context/          # ToneyContext (global state)
 │   │       ├── hooks/            # useProfile, useSession, useRewireCards, useWins, useFocusCard
@@ -74,7 +76,7 @@ toney/
 │   │       └── pipelines/        # openSessionPipeline, closeSessionPipeline (pure functions)
 │   └── config-typescript/        # @toney/config-typescript — shared tsconfig
 │
-├── supabase/migrations/          # Shared database schema + RLS (001-018)
+├── supabase/migrations/          # Shared database schema + RLS (001-020)
 └── _prototype/                   # Original prototype (reference only)
 ```
 
@@ -87,7 +89,7 @@ The coaching engine uses two agents. All agent logic lives in `packages/coaching
 | Agent | Model | Temp | When it runs | What it does |
 |-------|-------|------|-------------|--------------|
 | **Coach** | Sonnet 4.5 | 0.7 | Every user message | The main chat endpoint (`/api/chat`). Reads the Strategist briefing. Requires a briefing to exist (no legacy fallback). Prompt-cached. |
-| **Strategist** (decomposed) | Sonnet 4.5 / Haiku | varies | Session open + close | Decomposed into pipeline functions. Open: `prepareSession()` (Sonnet). Close: `evolveUnderstanding()` (Sonnet) + `generateSessionNotes()` (Haiku) in parallel. |
+| **Strategist** (decomposed) | Sonnet 4.5 / Haiku | varies | Session open + close | Decomposed into pipeline functions. Open: fast path via `assembleBriefingDocument()` (pure code) when suggestions exist, fallback to `prepareSession()` (Sonnet). Close: `evolveUnderstanding()` → `generateSessionNotes()` → `generateSessionSuggestions()` (sequential). |
 
 ### Understanding Narrative — How Toney Learns
 
@@ -110,7 +112,7 @@ A snapshot of the understanding BEFORE each evolution is stored in `sessions.nar
                                             ↓
 [Every message] → Coach (/api/chat) ← reads briefing → Response
                                             ↓
-[Session close] → evolveUnderstanding() + generateSessionNotes() → updated profiles.understanding + session notes
+[Session close] → evolveUnderstanding() → generateSessionNotes() → generateSessionSuggestions() → updated understanding + notes + suggestions
 ```
 
 ### Prompt Caching
@@ -139,8 +141,8 @@ Cards are co-created in-chat via `[CARD:category]...[/CARD]` markers, rendered a
 
 | Event | Route | What runs |
 |-------|-------|-----------|
-| **Session open** | `POST /api/session/open` | `planSessionStep()` → builds briefing → streams opening message. If `previousSessionId` passed, runs `closeSessionPipeline()` first (deferred close). |
-| **Session close** | `POST /api/session/close` | `closeSessionPipeline()`: `evolveUnderstanding()` (Sonnet) + `generateSessionNotes()` (Haiku) in parallel via `Promise.allSettled`. |
+| **Session open** | `POST /api/session/open` | Fast path: `assembleBriefingDocument()` (pure code) when suggestions exist, else `prepareSession()` (Sonnet) → streams opening message. If `previousSessionId` passed, runs `closeSessionPipeline()` first (deferred close). |
+| **Session close** | `POST /api/session/close` | `closeSessionPipeline()`: `evolveUnderstanding()` (Sonnet) → `generateSessionNotes()` (Haiku) → `generateSessionSuggestions()` (Sonnet) — sequential. |
 | **First session** | `POST /api/session/open` | `prepareSession()` — unified path for all sessions. Detects first session by absence of previous briefing. |
 | **After onboarding** | `POST /api/seed` | `seedUnderstanding()` — creates initial understanding + determines tension type from quiz answers. |
 
@@ -181,7 +183,7 @@ Tension details/colors, onboarding questions, style options, stage/engagement co
 ### @toney/coaching
 2-agent coaching engine. Exports:
 - **Coach**: `buildSystemPromptFromBriefing()`, `buildSessionOpeningBlock()`
-- **Strategist**: `prepareSession()`, `evolveUnderstanding()`, `seedUnderstanding()`
+- **Strategist**: `prepareSession()`, `evolveUnderstanding()`, `seedUnderstanding()`, `generateSessionSuggestions()`, `assembleBriefingDocument()`
 - **Pipelines**: `openSessionPipeline()`, `closeSessionPipeline()`, `planSessionStep()`
 - **Session**: `detectSessionBoundary()`
 - **Session Notes**: `generateSessionNotes()`
@@ -208,14 +210,16 @@ Tone is a continuous 1-10 scale (not discrete buckets). 1-4 = Gentle, 5-6 = Bala
 ### Mobile-First PWA
 All mobile UI constrained to `max-w-[430px]` centered on desktop.
 
-## Data Model (7 tables)
-- `profiles` — user settings (tension_type, tone, depth, learning_style, stage_of_change, understanding)
+## Data Model (9 tables)
+- `profiles` — user settings (tension_type, tone, depth, learning_style, stage_of_change, understanding, display_name)
 - `sessions` — chat sessions (+ session_number, session_notes, session_status, narrative_snapshot)
 - `messages` — individual chat messages (session_id FK)
 - `rewire_cards` — saved insight cards (+ is_focus, focus_set_at, graduated_at, times_completed, last_completed_at, prescribed_by)
 - `wins` — small victories (text, tension_type)
 - `user_knowledge` — tagged knowledge entries (used by focus card reflections only)
 - `coaching_briefings` — Strategist output per session (briefing_content, hypothesis, leverage_point, curiosities, version)
+- `focus_areas` — ongoing intentions (text, source, session_id, archived_at)
+- `session_suggestions` — pre-generated session ideas (suggestions JSONB, generated_after_session_id)
 
 Profile auto-created on signup via DB trigger.
 

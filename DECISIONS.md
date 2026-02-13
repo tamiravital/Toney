@@ -4,6 +4,24 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Vertical suggestion list with featured card, not horizontal scroll (2026-02-12)
+First iteration used horizontal scrollable cards (260px wide). Problems: (1) only 1.5 cards visible at a time — users couldn't see what was available, (2) the home screen felt empty with just a thin strip of cards + streak, (3) horizontal scroll is easy to miss on mobile. Switched to vertical layout: first suggestion gets a full-width gradient card (hero treatment), remaining suggestions are compact rows with title + teaser + time label. Fills the viewport, all options visible, and the featured card gives a clear primary CTA.
+
+### Remove "What Toney Sees" and "Your Rewire Cards" from home screen (2026-02-12)
+"What Toney Sees" showed the user's tension label from onboarding — static information they already knew. It didn't evolve between sessions and took up prime real estate. "Your Rewire Cards" duplicated the Rewire tab with only 3 cards. Both replaced by session suggestions, which are dynamic, personalized, and actionable. Home screen now has a clear hierarchy: suggestions (primary CTA) → last session → focus areas → streak.
+
+### Session suggestions generated at close time, not open time (2026-02-12)
+Suggestions could run at session open (just-in-time) or session close (pre-computed). Chose close: (1) close is not latency-sensitive — the user already tapped "End Session" — while open is the bottleneck users feel, (2) close has the richest context (just-evolved understanding + session headline + key moments), (3) pre-computing lets the home screen display suggestions without any LLM call at render time. Cost is neutral (~$0.31/session) — the Sonnet `prepareSession()` call at open is swapped for a Sonnet `generateSessionSuggestions()` call at close.
+
+### Close pipeline sequential, not parallel (2026-02-12)
+Changed from parallel (evolve + notes via Promise.allSettled) to fully sequential (evolve → notes → suggestions). Each step feeds the next: notes need the evolved understanding for richer context, suggestions need the session headline and key moments from notes. Session close is not latency-sensitive, so the extra seconds don't matter. The pipeline is now ~15-20s instead of ~8-10s, but produces much richer output.
+
+### Pure-code briefing assembly replaces LLM on fast path (2026-02-12)
+`assembleBriefingDocument()` is plain TypeScript (no LLM) that produces the same briefing format as `prepareSession()`. Since each suggestion already contains hypothesis, leverage point, and curiosities (computed by Sonnet at close time), the open-time briefing is just formatting: understanding narrative + suggestion fields + fresh cards/wins/focus areas from DB. This eliminates the Sonnet call at session open for returning users with suggestions. First session and edge cases still fall back to full `prepareSession()`.
+
+### Suggestion lengths as coaching concept (2026-02-12)
+Four length categories: quick (2-5min), medium (5-10min), deep (10-15min), standing (always available). Informed by user insight that Toney sessions should be "Duolingo-length engagements, not 45-minute coaching sessions." Standing suggestions are recurring entry points personalized to the user's patterns ("before a money decision," "something shifted"). Minimum 1 per category, 4-10 total. This gives users agency over session depth without making them design the session.
+
 ### Focus areas are ongoing intentions, not completable goals (2026-02-12)
 Rejected binary goal completion. Most onboarding goals ("feel okay spending on myself", "stop fighting about money") are aspirational directions that never truly finish — forcing completion creates pressure and feelings of failure. Focus areas have only two states: active (archived_at IS NULL) and archived (timestamp set). No status column, no completed_at, no percentage. The Coach never marks them "done." Users archive when they feel ready. Naming was deliberate: "goals" creates performance pressure; "focus areas" frames them as directions of attention.
 
