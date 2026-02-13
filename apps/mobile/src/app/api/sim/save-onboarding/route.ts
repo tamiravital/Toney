@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
 
     const { answers, tone, depth, learningStyles, whatBroughtYou } = await request.json();
 
+    // Core fields — these columns always exist on sim_profiles
     const { error } = await ctx.supabase
       .from(ctx.table('profiles'))
       .update({
@@ -27,13 +28,20 @@ export async function POST(request: NextRequest) {
         depth: depth ?? 3,
         learning_styles: learningStyles ?? [],
         onboarding_completed: true,
-        ...(whatBroughtYou && { what_brought_you: whatBroughtYou }),
       })
       .eq('id', ctx.userId);
 
     if (error) {
       console.error('Sim save-onboarding error:', error);
       return NextResponse.json({ error: 'Failed to save onboarding' }, { status: 500 });
+    }
+
+    // what_brought_you may not exist if migration 025 hasn't been applied — separate update to avoid killing the critical one
+    if (whatBroughtYou) {
+      await ctx.supabase
+        .from(ctx.table('profiles'))
+        .update({ what_brought_you: whatBroughtYou })
+        .eq('id', ctx.userId);
     }
 
     return NextResponse.json({ success: true });
