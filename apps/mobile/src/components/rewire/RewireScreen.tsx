@@ -2,9 +2,19 @@
 
 import { useState } from 'react';
 import { Brain, RotateCcw, Lightbulb, ClipboardList, MessageCircle, Sparkles, Pencil, Trash2, X, Target } from 'lucide-react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import { RewireCardCategory, Insight } from '@toney/types';
-import { ComponentType } from 'react';
+import { ComponentType, ComponentPropsWithoutRef } from 'react';
+
+const mdComponents: Components = {
+  p: (props: ComponentPropsWithoutRef<'p'>) => <p className="text-sm text-gray-700 leading-relaxed mb-2 last:mb-0" {...props} />,
+  strong: (props: ComponentPropsWithoutRef<'strong'>) => <strong className="font-semibold text-gray-900" {...props} />,
+  em: (props: ComponentPropsWithoutRef<'em'>) => <em className="italic" {...props} />,
+  ul: (props: ComponentPropsWithoutRef<'ul'>) => <ul className="list-disc pl-4 space-y-1 mb-2 last:mb-0" {...props} />,
+  ol: (props: ComponentPropsWithoutRef<'ol'>) => <ol className="list-decimal pl-4 space-y-1 mb-2 last:mb-0" {...props} />,
+  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm text-gray-700 leading-relaxed" {...props} />,
+};
 
 type Category = 'all' | RewireCardCategory;
 
@@ -105,96 +115,21 @@ function guessCategory(content: string): RewireCardCategory {
   return 'reframe';
 }
 
-// ── Category-specific content renderers ──
+// ── Card content with category-specific styling + markdown ──
 
-function ReframeContent({ content }: { content: string }) {
-  return (
-    <div className="pl-3 border-l-2 border-purple-200">
-      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{content}</p>
-    </div>
-  );
-}
-
-function TruthContent({ content }: { content: string }) {
-  const lines = content.split('\n');
-  const firstLine = lines[0];
-  const rest = lines.slice(1).join('\n').trim();
-  return (
-    <div>
-      <p className="text-sm font-semibold text-gray-900 leading-snug mb-1">{firstLine}</p>
-      {rest && (
-        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">{rest}</p>
-      )}
-    </div>
-  );
-}
-
-function PlanContent({ content }: { content: string }) {
-  const stepRegex = /(?:^|\n)(?:\d+[\.\)]\s*|[-*]\s+)/;
-  const hasSteps = stepRegex.test(content);
-
-  if (hasSteps) {
-    const steps = content
-      .split(/\n(?=\d+[\.\)]\s|[-*]\s)/)
-      .map(s => s.replace(/^\d+[\.\)]\s*|^[-*]\s+/, '').trim())
-      .filter(Boolean);
-    return (
-      <div className="space-y-2">
-        {steps.map((step, i) => (
-          <div key={i} className="flex items-start gap-2.5">
-            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-[10px] font-bold text-blue-600">{i + 1}</span>
-            </div>
-            <p className="text-sm text-gray-700 leading-relaxed">{step}</p>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{content}</p>
-  );
-}
-
-function PracticeContent({ content }: { content: string }) {
-  const lines = content.split('\n').filter(l => l.trim());
-  if (lines.length <= 2) {
-    return (
-      <div className="bg-green-50/60 rounded-xl px-3.5 py-3">
-        <p className="text-sm text-gray-800 leading-relaxed font-medium">{content}</p>
-      </div>
-    );
-  }
-  return (
-    <div>
-      <div className="bg-green-50/60 rounded-xl px-3.5 py-2.5 mb-2">
-        <p className="text-sm text-gray-800 leading-relaxed font-medium">{lines[0]}</p>
-      </div>
-      <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">
-        {lines.slice(1).join('\n')}
-      </p>
-    </div>
-  );
-}
-
-function ConversationKitContent({ content }: { content: string }) {
-  return (
-    <div className="bg-teal-50/50 rounded-xl px-4 py-3">
-      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{content}</p>
-    </div>
-  );
-}
+const categoryWrapperStyles: Record<string, string> = {
+  reframe: 'pl-3 border-l-2 border-purple-200',
+  practice: 'bg-green-50/60 rounded-xl px-3.5 py-3',
+  conversation_kit: 'bg-teal-50/50 rounded-xl px-4 py-3',
+};
 
 function CardContent({ category, content }: { category: RewireCardCategory; content: string }) {
-  switch (category) {
-    case 'reframe': return <ReframeContent content={content} />;
-    case 'truth': return <TruthContent content={content} />;
-    case 'plan': return <PlanContent content={content} />;
-    case 'practice': return <PracticeContent content={content} />;
-    case 'conversation_kit': return <ConversationKitContent content={content} />;
-    default: return <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{content}</p>;
-  }
+  const wrapperClass = categoryWrapperStyles[category] || '';
+  return (
+    <div className={wrapperClass}>
+      <ReactMarkdown components={mdComponents}>{content}</ReactMarkdown>
+    </div>
+  );
 }
 
 // ── Rewire Card Component ──
