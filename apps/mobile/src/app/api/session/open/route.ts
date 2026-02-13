@@ -318,14 +318,13 @@ export async function POST(request: NextRequest) {
 
     timing(selectedSuggestion ? 'assembleBriefing complete (fast path)' : 'prepareSession complete (Sonnet)');
 
-    // Save briefing — don't wait for these
+    // Save briefing — MUST complete before client can send messages
     let version = 1;
     if (previousBriefing) {
       version = (previousBriefing.version || 0) + 1;
     }
 
-    // Fire-and-forget: save planning results in parallel with streaming
-    const savePlanPromise = Promise.all([
+    const [briefingRes] = await Promise.all([
       ctx.supabase.from(ctx.table('coaching_briefings')).insert({
         user_id: ctx.userId,
         session_id: sessionId,
@@ -342,11 +341,12 @@ export async function POST(request: NextRequest) {
             secondary_tension_type: plan.secondaryTensionType || null,
           }).eq('id', ctx.userId)
         : Promise.resolve(),
-    ]).then(([briefingRes]) => {
-      if (briefingRes && typeof briefingRes === 'object' && 'error' in briefingRes && briefingRes.error) {
-        console.error('[session/open] Briefing insert failed:', briefingRes.error);
-      }
-    }).catch(err => console.error('Save plan results failed:', err));
+    ]);
+
+    if (briefingRes && typeof briefingRes === 'object' && 'error' in briefingRes && briefingRes.error) {
+      console.error('[session/open] Briefing insert failed:', briefingRes.error);
+    }
+    timing('briefing saved');
 
     // ── Pipeline Step 2: Stream opening message (Sonnet) ──
     const stream = anthropic.messages.stream({
@@ -393,9 +393,6 @@ export async function POST(request: NextRequest) {
               .single();
             savedMessageId = savedMsg?.id || null;
           } catch { /* non-critical */ }
-
-          // Wait for plan saves to finish
-          await savePlanPromise;
 
           timing('stream complete + saved');
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
