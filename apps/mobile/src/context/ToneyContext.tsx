@@ -554,9 +554,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (appPhase !== 'main') return;
 
+    // Mark messages as not-yet-loaded for this session change
+    messagesLoadedRef.current = false;
+
     // Skip reload if we're doing an inline session open (messages are being streamed in)
     if (skipMessageLoadRef.current) {
       skipMessageLoadRef.current = false;
+      messagesLoadedRef.current = true; // Inline open = messages already being streamed
       return;
     }
 
@@ -567,6 +571,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (!currentSessionId) {
       setSessionStatus('active');
       setMessages([]);
+      messagesLoadedRef.current = true; // No session = nothing to load
       return;
     }
 
@@ -620,6 +625,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setMessages([]);
       } finally {
         setLoadingChat(false);
+        messagesLoadedRef.current = true;
       }
     };
 
@@ -888,6 +894,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
   const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number) => {
     if (!isSupabaseConfigured()) return;
+    if (openSessionInFlightRef.current) return; // Bug 2: Already opening a session
+    openSessionInFlightRef.current = true;
+    sessionOpenedRef.current = true; // Prevent auto-open from re-firing
+    openSessionFailedRef.current = false; // Clear any previous failure
 
     setLoadingChat(true);
     setSessionHasCard(false);
@@ -897,7 +907,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     // When preserving messages, capture current messages as previous session (collapsed)
     if (preserveMessages) {
       skipMessageLoadRef.current = true;
-      const currentNonDividerMessages = messages.filter(m => m.role !== 'divider');
+      const currentNonDividerMessages = messagesRef.current.filter(m => m.role !== 'divider'); // Bug 4: Read from ref, not stale closure
       setPreviousSessionMessages(currentNonDividerMessages);
       setPreviousSessionCollapsed(true);
       setMessages([]);
@@ -1011,7 +1021,18 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error('[Toney] Session open failed:', err);
+      openSessionFailedRef.current = true; // Bug 3: Mark failure — prevents auto-retry on tab switch
+      setMessages([{
+        id: `msg-error-${Date.now()}`,
+        role: 'assistant',
+        content: "I'm having trouble starting a session right now. Please try again in a moment.",
+        timestamp: new Date(),
+        canSave: false,
+        saved: false,
+      }]);
       setLoadingChat(false);
+    } finally {
+      openSessionInFlightRef.current = false; // Bug 2: Release mutex
     }
   }, []);
 
@@ -1020,10 +1041,15 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const lastMessageTimestampRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const skipMessageLoadRef = useRef(false); // Skip message reload during inline session open
+  const messagesLoadedRef = useRef(false); // Bug 1: block auto-open until messages loaded
+  const openSessionInFlightRef = useRef(false); // Bug 2: mutex for concurrent openSession calls
+  const openSessionFailedRef = useRef(false); // Bug 3: prevent auto-retry after failure
+  const messagesRef = useRef<Message[]>([]); // Bug 4: current messages for openSession closure
 
   const startNewSession = useCallback(async () => {
     const prevId = currentSessionId;
     sessionOpenedRef.current = true; // Prevent auto-open from firing
+    openSessionFailedRef.current = false; // Clear failure on manual retry
     // Open new session inline — preserve old messages with a divider
     await openSession(prevId || undefined, true);
   }, [currentSessionId, openSession]);
@@ -1033,13 +1059,23 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     sessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
+  // Keep messagesRef in sync with state (Bug 4: avoids stale closure in openSession)
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   useEffect(() => {
     if (appPhase !== 'main') return;
     if (activeTab !== 'chat') {
-      sessionOpenedRef.current = false;
+      // Only reset if no failure — prevents retry loop on tab return
+      if (!openSessionFailedRef.current) {
+        sessionOpenedRef.current = false;
+      }
       return;
     }
     if (loadingChat) return;
+    if (!messagesLoadedRef.current) return; // Wait for message loader to finish first
+    if (openSessionFailedRef.current) return; // Don't auto-retry after failure
     if (sessionOpenedRef.current) return;
     if (sessionStatus !== 'active') return;
 
