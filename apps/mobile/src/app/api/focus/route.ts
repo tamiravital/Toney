@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { resolveContext } from '@/lib/supabase/sim';
 
 /**
  * GET /api/focus — Returns the current Focus card (if any)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: focusCard } = await supabase
-      .from('rewire_cards')
+    const { data: focusCard } = await ctx.supabase
+      .from(ctx.table('rewire_cards'))
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ctx.userId)
       .eq('is_focus', true)
       .single();
 
@@ -33,10 +31,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -47,10 +43,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current focus card
-    const { data: focusCard } = await supabase
-      .from('rewire_cards')
+    const { data: focusCard } = await ctx.supabase
+      .from(ctx.table('rewire_cards'))
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ctx.userId)
       .eq('is_focus', true)
       .single();
 
@@ -60,8 +56,8 @@ export async function POST(request: NextRequest) {
 
     if (action === 'complete') {
       // Increment completion count
-      await supabase
-        .from('rewire_cards')
+      await ctx.supabase
+        .from(ctx.table('rewire_cards'))
         .update({
           times_completed: (focusCard.times_completed || 0) + 1,
           last_completed_at: new Date().toISOString(),
@@ -70,10 +66,10 @@ export async function POST(request: NextRequest) {
 
       // Save reflection as user knowledge (if provided)
       if (reflection?.trim()) {
-        await supabase
-          .from('user_knowledge')
+        await ctx.supabase
+          .from(ctx.table('user_knowledge'))
           .insert({
-            user_id: user.id,
+            user_id: ctx.userId,
             category: 'coaching_note',
             content: `Focus card "${focusCard.title}" reflection: ${reflection.trim()}`,
             source: 'focus_card',

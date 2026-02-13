@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import type { FocusArea } from '@toney/types';
 
 /**
@@ -7,19 +7,17 @@ import type { FocusArea } from '@toney/types';
  *
  * Returns all active (non-archived) focus areas for the authenticated user.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from('focus_areas')
+    const { data, error } = await ctx.supabase
+      .from(ctx.table('focus_areas'))
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ctx.userId)
       .is('archived_at', null)
       .order('created_at', { ascending: true });
 
@@ -43,10 +41,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -59,10 +55,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing text' }, { status: 400 });
       }
 
-      const { data, error } = await supabase
-        .from('focus_areas')
+      const { data, error } = await ctx.supabase
+        .from(ctx.table('focus_areas'))
         .insert({
-          user_id: user.id,
+          user_id: ctx.userId,
           text: text.trim(),
           source: source || 'user',
           session_id: sessionId || null,
@@ -84,11 +80,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing focusAreaId' }, { status: 400 });
       }
 
-      const { error } = await supabase
-        .from('focus_areas')
+      const { error } = await ctx.supabase
+        .from(ctx.table('focus_areas'))
         .update({ archived_at: new Date().toISOString() })
         .eq('id', focusAreaId)
-        .eq('user_id', user.id);
+        .eq('user_id', ctx.userId);
 
       if (error) {
         console.error('Focus area archive error:', error);

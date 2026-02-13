@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import type { SessionSuggestion } from '@toney/types';
 
 /**
@@ -8,21 +8,18 @@ import type { SessionSuggestion } from '@toney/types';
  * Returns the latest session suggestions for the authenticated user.
  * Used by the home screen to display personalized session options.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // ── Auth ──
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // ── Load latest suggestions ──
-    const { data } = await supabase
-      .from('session_suggestions')
+    const { data } = await ctx.supabase
+      .from(ctx.table('session_suggestions'))
       .select('id, suggestions, created_at')
-      .eq('user_id', user.id)
+      .eq('user_id', ctx.userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();

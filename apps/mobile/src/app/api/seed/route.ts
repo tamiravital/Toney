@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import { seedUnderstanding, generateSessionSuggestions } from '@toney/coaching';
 import { formatAnswersReadable, questions } from '@toney/constants';
 
@@ -13,21 +13,18 @@ export const maxDuration = 60;
  * so prepareSession always has a narrative to read.
  * Also determines tension type from quiz answers.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // ── Auth ──
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // ── Load profile ──
-    const { data: profile } = await supabase
-      .from('profiles')
+    const { data: profile } = await ctx.supabase
+      .from(ctx.table('profiles'))
       .select('onboarding_answers, what_brought_you, emotional_why, life_stage, income_type, relationship_status')
-      .eq('id', user.id)
+      .eq('id', ctx.userId)
       .single();
 
     if (!profile) {
@@ -54,12 +51,12 @@ export async function POST() {
     });
 
     // ── Save to profile ──
-    await supabase.from('profiles').update({
+    await ctx.supabase.from(ctx.table('profiles')).update({
       understanding: result.understanding,
       understanding_snippet: result.snippet || null,
       tension_type: result.tensionLabel,
       secondary_tension_type: result.secondaryTensionLabel || null,
-    }).eq('id', user.id);
+    }).eq('id', ctx.userId);
 
     // ── Create focus area rows from Q7 goals ──
     const goalsAnswer = (profile.onboarding_answers as Record<string, string>)?.goals;
@@ -70,12 +67,12 @@ export async function POST() {
         const focusAreaRows = selectedValues.map(v => {
           const opt = goalsQuestion.options.find(o => o.value === v);
           return {
-            user_id: user.id,
+            user_id: ctx.userId,
             text: opt ? opt.label : v,
             source: 'onboarding' as const,
           };
         });
-        await supabase.from('focus_areas').insert(focusAreaRows);
+        await ctx.supabase.from(ctx.table('focus_areas')).insert(focusAreaRows);
       }
     }
 
@@ -88,8 +85,8 @@ export async function POST() {
       });
 
       if (suggestionsResult.suggestions.length > 0) {
-        await supabase.from('session_suggestions').insert({
-          user_id: user.id,
+        await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+          user_id: ctx.userId,
           suggestions: suggestionsResult.suggestions,
         });
       }

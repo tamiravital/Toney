@@ -153,6 +153,10 @@ interface ToneyContextValue {
   handleSaveFocusArea: (text: string, sessionId?: string | null) => Promise<void>;
   handleArchiveFocusArea: (focusAreaId: string) => Promise<void>;
 
+  // Sim mode
+  simMode: boolean;
+  buildApiUrl: (path: string) => string;
+
   // Auth
   signIn: () => void;
   signOut: () => void;
@@ -216,9 +220,119 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   // Focus Areas
   const [focusAreas, setFocusAreas] = useState<FocusArea[]>([]);
 
+  // Sim mode
+  const [simMode, setSimMode] = useState(false);
+  const simProfileIdRef = useRef<string | null>(null);
+  const simSecretRef = useRef<string | null>(null);
+
+  const buildApiUrl = useCallback((path: string) => {
+    if (!simMode || !simProfileIdRef.current || !simSecretRef.current) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}sim=${simProfileIdRef.current}&simSecret=${simSecretRef.current}`;
+  }, [simMode]);
+
   // ── Hydrate from localStorage + check Supabase session on mount ──
   useEffect(() => {
     const hydrate = async () => {
+      // ── Sim mode detection ──
+      const params = new URLSearchParams(window.location.search);
+      const simId = params.get('sim');
+      const secret = params.get('simSecret');
+
+      if (simId && secret) {
+        setSimMode(true);
+        simProfileIdRef.current = simId === 'new' ? null : simId;
+        simSecretRef.current = secret;
+
+        if (simId === 'new') {
+          // New sim user — create profile, start onboarding
+          try {
+            const res = await fetch(`/api/sim/create-profile?simSecret=${secret}`, { method: 'POST' });
+            if (res.ok) {
+              const { id } = await res.json();
+              simProfileIdRef.current = id;
+              window.history.replaceState(null, '', `?sim=${id}&simSecret=${secret}`);
+            }
+          } catch { /* creation failed — will show onboarding anyway */ }
+          setAppPhase('onboarding');
+          return;
+        }
+
+        // Existing sim user — hydrate from API
+        try {
+          const res = await fetch(`/api/sim/hydrate?sim=${simId}&simSecret=${secret}`);
+          if (res.ok) {
+            const data = await res.json();
+            const p = data.profile;
+            if (p) {
+              if (p.display_name) setDisplayName(p.display_name);
+              if (p.understanding_snippet) setUnderstandingSnippet(p.understanding_snippet);
+              if (p.tension_type) {
+                const tension: IdentifiedTension = {
+                  primary: p.tension_type as TensionType,
+                  primaryScore: 5,
+                  primaryDetails: tensionDetails[p.tension_type as TensionType],
+                  ...(p.secondary_tension_type && {
+                    secondary: p.secondary_tension_type as TensionType,
+                    secondaryDetails: tensionDetails[p.secondary_tension_type as TensionType],
+                  }),
+                };
+                setIdentifiedTension(tension);
+              }
+              if (p.tone || p.depth || p.learning_styles) {
+                const style: StyleProfile = {
+                  tone: p.tone ?? defaultStyle.tone,
+                  depth: p.depth ?? defaultStyle.depth,
+                  learningStyles: (p.learning_styles as StyleProfile['learningStyles']) ?? defaultStyle.learningStyles,
+                };
+                setStyleProfile(style);
+                setTempStyle(style);
+              }
+            }
+            if (data.cards?.length > 0) setSavedInsights(data.cards);
+            if (data.focusAreas?.length > 0) setFocusAreas(data.focusAreas);
+            if (data.wins?.length > 0) setWins(data.wins);
+            if (data.suggestions?.length > 0) setSuggestions(data.suggestions);
+            if (data.recentSession) {
+              setCurrentSessionId(data.recentSession.id);
+              sessionIdRef.current = data.recentSession.id;
+              if (data.recentSession.messages?.length > 0) {
+                setMessages(data.recentSession.messages.map((m: { id: string; role: string; content: string; created_at: string }) => ({
+                  id: m.id,
+                  role: m.role as 'user' | 'assistant',
+                  content: m.content,
+                  timestamp: new Date(m.created_at),
+                  canSave: m.role === 'assistant',
+                  saved: false,
+                })));
+              }
+              if (data.recentSession.status === 'completed') {
+                setSessionStatus('completed');
+              }
+            }
+            setIsFirstSession((data.sessionCount || 0) <= 1);
+            if (data.lastMessageTime) {
+              lastMessageTimestampRef.current = data.lastMessageTime;
+            }
+            if (p?.onboarding_completed) {
+              setAppPhase('main');
+              const hash = window.location.hash.replace('#', '');
+              if (VALID_TABS.has(hash as ActiveTab)) {
+                setActiveTab(hash as ActiveTab);
+              } else {
+                setActiveTab('home');
+              }
+            } else {
+              setAppPhase('onboarding');
+            }
+          }
+        } catch (err) {
+          console.error('[Sim] Hydrate failed:', err);
+          setAppPhase('onboarding');
+        }
+        return;
+      }
+
       let isSignedIn = localStorage.getItem('toney_signed_in') === 'true';
 
       if (isSupabaseConfigured()) {
@@ -413,7 +527,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             // Hydrate wins from Supabase
             try {
-              const winsRes = await fetch('/api/wins');
+              const winsRes = await fetch(buildApiUrl('/api/wins'));
               if (winsRes.ok) {
                 const dbWins = await winsRes.json();
                 if (Array.isArray(dbWins) && dbWins.length > 0) {
@@ -445,7 +559,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             // Hydrate session suggestions
             try {
-              const res = await fetch('/api/suggestions');
+              const res = await fetch(buildApiUrl('/api/suggestions'));
               if (res.ok) {
                 const { suggestions: s } = await res.json();
                 if (Array.isArray(s) && s.length > 0) {
@@ -582,6 +696,32 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
 
     const loadMessages = async () => {
+      if (simMode && simProfileIdRef.current && simSecretRef.current) {
+        setLoadingChat(true);
+        try {
+          const res = await fetch(buildApiUrl(`/api/sim/session-data?sessionId=${currentSessionId}`));
+          if (res.ok) {
+            const data = await res.json();
+            if (data.cardCount > 0) setSessionHasCard(true);
+            if (data.sessionStatus === 'completed') setSessionStatus('completed');
+            else setSessionStatus('active');
+            if (data.messages?.length > 0) {
+              setMessages(data.messages.map((m: { id: string; role: string; content: string; created_at: string }) => ({
+                id: m.id,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                timestamp: new Date(m.created_at),
+                canSave: m.role === 'assistant',
+                saved: false,
+              })));
+            } else {
+              setMessages([]);
+            }
+          }
+        } catch { setMessages([]); }
+        finally { setLoadingChat(false); messagesLoadedRef.current = true; }
+        return;
+      }
       if (!isSupabaseConfigured()) return;
       setLoadingChat(true);
       try {
@@ -636,7 +776,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     };
 
     loadMessages();
-  }, [currentSessionId, appPhase]);
+  }, [currentSessionId, appPhase, simMode, buildApiUrl]);
 
   // ── Handlers ──
 
@@ -677,7 +817,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const res = await fetch('/api/chat', {
+        const res = await fetch(buildApiUrl('/api/chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -783,7 +923,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       saved: false,
     }]);
     setIsTyping(false);
-  }, [chatInput]);
+  }, [chatInput, buildApiUrl]);
 
   const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
     setMessages(prev =>
@@ -802,6 +942,23 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           tags: [identifiedTensionState?.primary ? `tends to ${identifiedTensionState.primary}` : 'Insight'],
         },
       ]);
+
+      // Sim mode: save via API
+      if (simMode) {
+        try {
+          await fetch(buildApiUrl('/api/sim/save-card'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: (editedContent || msg.content).substring(0, 80),
+              content: editedContent || msg.content,
+              category: category || 'reframe',
+              sessionId: currentSessionId,
+            }),
+          });
+        } catch (err) { console.error('Sim save insight failed:', err); }
+        return null;
+      }
 
       // Also save to Supabase
       if (isSupabaseConfigured()) {
@@ -834,7 +991,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       setSavedInsights(prev => prev.filter(i => i.content !== msg.content));
     }
     return null;
-  }, [messages, identifiedTensionState]);
+  }, [messages, identifiedTensionState, simMode, buildApiUrl, currentSessionId]);
 
   const handleSaveCard = useCallback(async (title: string, content: string, category: RewireCardCategory) => {
     // Add to local state
@@ -849,6 +1006,18 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     };
     setSavedInsights(prev => [newInsight, ...prev]);
     setSessionHasCard(true);
+
+    // Sim mode: save via API
+    if (simMode) {
+      try {
+        await fetch(buildApiUrl('/api/sim/save-card'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content, category, sessionId: currentSessionId }),
+        });
+      } catch (err) { console.error('Sim save card failed:', err); }
+      return;
+    }
 
     // Save to Supabase
     if (isSupabaseConfigured()) {
@@ -868,14 +1037,14 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) { console.error('Failed to save rewire card:', err); }
     }
-  }, [identifiedTensionState, currentSessionId]);
+  }, [identifiedTensionState, currentSessionId, simMode, buildApiUrl]);
 
   const endSession = useCallback(async () => {
     if (!currentSessionId || sessionStatus !== 'active') return;
     setSessionStatus('ending');
 
     try {
-      const res = await fetch('/api/session/close', {
+      const res = await fetch(buildApiUrl('/api/session/close'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: currentSessionId }),
@@ -898,7 +1067,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       // If session close fails, revert to active
       setSessionStatus('active');
     }
-  }, [currentSessionId, sessionStatus]);
+  }, [currentSessionId, sessionStatus, buildApiUrl]);
 
   const dismissSessionNotes = useCallback(() => {
     setSessionNotes(null);
@@ -930,7 +1099,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch('/api/session/open', {
+      const res = await fetch(buildApiUrl('/api/session/open'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1047,7 +1216,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     } finally {
       openSessionInFlightRef.current = false; // Bug 2: Release mutex
     }
-  }, []);
+  }, [buildApiUrl]);
 
   // ── Auto-open session when user navigates to chat ──
   const sessionOpenedRef = useRef(false);
@@ -1147,7 +1316,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStreak(prev => prev + 1);
 
     try {
-      const res = await fetch('/api/wins', {
+      const res = await fetch(buildApiUrl('/api/wins'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1161,7 +1330,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id } : w));
       }
     } catch { /* non-critical — local state has the win */ }
-  }, [identifiedTensionState]);
+  }, [identifiedTensionState, buildApiUrl]);
 
   const handleAutoWin = useCallback(async (text: string) => {
     const tempId = `win-${Date.now()}`;
@@ -1172,7 +1341,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStreak(prev => prev + 1);
 
     try {
-      const res = await fetch('/api/wins', {
+      const res = await fetch(buildApiUrl('/api/wins'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1187,19 +1356,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id } : w));
       }
     } catch { /* non-critical — local state has the win */ }
-  }, [identifiedTensionState]);
+  }, [identifiedTensionState, buildApiUrl]);
 
   const deleteWin = useCallback(async (winId: string) => {
     setWins(prev => prev.filter(w => w.id !== winId));
 
     try {
-      await fetch('/api/wins', {
+      await fetch(buildApiUrl('/api/wins'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ winId }),
       });
     } catch { /* non-critical */ }
-  }, []);
+  }, [buildApiUrl]);
 
   const handleSaveFocusArea = useCallback(async (text: string, sessionId?: string | null) => {
     // Optimistic local add
@@ -1215,7 +1384,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     // Save to DB
     try {
-      const res = await fetch('/api/focus-areas', {
+      const res = await fetch(buildApiUrl('/api/focus-areas'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create', text, source: 'coach', sessionId: sessionId || null }),
@@ -1227,7 +1396,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         ));
       }
     } catch { /* non-critical — local state has the focus area */ }
-  }, []);
+  }, [buildApiUrl]);
 
   const handleArchiveFocusArea = useCallback(async (focusAreaId: string) => {
     // Optimistic local remove
@@ -1235,13 +1404,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     // Save to DB
     try {
-      await fetch('/api/focus-areas', {
+      await fetch(buildApiUrl('/api/focus-areas'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'archive', focusAreaId }),
       });
     } catch { /* non-critical */ }
-  }, []);
+  }, [buildApiUrl]);
 
   const signIn = useCallback(() => {
     localStorage.setItem('toney_signed_in', 'true');
@@ -1283,7 +1452,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setStyleProfile({ ...defaultStyle });
     localStorage.setItem('toney_onboarded', 'true');
 
-    // Extract goals from multi-select Q7 answer for what_brought_you
+    // Extract goals from multi-select Q7 answer for what_brought_you (used by both sim and normal paths)
     let goalsText = '';
     const goalsAnswer = answers['goals'] || '';
     if (goalsAnswer) {
@@ -1296,6 +1465,45 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         });
         goalsText = selectedLabels.join('; ');
       }
+    }
+
+    if (simMode && simProfileIdRef.current && simSecretRef.current) {
+      // Save onboarding data via API (can't use browser Supabase for sim_ tables)
+      try {
+        await fetch(buildApiUrl('/api/sim/save-onboarding'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answers,
+            tone: defaultStyle.tone,
+            depth: defaultStyle.depth,
+            learningStyles: defaultStyle.learningStyles,
+            whatBroughtYou: goalsText || undefined,
+          }),
+        });
+        // Seed understanding
+        const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
+        if (seedRes.ok) {
+          const seedData = await seedRes.json();
+          if (seedData.tensionType) {
+            const tension: IdentifiedTension = {
+              primary: seedData.tensionType as TensionType,
+              primaryScore: 5,
+              primaryDetails: tensionDetails[seedData.tensionType as TensionType],
+              ...(seedData.secondaryTensionType && {
+                secondary: seedData.secondaryTensionType as TensionType,
+                secondaryDetails: tensionDetails[seedData.secondaryTensionType as TensionType],
+              }),
+            };
+            setIdentifiedTension(tension);
+          }
+        }
+      } catch (err) {
+        console.error('[Sim] Onboarding save failed:', err);
+      }
+      setAppPhase('main');
+      setActiveTab('chat');
+      return;
     }
 
     // Save profile to Supabase, then seed understanding
@@ -1315,7 +1523,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
           // Seed understanding — determines tension + creates initial narrative
           try {
-            const seedRes = await fetch('/api/seed', { method: 'POST' });
+            const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
             if (seedRes.ok) {
               const seedData = await seedRes.json();
               if (seedData.tensionType) {
@@ -1344,7 +1552,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     // Go to main app — straight to chat
     setAppPhase('main');
     setActiveTab('chat');
-  }, [answers]);
+  }, [answers, simMode, buildApiUrl]);
 
   const handleNextQuestion = useCallback(() => {
     if (currentQuestionIndex < questions.length - 1) {
@@ -1467,6 +1675,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         focusAreas,
         handleSaveFocusArea,
         handleArchiveFocusArea,
+        simMode,
+        buildApiUrl,
         signIn,
         signOut,
         finishOnboarding,

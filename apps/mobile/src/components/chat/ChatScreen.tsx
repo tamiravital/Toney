@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useEffect, ComponentPropsWithoutRef } from 'react';
-import { Send, Square, ChevronRight, ChevronDown, Clock, ArrowRight, MessageCircle } from 'lucide-react';
+import { Send, Square, ChevronRight, ChevronDown, Clock, ArrowRight, MessageCircle, Sparkles } from 'lucide-react';
+import { useState as useLocalState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import DraftCard from './DraftCard';
@@ -143,12 +144,43 @@ export default function ChatScreen() {
     setPreviousSessionCollapsed,
     suggestions,
     openSession,
+    simMode,
+    buildApiUrl,
   } = useToney();
 
   const isSessionEnded = sessionStatus === 'completed' || sessionStatus === 'ending';
+  const [generating, setGenerating] = useLocalState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Generate a simulated user message (sim mode only)
+  const handleGenerate = async () => {
+    if (!simMode || !currentSessionId || generating) return;
+    setGenerating(true);
+    try {
+      const res = await fetch(buildApiUrl(`/api/sim/suggest-message`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: currentSessionId }),
+      });
+      if (res.ok) {
+        const { text } = await res.json();
+        if (text) {
+          setChatInput(text);
+          // Auto-expand textarea
+          if (inputRef.current) {
+            inputRef.current.style.height = 'auto';
+            inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Generate message failed:', err);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -473,6 +505,20 @@ export default function ChatScreen() {
                 style={{ height: 20, maxHeight: 120 }}
               />
             </div>
+            {simMode && (
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                title="Generate user message"
+                className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                  generating
+                    ? 'bg-amber-100 text-amber-400 animate-pulse'
+                    : 'bg-amber-50 text-amber-500 hover:bg-amber-100 active:scale-95'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={() => handleSendMessage()}
               disabled={!chatInput.trim()}

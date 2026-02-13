@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import { generateSessionNotes, evolveUnderstanding, generateSessionSuggestions } from '@toney/coaching';
 import type { FocusArea, RewireCard, Win } from '@toney/types';
 
@@ -14,11 +14,8 @@ export const maxDuration = 60;
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // ── Auth ──
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,64 +26,64 @@ export async function POST(request: NextRequest) {
 
     // ── Load data in parallel ──
     const [messagesResult, profileResult, briefingResult, cardsResult, allCardsResult, sessionResult, prevNotesResult, focusAreasResult, winsResult, prevSuggestionsResult] = await Promise.all([
-      supabase
-        .from('messages')
+      ctx.supabase
+        .from(ctx.table('messages'))
         .select('role, content')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true }),
-      supabase
-        .from('profiles')
+      ctx.supabase
+        .from(ctx.table('profiles'))
         .select('tension_type, stage_of_change, understanding')
-        .eq('id', user.id)
+        .eq('id', ctx.userId)
         .single(),
-      supabase
-        .from('coaching_briefings')
+      ctx.supabase
+        .from(ctx.table('coaching_briefings'))
         .select('hypothesis')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
       // Cards from this session (for notes)
-      supabase
-        .from('rewire_cards')
+      ctx.supabase
+        .from(ctx.table('rewire_cards'))
         .select('title, category')
         .eq('session_id', sessionId),
       // All user's cards (for suggestion context)
-      supabase
-        .from('rewire_cards')
+      ctx.supabase
+        .from(ctx.table('rewire_cards'))
         .select('id, title, category, times_completed')
-        .eq('user_id', user.id),
-      supabase
-        .from('sessions')
+        .eq('user_id', ctx.userId),
+      ctx.supabase
+        .from(ctx.table('sessions'))
         .select('session_number')
         .eq('id', sessionId)
         .single(),
-      supabase
-        .from('sessions')
+      ctx.supabase
+        .from(ctx.table('sessions'))
         .select('session_notes')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .eq('session_status', 'completed')
         .not('session_notes', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
-      supabase
-        .from('focus_areas')
+      ctx.supabase
+        .from(ctx.table('focus_areas'))
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .is('archived_at', null),
       // Recent wins (for suggestion context)
-      supabase
-        .from('wins')
+      ctx.supabase
+        .from(ctx.table('wins'))
         .select('id, text, tension_type')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(10),
       // Previous suggestion titles (to avoid repetition)
-      supabase
-        .from('session_suggestions')
+      ctx.supabase
+        .from(ctx.table('session_suggestions'))
         .select('suggestions')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
@@ -153,7 +150,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Save session: notes + status + title + narrative snapshot ──
-    const { error: sessionUpdateErr } = await supabase.from('sessions').update({
+    const { error: sessionUpdateErr } = await ctx.supabase.from(ctx.table('sessions')).update({
       session_notes: JSON.stringify(sessionNotes),
       session_status: 'completed',
       title: sessionNotes.headline || 'Session complete',
@@ -180,14 +177,13 @@ export async function POST(request: NextRequest) {
         });
 
         // Step 2: Save evolved understanding to profile
-        const supabaseBg = await createClient();
-        const { error: profileUpdateErr } = await supabaseBg.from('profiles').update({
+        const { error: profileUpdateErr } = await ctx.supabase.from(ctx.table('profiles')).update({
           understanding: evolved.understanding,
           understanding_snippet: evolved.snippet || null,
           ...(evolved.stageOfChange && {
             stage_of_change: evolved.stageOfChange,
           }),
-        }).eq('id', user.id);
+        }).eq('id', ctx.userId);
 
         if (profileUpdateErr) {
           console.error('Background: Profile update failed:', profileUpdateErr);
@@ -207,8 +203,8 @@ export async function POST(request: NextRequest) {
 
         // Step 4: Save suggestions
         if (suggestionsResult.suggestions.length > 0) {
-          const { error: suggestionsErr } = await supabaseBg.from('session_suggestions').insert({
-            user_id: user.id,
+          const { error: suggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+            user_id: ctx.userId,
             suggestions: suggestionsResult.suggestions,
             generated_after_session_id: sessionId,
           });

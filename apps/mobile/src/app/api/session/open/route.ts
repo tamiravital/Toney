@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@/lib/supabase/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney/coaching';
 import { Profile, RewireCard, Win, CoachingBriefing, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
@@ -24,12 +24,8 @@ export async function POST(request: NextRequest) {
   const timing = (label: string) => console.log(`[session/open] ${label}: ${Date.now() - t0}ms`);
 
   try {
-    const supabase = await createClient();
-    timing('supabase client created');
-
-    // ── Auth ──
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     timing('auth complete');
@@ -45,48 +41,48 @@ export async function POST(request: NextRequest) {
 
     // ── Load data in parallel ──
     const [profileResult, winsResult, cardsResult, briefingResult, notesResult, focusAreasResult, suggestionsResult] = await Promise.all([
-      supabase
-        .from('profiles')
+      ctx.supabase
+        .from(ctx.table('profiles'))
         .select('*')
-        .eq('id', user.id)
+        .eq('id', ctx.userId)
         .single(),
-      supabase
-        .from('wins')
+      ctx.supabase
+        .from(ctx.table('wins'))
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(5),
-      supabase
-        .from('rewire_cards')
+      ctx.supabase
+        .from(ctx.table('rewire_cards'))
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(20),
-      supabase
-        .from('coaching_briefings')
+      ctx.supabase
+        .from(ctx.table('coaching_briefings'))
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
-      supabase
-        .from('sessions')
+      ctx.supabase
+        .from(ctx.table('sessions'))
         .select('session_notes')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .not('session_notes', 'is', null)
         .order('created_at', { ascending: false })
         .limit(3),
-      supabase
-        .from('focus_areas')
+      ctx.supabase
+        .from(ctx.table('focus_areas'))
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .is('archived_at', null)
         .order('created_at', { ascending: true }),
       // Load latest suggestions for fast path
-      supabase
-        .from('session_suggestions')
+      ctx.supabase
+        .from(ctx.table('session_suggestions'))
         .select('suggestions')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
@@ -119,13 +115,13 @@ export async function POST(request: NextRequest) {
           profile.understanding = seedResult.understanding;
 
           // Save understanding + tension to profile
-          await supabase.from('profiles').update({
+          await ctx.supabase.from(ctx.table('profiles')).update({
             understanding: seedResult.understanding,
             ...(seedResult.tensionLabel && !profile.tension_type && {
               tension_type: seedResult.tensionLabel,
               secondary_tension_type: seedResult.secondaryTensionLabel || null,
             }),
-          }).eq('id', user.id);
+          }).eq('id', ctx.userId);
           timing('legacy seed complete');
         }
       } catch (err) {
@@ -138,34 +134,34 @@ export async function POST(request: NextRequest) {
     if (previousSessionId) {
       try {
         const [oldMessagesResult, oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([
-          supabase
-            .from('messages')
+          ctx.supabase
+            .from(ctx.table('messages'))
             .select('role, content')
             .eq('session_id', previousSessionId)
             .order('created_at', { ascending: true }),
-          supabase
-            .from('rewire_cards')
+          ctx.supabase
+            .from(ctx.table('rewire_cards'))
             .select('title, category')
             .eq('session_id', previousSessionId),
-          supabase
-            .from('sessions')
+          ctx.supabase
+            .from(ctx.table('sessions'))
             .select('session_number')
             .eq('id', previousSessionId)
             .single(),
-          supabase
-            .from('sessions')
+          ctx.supabase
+            .from(ctx.table('sessions'))
             .select('session_notes')
-            .eq('user_id', user.id)
+            .eq('user_id', ctx.userId)
             .eq('session_status', 'completed')
             .not('session_notes', 'is', null)
             .neq('id', previousSessionId)
             .order('created_at', { ascending: false })
             .limit(1)
             .single(),
-          supabase
-            .from('session_suggestions')
+          ctx.supabase
+            .from(ctx.table('session_suggestions'))
             .select('suggestions')
-            .eq('user_id', user.id)
+            .eq('user_id', ctx.userId)
             .order('created_at', { ascending: false })
             .limit(1)
             .single(),
@@ -221,7 +217,7 @@ export async function POST(request: NextRequest) {
           });
 
           // Save close results
-          const { error: deferredSessionErr } = await supabase.from('sessions').update({
+          const { error: deferredSessionErr } = await ctx.supabase.from(ctx.table('sessions')).update({
             session_notes: JSON.stringify(closeResult.sessionNotes),
             session_status: 'completed',
             title: closeResult.sessionNotes.headline || 'Session complete',
@@ -232,13 +228,13 @@ export async function POST(request: NextRequest) {
             console.error('Deferred session update failed:', deferredSessionErr);
           }
 
-          const { error: deferredProfileErr } = await supabase.from('profiles').update({
+          const { error: deferredProfileErr } = await ctx.supabase.from(ctx.table('profiles')).update({
             understanding: closeResult.understanding.understanding,
             understanding_snippet: closeResult.understanding.snippet || null,
             ...(closeResult.understanding.stageOfChange && {
               stage_of_change: closeResult.understanding.stageOfChange,
             }),
-          }).eq('id', user.id);
+          }).eq('id', ctx.userId);
 
           if (deferredProfileErr) {
             console.error('Deferred profile update failed:', deferredProfileErr);
@@ -246,8 +242,8 @@ export async function POST(request: NextRequest) {
 
           // Save suggestions from deferred close
           if (closeResult.suggestions.length > 0) {
-            const { error: deferredSuggestionsErr } = await supabase.from('session_suggestions').insert({
-              user_id: user.id,
+            const { error: deferredSuggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+              user_id: ctx.userId,
               suggestions: closeResult.suggestions,
               generated_after_session_id: previousSessionId,
             });
@@ -270,9 +266,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create session row
-    const { data: session } = await supabase
-      .from('sessions')
-      .insert({ user_id: user.id })
+    const { data: session } = await ctx.supabase
+      .from(ctx.table('sessions'))
+      .insert({ user_id: ctx.userId })
       .select('id')
       .single();
 
@@ -330,8 +326,8 @@ export async function POST(request: NextRequest) {
 
     // Fire-and-forget: save planning results in parallel with streaming
     const savePlanPromise = Promise.all([
-      supabase.from('coaching_briefings').insert({
-        user_id: user.id,
+      ctx.supabase.from(ctx.table('coaching_briefings')).insert({
+        user_id: ctx.userId,
         session_id: sessionId,
         briefing_content: plan.briefingContent,
         hypothesis: plan.hypothesis,
@@ -341,10 +337,10 @@ export async function POST(request: NextRequest) {
         version,
       }),
       plan.tensionType
-        ? supabase.from('profiles').update({
+        ? ctx.supabase.from(ctx.table('profiles')).update({
             tension_type: plan.tensionType,
             secondary_tension_type: plan.secondaryTensionType || null,
-          }).eq('id', user.id)
+          }).eq('id', ctx.userId)
         : Promise.resolve(),
     ]).catch(err => console.error('Save plan results failed:', err));
 
@@ -381,11 +377,11 @@ export async function POST(request: NextRequest) {
           // Save opening message to DB
           let savedMessageId: string | null = null;
           try {
-            const { data: savedMsg } = await supabase
-              .from('messages')
+            const { data: savedMsg } = await ctx.supabase
+              .from(ctx.table('messages'))
               .insert({
                 session_id: sessionId,
-                user_id: user.id,
+                user_id: ctx.userId,
                 role: 'assistant',
                 content: fullContent,
               })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@/lib/supabase/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import { buildSystemPromptFromBriefing } from '@toney/coaching';
 import { SystemPromptBlock, CoachingBriefing } from '@toney/types';
 
@@ -13,11 +13,8 @@ const anthropic = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Verify auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -34,10 +31,10 @@ export async function POST(request: NextRequest) {
     // By the time /api/chat is called, the briefing should already exist.
     let briefing: CoachingBriefing | null = null;
     try {
-      const { data } = await supabase
-        .from('coaching_briefings')
+      const { data } = await ctx.supabase
+        .from(ctx.table('coaching_briefings'))
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -52,25 +49,25 @@ export async function POST(request: NextRequest) {
     const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefing.briefing_content);
 
     // Load session history (last 50 messages)
-    const { data: historyRows } = await supabase
-      .from('messages')
+    const { data: historyRows } = await ctx.supabase
+      .from(ctx.table('messages'))
       .select('role, content')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true })
       .limit(50);
 
     // Save user message
-    await supabase
-      .from('messages')
+    await ctx.supabase
+      .from(ctx.table('messages'))
       .insert({
         session_id: sessionId,
-        user_id: user.id,
+        user_id: ctx.userId,
         role: 'user',
         content: message,
       });
 
     // Build message history for Claude with incremental caching
-    const rawHistory = (historyRows || []).map(m => ({
+    const rawHistory: { role: 'user' | 'assistant'; content: string }[] = (historyRows || []).map((m: { role: string; content: string }) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
@@ -113,11 +110,11 @@ export async function POST(request: NextRequest) {
           // Save assistant message to DB
           let savedMessageId: string | null = null;
           try {
-            const { data } = await supabase
-              .from('messages')
+            const { data } = await ctx.supabase
+              .from(ctx.table('messages'))
               .insert({
                 session_id: sessionId,
-                user_id: user.id,
+                user_id: ctx.userId,
                 role: 'assistant',
                 content: fullContent,
               })

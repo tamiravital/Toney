@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { resolveContext } from '@/lib/supabase/sim';
 import type { Win } from '@toney/types';
 
 /**
@@ -7,19 +7,17 @@ import type { Win } from '@toney/types';
  *
  * Returns all wins for the authenticated user, ordered by created_at DESC.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from('wins')
+    const { data, error } = await ctx.supabase
+      .from(ctx.table('wins'))
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ctx.userId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -40,10 +38,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -52,10 +48,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing text' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('wins')
+    const { data, error } = await ctx.supabase
+      .from(ctx.table('wins'))
       .insert({
-        user_id: user.id,
+        user_id: ctx.userId,
         text: text.trim(),
         tension_type: tensionType || null,
         session_id: sessionId || null,
@@ -83,10 +79,8 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const ctx = await resolveContext(request);
+    if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -95,11 +89,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing winId' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('wins')
+    const { error } = await ctx.supabase
+      .from(ctx.table('wins'))
       .delete()
       .eq('id', winId)
-      .eq('user_id', user.id);
+      .eq('user_id', ctx.userId);
 
     if (error) {
       console.error('Win delete error:', error);
