@@ -133,7 +133,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Deferred close of previous session ──
+    // ── Deferred close of previous session (skip if already completed) ──
+    if (previousSessionId) {
+      // Check if session is already completed — no need to re-close
+      const { data: prevSessionCheck } = await ctx.supabase
+        .from(ctx.table('sessions'))
+        .select('session_status')
+        .eq('id', previousSessionId)
+        .single();
+
+      if (prevSessionCheck?.session_status === 'completed') {
+        previousSessionId = null; // Already closed — skip deferred close
+        timing('previous session already completed, skipping deferred close');
+      }
+    }
+
     if (previousSessionId) {
       try {
         const [oldMessagesResult, oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([

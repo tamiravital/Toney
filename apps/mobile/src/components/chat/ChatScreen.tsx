@@ -204,13 +204,16 @@ export default function ChatScreen() {
     (a, b) => lengthOrder.indexOf(a.length) - lengthOrder.indexOf(b.length)
   );
 
+  // Don't pass previousSessionId when session is already completed — nothing to close
+  const previousIdForOpen = sessionStatus === 'completed' ? undefined : (currentSessionId ?? undefined);
+
   const handleSuggestionTap = (suggestionIndex: number) => {
     const original = suggestions.indexOf(sortedSuggestions[suggestionIndex]);
-    openSession(currentSessionId ?? undefined, false, original);
+    openSession(previousIdForOpen, false, original);
   };
 
   const handleFreeChat = () => {
-    openSession(currentSessionId ?? undefined, false);
+    openSession(previousIdForOpen, false);
   };
 
   const showSuggestionPicker = !loadingChat && messages.length === 0
