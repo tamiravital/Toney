@@ -6,7 +6,7 @@ import { tensionColor } from '@toney/constants';
 import type { TensionType } from '@toney/types';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
-import { OpenButton, DeleteButton, NewUserButton, CloneUserSection } from './SimulatorActions';
+import { OpenButton, DeleteButton, NewUserButton, CloneUserSection, EditableName } from './SimulatorActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,9 +66,7 @@ export default async function SimulatorPage() {
                 {/* Header */}
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-gray-900 truncate">
-                      {profile.display_name || 'Unnamed'}
-                    </h3>
+                    <EditableName profileId={profile.id} initialName={profile.display_name || 'Unnamed'} />
                     <p className="text-xs text-gray-400 mt-0.5">
                       {formatDate(profile.created_at)}
                     </p>

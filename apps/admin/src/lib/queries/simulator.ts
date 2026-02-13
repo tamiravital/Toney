@@ -80,6 +80,15 @@ export async function createSimProfile(config: Partial<Profile> & {
   return data;
 }
 
+export async function renameSimProfile(id: string, displayName: string): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from('sim_profiles')
+    .update({ display_name: displayName })
+    .eq('id', id);
+  if (error) throw new Error(`Failed to rename sim profile: ${error.message}`);
+}
+
 export async function deleteSimProfile(id: string): Promise<void> {
   const supabase = createAdminClient();
 

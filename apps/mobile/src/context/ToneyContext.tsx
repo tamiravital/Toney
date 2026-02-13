@@ -252,8 +252,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               const { id } = await res.json();
               simProfileIdRef.current = id;
               window.history.replaceState(null, '', `?sim=${id}&simSecret=${secret}`);
+            } else {
+              console.error('[Sim] create-profile failed:', res.status, await res.text());
             }
-          } catch { /* creation failed — will show onboarding anyway */ }
+          } catch (err) {
+            console.error('[Sim] create-profile error:', err);
+          }
           setAppPhase('onboarding');
           return;
         }
@@ -806,7 +810,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setChatInput('');
     setIsTyping(true);
 
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() || simMode) {
       try {
         const sessId = sessionIdRef.current;
 
@@ -923,7 +927,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       saved: false,
     }]);
     setIsTyping(false);
-  }, [chatInput, buildApiUrl]);
+  }, [chatInput, simMode, buildApiUrl]);
 
   const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
     setMessages(prev =>
@@ -1074,7 +1078,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number) => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured() && !simMode) return;
     if (openSessionInFlightRef.current) return; // Bug 2: Already opening a session
     openSessionInFlightRef.current = true;
     sessionOpenedRef.current = true; // Prevent auto-open from re-firing
@@ -1216,7 +1220,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     } finally {
       openSessionInFlightRef.current = false; // Bug 2: Release mutex
     }
-  }, [buildApiUrl]);
+  }, [simMode, buildApiUrl]);
 
   // ── Auto-open session when user navigates to chat ──
   const sessionOpenedRef = useRef(false);
@@ -1467,7 +1471,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (simMode && simProfileIdRef.current && simSecretRef.current) {
+    if (simMode) {
+      if (!simProfileIdRef.current || !simSecretRef.current) {
+        console.error('[Sim] No profile ID — create-profile may have failed');
+        setAppPhase('main');
+        setActiveTab('chat');
+        return;
+      }
       // Save onboarding data via API (can't use browser Supabase for sim_ tables)
       try {
         await fetch(buildApiUrl('/api/sim/save-onboarding'), {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ExternalLink, Trash2, Plus, Copy } from 'lucide-react';
+import { ExternalLink, Trash2, Plus, Copy, Pencil, Check, X } from 'lucide-react';
 
 const MOBILE_URL = process.env.NEXT_PUBLIC_MOBILE_URL || 'http://localhost:3000';
 const SIM_SECRET = process.env.NEXT_PUBLIC_SIM_SECRET || '';
@@ -78,6 +78,85 @@ export function NewUserButton() {
     >
       <Plus className="h-4 w-4" />
       New Sim User
+    </button>
+  );
+}
+
+// ============================================================
+// Editable Name — click to rename
+// ============================================================
+
+export function EditableName({ profileId, initialName }: { profileId: string; initialName: string }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(initialName);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  async function handleSave() {
+    if (!name.trim() || name.trim() === initialName) {
+      setName(initialName);
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/simulator/personas/${profileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: name.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to rename');
+      setEditing(false);
+      router.refresh();
+    } catch {
+      setName(initialName);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave();
+            if (e.key === 'Escape') { setName(initialName); setEditing(false); }
+          }}
+          disabled={saving}
+          className="text-sm font-semibold text-gray-900 bg-gray-50 border border-gray-300 rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+        <button onClick={handleSave} disabled={saving} className="text-green-600 hover:text-green-700 p-0.5">
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => { setName(initialName); setEditing(false); }} className="text-gray-400 hover:text-gray-600 p-0.5">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="group flex items-center gap-1 min-w-0"
+    >
+      <h3 className="text-sm font-semibold text-gray-900 truncate">
+        {initialName || 'Unnamed'}
+      </h3>
+      <Pencil className="h-3 w-3 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
     </button>
   );
 }
