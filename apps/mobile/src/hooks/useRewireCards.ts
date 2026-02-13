@@ -31,7 +31,6 @@ export function useRewireCards() {
     title: string;
     content: string;
     source_message_id?: string;
-    tension_type?: string;
     trigger_context?: string;
     auto_generated?: boolean;
   }): Promise<RewireCard | null> => {

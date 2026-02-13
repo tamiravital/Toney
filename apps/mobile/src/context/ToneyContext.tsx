@@ -809,19 +809,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const { data } = await supabase.from('rewire_cards').insert({
+            const { data, error } = await supabase.from('rewire_cards').insert({
               user_id: user.id,
               source_message_id: messageId.startsWith('msg-') ? null : messageId,
               category: category || 'reframe',
               title: (editedContent || msg.content).substring(0, 80),
               content: editedContent || msg.content,
-              tension_type: identifiedTensionState?.primary || null,
               auto_generated: false,
               trigger_context: triggerContext || null,
             }).select('id').single();
+            if (error) console.error('Failed to save insight card:', error);
             return data?.id || null;
           }
-        } catch { /* non-critical */ }
+        } catch (err) { console.error('Failed to save insight card:', err); }
       }
     } else if (msg) {
       setSavedInsights(prev => prev.filter(i => i.content !== msg.content));
@@ -853,7 +853,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             category,
             title,
             content,
-            tension_type: identifiedTensionState?.primary || null,
             auto_generated: false,
             session_id: currentSessionId || null,
           });

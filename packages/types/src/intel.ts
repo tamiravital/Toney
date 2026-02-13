@@ -15,7 +15,6 @@ export interface RewireCard {
   title: string;
   content: string;
   source_message_id?: string | null;
-  tension_type?: string | null;
   trigger_context?: string | null;
   times_viewed: number;
   last_viewed_at?: string | null;
