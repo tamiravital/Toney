@@ -707,17 +707,23 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           if (res.ok) {
             const data = await res.json();
             if (data.cardCount > 0) setSessionHasCard(true);
-            if (data.sessionStatus === 'completed') setSessionStatus('completed');
+            const simCompleted = data.sessionStatus === 'completed';
+            if (simCompleted) setSessionStatus('completed');
             else setSessionStatus('active');
             if (data.messages?.length > 0) {
-              setMessages(data.messages.map((m: { id: string; role: string; content: string; created_at: string }) => ({
+              const mapped = data.messages.map((m: { id: string; role: string; content: string; created_at: string }) => ({
                 id: m.id,
                 role: m.role as 'user' | 'assistant',
                 content: m.content,
                 timestamp: new Date(m.created_at),
                 canSave: m.role === 'assistant',
                 saved: false,
-              })));
+              }));
+              if (simCompleted) {
+                setMessages([]);
+              } else {
+                setMessages(mapped);
+              }
             } else {
               setMessages([]);
             }
@@ -753,21 +759,30 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         }
 
         // Restore session status (e.g. if user refreshes after ending)
-        if (sessionData?.session_status === 'completed') {
+        const isCompleted = sessionData?.session_status === 'completed';
+        if (isCompleted) {
           setSessionStatus('completed');
         } else {
           setSessionStatus('active');
         }
 
         if (dbMessages && dbMessages.length > 0) {
-          setMessages(dbMessages.reverse().map(m => ({
+          const mapped = dbMessages.reverse().map(m => ({
             id: m.id,
             role: m.role as 'user' | 'assistant',
             content: m.content,
             timestamp: new Date(m.created_at),
             canSave: m.role === 'assistant',
             saved: false,
-          })));
+          }));
+
+          if (isCompleted) {
+            // Completed session: don't fill messages (keeps suggestion picker visible).
+            // Messages are available in Journey tab — no need to show stale chat.
+            setMessages([]);
+          } else {
+            setMessages(mapped);
+          }
         } else {
           setMessages([]);
         }
