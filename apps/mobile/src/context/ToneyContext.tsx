@@ -1480,6 +1480,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         return;
       }
       // Save onboarding data via API (can't use browser Supabase for sim_ tables)
+      // Save-onboarding MUST complete (seed reads from it), but seed runs in background
+      // so the user transitions to chat immediately.
       try {
         const onboardRes = await fetch(buildApiUrl('/api/sim/save-onboarding'), {
           method: 'POST',
@@ -1495,31 +1497,32 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         if (!onboardRes.ok) {
           console.error('[Sim] save-onboarding failed:', onboardRes.status, await onboardRes.text().catch(() => ''));
         }
-        // Seed understanding
-        const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
-        if (!seedRes.ok) {
-          console.error('[Sim] seed failed:', seedRes.status, await seedRes.text().catch(() => ''));
-        }
-        if (seedRes.ok) {
-          const seedData = await seedRes.json();
-          if (seedData.tensionType) {
-            const tension: IdentifiedTension = {
-              primary: seedData.tensionType as TensionType,
-              primaryScore: 5,
-              primaryDetails: tensionDetails[seedData.tensionType as TensionType],
-              ...(seedData.secondaryTensionType && {
-                secondary: seedData.secondaryTensionType as TensionType,
-                secondaryDetails: tensionDetails[seedData.secondaryTensionType as TensionType],
-              }),
-            };
-            setIdentifiedTension(tension);
-          }
-        }
       } catch (err) {
-        console.error('[Sim] Onboarding save failed:', err);
+        console.error('[Sim] save-onboarding threw:', err);
       }
+      // Transition to chat immediately — session open will handle missing understanding
       setAppPhase('main');
       setActiveTab('chat');
+      // Seed understanding in background (session open has legacy-user fallback for missing understanding)
+      fetch(buildApiUrl('/api/seed'), { method: 'POST' }).then(async (seedRes) => {
+        if (!seedRes.ok) {
+          console.error('[Sim] seed failed:', seedRes.status, await seedRes.text().catch(() => ''));
+          return;
+        }
+        const seedData = await seedRes.json();
+        if (seedData.tensionType) {
+          const tension: IdentifiedTension = {
+            primary: seedData.tensionType as TensionType,
+            primaryScore: 5,
+            primaryDetails: tensionDetails[seedData.tensionType as TensionType],
+            ...(seedData.secondaryTensionType && {
+              secondary: seedData.secondaryTensionType as TensionType,
+              secondaryDetails: tensionDetails[seedData.secondaryTensionType as TensionType],
+            }),
+          };
+          setIdentifiedTension(tension);
+        }
+      }).catch(err => console.error('[Sim] seed threw:', err));
       return;
     }
 
