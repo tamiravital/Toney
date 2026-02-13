@@ -116,7 +116,6 @@ export async function POST(request: NextRequest) {
                 session_notes: sessionNotes,
                 session_number: 1,
                 session_status: 'completed',
-                is_active: false,
               })
               .eq('id', existingSessionId);
           } else {
@@ -126,7 +125,6 @@ export async function POST(request: NextRequest) {
               .insert({
                 user_id: userId,
                 created_at: firstMsg.created_at,
-                is_active: false,
                 session_number: i + 1,
                 session_notes: sessionNotes,
                 session_status: 'completed',

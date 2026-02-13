@@ -43,7 +43,7 @@ export default async function SessionsPage({
                   {formatDateTime(s.created_at)}
                 </span>
                 <Badge label={`${s.message_count} msgs`} />
-                {s.is_active && (
+                {s.session_status === 'active' && (
                   <Badge label="Active" bg="bg-green-100" text="text-green-700" />
                 )}
               </div>

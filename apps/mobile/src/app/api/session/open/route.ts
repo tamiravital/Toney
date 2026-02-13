@@ -218,34 +218,39 @@ export async function POST(request: NextRequest) {
           });
 
           // Save close results
-          const closeSaveOps: PromiseLike<unknown>[] = [
-            supabase.from('sessions').update({
-              session_notes: JSON.stringify(closeResult.sessionNotes),
-              session_status: 'completed',
-              ended_at: new Date().toISOString(),
-              narrative_snapshot: profile.understanding || null,
-            }).eq('id', previousSessionId),
+          const { error: deferredSessionErr } = await supabase.from('sessions').update({
+            session_notes: JSON.stringify(closeResult.sessionNotes),
+            session_status: 'completed',
+            title: closeResult.sessionNotes.headline || 'Session complete',
+            narrative_snapshot: profile.understanding || null,
+          }).eq('id', previousSessionId);
 
-            supabase.from('profiles').update({
-              understanding: closeResult.understanding.understanding,
-              ...(closeResult.understanding.stageOfChange && {
-                stage_of_change: closeResult.understanding.stageOfChange,
-              }),
-            }).eq('id', user.id),
-          ];
+          if (deferredSessionErr) {
+            console.error('Deferred session update failed:', deferredSessionErr);
+          }
+
+          const { error: deferredProfileErr } = await supabase.from('profiles').update({
+            understanding: closeResult.understanding.understanding,
+            ...(closeResult.understanding.stageOfChange && {
+              stage_of_change: closeResult.understanding.stageOfChange,
+            }),
+          }).eq('id', user.id);
+
+          if (deferredProfileErr) {
+            console.error('Deferred profile update failed:', deferredProfileErr);
+          }
 
           // Save suggestions from deferred close
           if (closeResult.suggestions.length > 0) {
-            closeSaveOps.push(
-              supabase.from('session_suggestions').insert({
-                user_id: user.id,
-                suggestions: closeResult.suggestions,
-                generated_after_session_id: previousSessionId,
-              }),
-            );
+            const { error: deferredSuggestionsErr } = await supabase.from('session_suggestions').insert({
+              user_id: user.id,
+              suggestions: closeResult.suggestions,
+              generated_after_session_id: previousSessionId,
+            });
+            if (deferredSuggestionsErr) {
+              console.error('Deferred suggestions save failed:', deferredSuggestionsErr);
+            }
           }
-
-          await Promise.all(closeSaveOps);
           timing('deferred close complete');
 
           // Update local profile reference with evolved understanding
@@ -331,7 +336,6 @@ export async function POST(request: NextRequest) {
         growth_edges: {},
         version,
       }),
-      supabase.from('sessions').update({ message_count: 1 }).eq('id', sessionId),
       plan.tensionType
         ? supabase.from('profiles').update({
             tension_type: plan.tensionType,

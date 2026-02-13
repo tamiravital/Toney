@@ -92,7 +92,7 @@ export default async function MetricsPage({
                     {formatDateTime(s.created_at)}
                   </td>
                   <td className="py-3 px-4">
-                    {s.is_active ? (
+                    {s.session_status === 'active' ? (
                       <Badge label="Active" bg="bg-green-100" text="text-green-700" />
                     ) : (
                       <Badge label="Ended" />

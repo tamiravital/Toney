@@ -148,36 +148,42 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Save results ──
-    const saveOps: PromiseLike<unknown>[] = [
-      // Session: notes + status + narrative snapshot (understanding BEFORE evolution)
-      supabase.from('sessions').update({
-        session_notes: JSON.stringify(result.sessionNotes),
-        session_status: 'completed',
-        ended_at: new Date().toISOString(),
-        narrative_snapshot: profileResult.data?.understanding || null,
-      }).eq('id', sessionId),
+    // Session: notes + status + title + narrative snapshot (understanding BEFORE evolution)
+    const { error: sessionUpdateErr } = await supabase.from('sessions').update({
+      session_notes: JSON.stringify(result.sessionNotes),
+      session_status: 'completed',
+      title: result.sessionNotes.headline || 'Session complete',
+      narrative_snapshot: profileResult.data?.understanding || null,
+    }).eq('id', sessionId);
 
-      // Profile: evolved understanding + optional stage shift
-      supabase.from('profiles').update({
-        understanding: result.understanding.understanding,
-        ...(result.understanding.stageOfChange && {
-          stage_of_change: result.understanding.stageOfChange,
-        }),
-      }).eq('id', user.id),
-    ];
+    if (sessionUpdateErr) {
+      console.error('Session update failed:', sessionUpdateErr);
+      return NextResponse.json({ error: 'Failed to save session' }, { status: 500 });
+    }
+
+    // Profile: evolved understanding + optional stage shift
+    const { error: profileUpdateErr } = await supabase.from('profiles').update({
+      understanding: result.understanding.understanding,
+      ...(result.understanding.stageOfChange && {
+        stage_of_change: result.understanding.stageOfChange,
+      }),
+    }).eq('id', user.id);
+
+    if (profileUpdateErr) {
+      console.error('Profile update failed:', profileUpdateErr);
+    }
 
     // Save suggestions (if any were generated)
     if (result.suggestions.length > 0) {
-      saveOps.push(
-        supabase.from('session_suggestions').insert({
-          user_id: user.id,
-          suggestions: result.suggestions,
-          generated_after_session_id: sessionId,
-        }),
-      );
+      const { error: suggestionsErr } = await supabase.from('session_suggestions').insert({
+        user_id: user.id,
+        suggestions: result.suggestions,
+        generated_after_session_id: sessionId,
+      });
+      if (suggestionsErr) {
+        console.error('Suggestions save failed:', suggestionsErr);
+      }
     }
-
-    await Promise.all(saveOps);
 
     // ── Response ──
     return NextResponse.json({ sessionNotes: result.sessionNotes });

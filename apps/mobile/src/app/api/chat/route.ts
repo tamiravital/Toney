@@ -123,19 +123,6 @@ export async function POST(request: NextRequest) {
             savedMessageId = data?.id || null;
           } catch { /* non-critical */ }
 
-          // Update session message count (non-critical)
-          try {
-            const { data: sess } = await supabase
-              .from('sessions')
-              .select('message_count')
-              .eq('id', sessionId)
-              .single();
-            await supabase
-              .from('sessions')
-              .update({ message_count: (sess?.message_count || 0) + 2 })
-              .eq('id', sessionId);
-          } catch { /* non-critical */ }
-
           // Send final message with saved ID
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
           controller.close();

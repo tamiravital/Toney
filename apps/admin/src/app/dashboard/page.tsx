@@ -183,7 +183,7 @@ export default async function OverviewPage() {
                       <Badge label={`${c.message_count}`} />
                     </td>
                     <td className="py-2.5 px-3">
-                      {c.is_active ? (
+                      {c.session_status === 'active' ? (
                         <Badge label="Active" bg="bg-green-100" text="text-green-700" />
                       ) : (
                         <span className="text-gray-400">Ended</span>

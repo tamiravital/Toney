@@ -15,7 +15,7 @@ export interface UserEngagementMetrics {
 export interface SessionMetric {
   id: string;
   created_at: string;
-  is_active: boolean;
+  session_status: string;
   title: string | null;
   message_count: number;
   user_message_count: number;
@@ -60,7 +60,7 @@ export async function getUserEngagementMetrics(userId: string): Promise<UserEnga
     return {
       id: s.id,
       created_at: s.created_at,
-      is_active: s.is_active ?? true,
+      session_status: s.session_status ?? 'active',
       title: s.title ?? null,
       message_count: sessMsgs.length,
       user_message_count: userMsgs.length,
