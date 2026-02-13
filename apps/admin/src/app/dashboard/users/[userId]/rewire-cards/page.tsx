@@ -71,7 +71,6 @@ export default async function RewireCardsPage({
                 <div className="flex items-center gap-2 mb-1">
                   <Badge label={categoryLabel(card.category)} />
                   {card.is_focus && <Badge label="Focus" bg="bg-indigo-100" text="text-indigo-700" />}
-                  {card.graduated_at && <Badge label="Graduated" bg="bg-emerald-100" text="text-emerald-700" />}
                   {card.user_feedback && (
                     <Badge
                       label={card.user_feedback === 'helpful' ? 'Helpful' : 'Not useful'}

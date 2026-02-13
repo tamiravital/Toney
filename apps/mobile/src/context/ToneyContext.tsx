@@ -373,7 +373,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           if (user) {
             const { data: dbCards } = await supabase
               .from('rewire_cards')
-              .select('id, title, content, category, created_at, is_focus, graduated_at')
+              .select('id, title, content, category, created_at, is_focus')
               .eq('user_id', user.id)
               .order('created_at', { ascending: false });
 
@@ -387,7 +387,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 fromChat: true,
                 tags: [],
                 is_focus: card.is_focus || false,
-                graduated_at: card.graduated_at || null,
               }));
               setSavedInsights(insights);
               saveJSON('toney_insights', insights);
@@ -849,18 +848,18 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          await supabase.from('rewire_cards').insert({
+          const { error } = await supabase.from('rewire_cards').insert({
             user_id: user.id,
             category,
             title,
             content,
             tension_type: identifiedTensionState?.primary || null,
             auto_generated: false,
-            prescribed_by: 'coach',
             session_id: currentSessionId || null,
           });
+          if (error) console.error('Failed to save rewire card:', error);
         }
-      } catch { /* non-critical */ }
+      } catch (err) { console.error('Failed to save rewire card:', err); }
     }
   }, [identifiedTensionState, currentSessionId]);
 

@@ -22,14 +22,12 @@ export interface RewireCard {
   user_feedback?: 'helpful' | 'not_useful' | null;
   usefulness_score?: number | null;
   auto_generated: boolean;
+  session_id?: string | null;
   created_at: string;
   // Focus card lifecycle
   is_focus?: boolean;
-  focus_set_at?: string | null;
-  graduated_at?: string | null;
   times_completed?: number;
   last_completed_at?: string | null;
-  prescribed_by?: 'coach' | 'strategist' | 'user';
 }
 
 export type WinSource = 'manual' | 'coach';
