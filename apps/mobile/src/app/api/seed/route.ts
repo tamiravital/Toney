@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { seedUnderstanding, generateSessionSuggestions } from '@toney/coaching';
 import { formatAnswersReadable, questions } from '@toney/constants';
 
+// Seed understanding + generate suggestions: 2 Sonnet calls
+export const maxDuration = 60;
+
 /**
  * POST /api/seed
  *

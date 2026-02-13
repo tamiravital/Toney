@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { closeSessionPipeline } from '@toney/coaching';
+import { generateSessionNotes, evolveUnderstanding, generateSessionSuggestions } from '@toney/coaching';
 import type { FocusArea, RewireCard, Win } from '@toney/types';
+
+// Notes return in ~3-5s. Background work (evolve + suggestions) runs via after().
+export const maxDuration = 60;
 
 /**
  * POST /api/session/close
  *
- * Thin shell: auth + data loading + pipeline + save.
- * All orchestration logic lives in @toney/coaching closeSessionPipeline.
+ * Returns session notes immediately (~3-5s via Haiku).
+ * Understanding evolution + suggestion generation run in the background via after().
  */
 export async function POST(request: NextRequest) {
   try {
@@ -106,6 +109,11 @@ export async function POST(request: NextRequest) {
     const allCards = (allCardsResult.data || []) as RewireCard[];
     const recentWins = (winsResult.data || []) as Win[];
 
+    const tensionType = profileResult.data?.tension_type || null;
+    const hypothesis = briefingResult.data?.hypothesis || null;
+    const currentStageOfChange = profileResult.data?.stage_of_change || null;
+    const currentUnderstanding = profileResult.data?.understanding || null;
+
     const sessionNumber = sessionResult.data?.session_number || null;
     let previousHeadline: string | null = null;
     if (prevNotesResult.data?.session_notes) {
@@ -130,30 +138,26 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore */ }
     }
 
-    // ── Pipeline ──
-    const result = await closeSessionPipeline({
-      sessionId,
+    // ── Immediate: Generate session notes (Haiku, ~3-5s) ──
+    // Uses current understanding (pre-evolution) — perfectly valid for notes
+    const sessionNotes = await generateSessionNotes({
       messages,
-      tensionType: profileResult.data?.tension_type || null,
-      hypothesis: briefingResult.data?.hypothesis || null,
-      currentStageOfChange: profileResult.data?.stage_of_change || null,
-      currentUnderstanding: profileResult.data?.understanding || null,
+      tensionType,
+      hypothesis,
       savedCards,
       sessionNumber,
+      understanding: currentUnderstanding,
+      stageOfChange: currentStageOfChange,
       previousHeadline,
       activeFocusAreas,
-      rewireCards: allCards,
-      recentWins,
-      previousSuggestionTitles,
     });
 
-    // ── Save results ──
-    // Session: notes + status + title + narrative snapshot (understanding BEFORE evolution)
+    // ── Save session: notes + status + title + narrative snapshot ──
     const { error: sessionUpdateErr } = await supabase.from('sessions').update({
-      session_notes: JSON.stringify(result.sessionNotes),
+      session_notes: JSON.stringify(sessionNotes),
       session_status: 'completed',
-      title: result.sessionNotes.headline || 'Session complete',
-      narrative_snapshot: profileResult.data?.understanding || null,
+      title: sessionNotes.headline || 'Session complete',
+      narrative_snapshot: currentUnderstanding,
     }).eq('id', sessionId);
 
     if (sessionUpdateErr) {
@@ -161,32 +165,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save session' }, { status: 500 });
     }
 
-    // Profile: evolved understanding + optional stage shift
-    const { error: profileUpdateErr } = await supabase.from('profiles').update({
-      understanding: result.understanding.understanding,
-      ...(result.understanding.stageOfChange && {
-        stage_of_change: result.understanding.stageOfChange,
-      }),
-    }).eq('id', user.id);
+    // ── Background: evolve understanding + generate suggestions ──
+    // Runs after response is sent. Vercel waits for completion within maxDuration.
+    after(async () => {
+      try {
+        // Step 1: Evolve understanding (Sonnet, ~5-8s)
+        const evolved = await evolveUnderstanding({
+          currentUnderstanding,
+          messages,
+          tensionType,
+          hypothesis,
+          currentStageOfChange,
+          activeFocusAreas,
+        });
 
-    if (profileUpdateErr) {
-      console.error('Profile update failed:', profileUpdateErr);
-    }
+        // Step 2: Save evolved understanding to profile
+        const supabaseBg = await createClient();
+        const { error: profileUpdateErr } = await supabaseBg.from('profiles').update({
+          understanding: evolved.understanding,
+          ...(evolved.stageOfChange && {
+            stage_of_change: evolved.stageOfChange,
+          }),
+        }).eq('id', user.id);
 
-    // Save suggestions (if any were generated)
-    if (result.suggestions.length > 0) {
-      const { error: suggestionsErr } = await supabase.from('session_suggestions').insert({
-        user_id: user.id,
-        suggestions: result.suggestions,
-        generated_after_session_id: sessionId,
-      });
-      if (suggestionsErr) {
-        console.error('Suggestions save failed:', suggestionsErr);
+        if (profileUpdateErr) {
+          console.error('Background: Profile update failed:', profileUpdateErr);
+        }
+
+        // Step 3: Generate suggestions (Sonnet, ~8-12s)
+        const suggestionsResult = await generateSessionSuggestions({
+          understanding: evolved.understanding,
+          tensionType,
+          recentSessionHeadline: sessionNotes.headline,
+          recentKeyMoments: sessionNotes.keyMoments,
+          rewireCards: allCards,
+          recentWins,
+          activeFocusAreas,
+          previousSuggestionTitles,
+        });
+
+        // Step 4: Save suggestions
+        if (suggestionsResult.suggestions.length > 0) {
+          const { error: suggestionsErr } = await supabaseBg.from('session_suggestions').insert({
+            user_id: user.id,
+            suggestions: suggestionsResult.suggestions,
+            generated_after_session_id: sessionId,
+          });
+          if (suggestionsErr) {
+            console.error('Background: Suggestions save failed:', suggestionsErr);
+          }
+        }
+      } catch (err) {
+        console.error('Background close tasks failed:', err);
       }
-    }
+    });
 
-    // ── Response ──
-    return NextResponse.json({ sessionNotes: result.sessionNotes });
+    // ── Response (immediate) ──
+    return NextResponse.json({ sessionNotes });
   } catch (error) {
     console.error('Session close error:', error);
     return NextResponse.json({ error: 'Failed to close session' }, { status: 500 });

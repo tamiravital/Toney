@@ -84,6 +84,7 @@ interface ToneyContextValue {
 
   // Profile
   displayName: string | null;
+  setDisplayName: (name: string | null) => void;
 
   // Session suggestions
   suggestions: SessionSuggestion[];
@@ -166,8 +167,8 @@ interface ToneyContextValue {
 const ToneyContext = createContext<ToneyContextValue | null>(null);
 
 const defaultStyle: StyleProfile = {
-  tone: 5,
-  depth: 'balanced',
+  tone: 3,
+  depth: 3,
   learningStyles: [],
 };
 
@@ -274,7 +275,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
               if (profile.tone || profile.depth || profile.learning_styles) {
                 const style: StyleProfile = {
                   tone: profile.tone ?? defaultStyle.tone,
-                  depth: (profile.depth as StyleProfile['depth']) ?? defaultStyle.depth,
+                  depth: profile.depth ?? defaultStyle.depth,
                   learningStyles: (profile.learning_styles as StyleProfile['learningStyles']) ?? defaultStyle.learningStyles,
                 };
                 saveJSON('toney_style', style);
@@ -875,6 +876,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ sessionId: currentSessionId }),
       });
 
+      if (!res.ok) {
+        console.error('Session close failed:', res.status);
+        setSessionStatus('active');
+        return;
+      }
+
       const data = await res.json();
 
       if (data.sessionNotes) {
@@ -1395,6 +1402,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         showSettings,
         setShowSettings,
         displayName,
+        setDisplayName,
         suggestions,
         onboardingStep,
         setOnboardingStep,

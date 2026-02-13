@@ -5,6 +5,9 @@ import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney
 import { Profile, RewireCard, Win, CoachingBriefing, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
+// Deferred close + plan + stream opening: can take 30s+
+export const maxDuration = 60;
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
