@@ -1,14 +1,14 @@
 'use client';
 
 import { useRef, useEffect, ComponentPropsWithoutRef } from 'react';
-import { Send, Square, Plus, ChevronRight, ChevronDown } from 'lucide-react';
+import { Send, Square, ChevronRight, ChevronDown, Clock, ArrowRight, MessageCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToney } from '@/context/ToneyContext';
 import DraftCard from './DraftCard';
 import DraftFocusArea from './DraftFocusArea';
 import DraftWin from './DraftWin';
 import SessionNotesView from './SessionNotesView';
-import type { RewireCardCategory } from '@toney/types';
+import type { RewireCardCategory, SuggestionLength } from '@toney/types';
 
 // Custom markdown components for chat bubble styling
 const markdownComponents = {
@@ -110,6 +110,15 @@ function parseMessageContent(raw: string): MessageSegment[] {
   return segments;
 }
 
+const lengthConfig: Record<SuggestionLength, { label: string; color: string }> = {
+  quick: { label: '~3 min', color: 'text-emerald-600' },
+  medium: { label: '~8 min', color: 'text-blue-600' },
+  deep: { label: '~12 min', color: 'text-purple-600' },
+  standing: { label: 'Anytime', color: 'text-amber-600' },
+};
+
+const lengthOrder: SuggestionLength[] = ['standing', 'quick', 'medium', 'deep'];
+
 export default function ChatScreen() {
   const {
     messages,
@@ -126,18 +135,20 @@ export default function ChatScreen() {
     sessionNotes,
     endSession,
     dismissSessionNotes,
-    startNewSession,
     loadingChat,
     setActiveTab,
     isFirstSession,
     previousSessionMessages,
     previousSessionCollapsed,
     setPreviousSessionCollapsed,
+    suggestions,
+    openSession,
   } = useToney();
 
   const isSessionEnded = sessionStatus === 'completed' || sessionStatus === 'ending';
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -152,6 +163,102 @@ export default function ChatScreen() {
   const handleTogglePrevious = () => {
     setPreviousSessionCollapsed(!previousSessionCollapsed);
   };
+
+  // ── Suggestion picker: show when no active session and not loading ──
+  const sortedSuggestions = [...suggestions].sort(
+    (a, b) => lengthOrder.indexOf(a.length) - lengthOrder.indexOf(b.length)
+  );
+
+  const handleSuggestionTap = (suggestionIndex: number) => {
+    const original = suggestions.indexOf(sortedSuggestions[suggestionIndex]);
+    openSession(currentSessionId ?? undefined, false, original);
+  };
+
+  const handleFreeChat = () => {
+    openSession(currentSessionId ?? undefined, false);
+  };
+
+  const showSuggestionPicker = !loadingChat && messages.length === 0
+    && previousSessionMessages.length === 0
+    && (sessionStatus === 'completed' || sessionStatus === 'active');
+
+  // ── Suggestion picker screen ──
+  if (showSuggestionPicker && !isTyping) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
+          <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 hide-scrollbar">
+          {sortedSuggestions.length > 0 ? (
+            <>
+              {/* Featured suggestion */}
+              <button
+                onClick={() => handleSuggestionTap(0)}
+                className="w-full bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-left mb-3"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white">
+                    <Clock className="w-3 h-3" />
+                    {lengthConfig[sortedSuggestions[0].length].label}
+                  </span>
+                  <ArrowRight className="w-4 h-4 text-white/60" />
+                </div>
+                <p className="text-base font-semibold text-white leading-snug mb-1.5">
+                  {sortedSuggestions[0].title}
+                </p>
+                <p className="text-sm text-white/75 leading-relaxed line-clamp-2">
+                  {sortedSuggestions[0].teaser}
+                </p>
+              </button>
+
+              {/* Remaining suggestions */}
+              <div className="space-y-2">
+                {sortedSuggestions.slice(1).map((s, i) => {
+                  const cfg = lengthConfig[s.length];
+                  return (
+                    <button
+                      key={i + 1}
+                      onClick={() => handleSuggestionTap(i + 1)}
+                      className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3.5 text-left hover:border-indigo-200 transition-all flex items-center gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 leading-snug">{s.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{s.teaser}</p>
+                      </div>
+                      <span className={`flex-shrink-0 text-[11px] font-semibold ${cfg.color}`}>
+                        {cfg.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Free conversation */}
+              <button
+                onClick={handleFreeChat}
+                className="w-full mt-4 py-3 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-all flex items-center justify-center gap-1.5"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Or just start talking
+              </button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16">
+              <p className="text-gray-500 text-sm mb-4">What&apos;s on your mind with money?</p>
+              <button
+                onClick={handleFreeChat}
+                className="bg-indigo-600 text-white py-3 px-6 rounded-2xl text-sm font-semibold hover:bg-indigo-700 transition-all"
+              >
+                Start a Session
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -169,16 +276,6 @@ export default function ChatScreen() {
         )}
         {sessionStatus === 'ending' && (
           <span className="text-xs text-gray-400 font-medium">Wrapping up...</span>
-        )}
-        {sessionStatus === 'completed' && (
-          <button
-            onClick={startNewSession}
-            disabled={loadingChat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95 transition-all disabled:opacity-50"
-          >
-            <Plus className="w-3 h-3" />
-            Start Session
-          </button>
         )}
       </div>
 
@@ -351,18 +448,29 @@ export default function ChatScreen() {
           <div className="flex items-end gap-2">
             <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-3">
               <textarea
+                ref={inputRef}
                 value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
+                onChange={(e) => {
+                  setChatInput(e.target.value);
+                  // Auto-expand: reset height, then set to scrollHeight
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage();
+                    // Reset height after send
+                    if (inputRef.current) {
+                      inputRef.current.style.height = 'auto';
+                    }
                   }
                 }}
                 placeholder="What's on your mind?"
                 rows={1}
                 className="w-full bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none outline-none"
-                style={{ minHeight: 20, maxHeight: 120 }}
+                style={{ height: 20, maxHeight: 120 }}
               />
             </div>
             <button

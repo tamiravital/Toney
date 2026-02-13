@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
         const supabaseBg = await createClient();
         const { error: profileUpdateErr } = await supabaseBg.from('profiles').update({
           understanding: evolved.understanding,
+          understanding_snippet: evolved.snippet || null,
           ...(evolved.stageOfChange && {
             stage_of_change: evolved.stageOfChange,
           }),

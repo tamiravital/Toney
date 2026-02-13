@@ -32,6 +32,8 @@ export interface EvolveUnderstandingOutput {
   understanding: string;
   /** Stage of change — only if it shifted this session */
   stageOfChange?: string;
+  /** One-sentence home screen snippet: what Toney sees right now */
+  snippet?: string;
 }
 
 const EVOLVE_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. You maintain an evolving understanding of each person — a living document that captures who they are, how their relationship with money works, what's shifting, and what coaching approaches work.
@@ -68,7 +70,8 @@ ${GROWTH_LENSES_DESCRIPTION}
 \`\`\`json
 {
   "understanding": "The full evolved narrative. 3-8 paragraphs. Clinical but warm. Third person ('They...' not 'You...'). Should read like a case formulation that would orient any skilled coach to work with this person effectively. 300-800 words.",
-  "stage_of_change": "Only include this field if their stage shifted THIS session. One of: precontemplation, contemplation, preparation, action, maintenance. Omit entirely if unchanged."
+  "stage_of_change": "Only include this field if their stage shifted THIS session. One of: precontemplation, contemplation, preparation, action, maintenance. Omit entirely if unchanged.",
+  "snippet": "One sentence (15-30 words) capturing the most salient observation about this person RIGHT NOW — what's shifting or what defines their relationship with money. Third person. Should change meaningfully session to session. This is displayed on their home screen as a growth signal."
 }
 \`\`\`
 
@@ -136,6 +139,10 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
       result.stageOfChange = parsed.stage_of_change;
     }
 
+    if (parsed.snippet && typeof parsed.snippet === 'string') {
+      result.snippet = parsed.snippet;
+    }
+
     return result;
   } catch {
     // Parse failed — return existing understanding unchanged
@@ -172,6 +179,8 @@ export interface SeedUnderstandingOutput {
   tensionLabel: string;
   /** Optional secondary tension */
   secondaryTensionLabel?: string | null;
+  /** One-sentence home screen snippet: first impression */
+  snippet?: string;
 }
 
 const SEED_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. From their quiz answers and goals, form an initial understanding of this person's relationship with money.
@@ -199,7 +208,8 @@ Tension types (pick ONE primary, optionally ONE secondary):
 {
   "understanding": "2-4 paragraphs. What you can see from the intake. Thoughtful but tentative — these are first impressions, not conclusions. Third person. 150-400 words.",
   "tension_label": "primary tension type (one of: avoid, worry, chase, perform, numb, give, grip)",
-  "secondary_tension_label": "secondary tension or null"
+  "secondary_tension_label": "secondary tension or null",
+  "snippet": "One sentence (15-30 words) capturing your first-impression read on this person — what stands out about their relationship with money. Tentative language. Third person."
 }
 \`\`\`
 
@@ -253,6 +263,7 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
       understanding: parsed.understanding || '',
       tensionLabel: parsed.tension_label || 'avoid',
       secondaryTensionLabel: parsed.secondary_tension_label || null,
+      snippet: parsed.snippet || undefined,
     };
   } catch {
     // Parse failed — return minimal defaults

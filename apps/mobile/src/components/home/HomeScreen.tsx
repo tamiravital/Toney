@@ -1,28 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Flame, MessageCircle, FileText, Target, X, Clock, ArrowRight } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useLastSession } from '@/hooks/useLastSession';
 import SessionNotesView from '@/components/chat/SessionNotesView';
-import type { SuggestionLength } from '@toney/types';
-
-const lengthConfig: Record<SuggestionLength, { label: string; color: string }> = {
-  quick: { label: '~3 min', color: 'text-emerald-600' },
-  medium: { label: '~8 min', color: 'text-blue-600' },
-  deep: { label: '~12 min', color: 'text-purple-600' },
-  standing: { label: 'Anytime', color: 'text-amber-600' },
-};
-
-const lengthOrder: SuggestionLength[] = ['standing', 'quick', 'medium', 'deep'];
 
 export default function HomeScreen() {
   const {
-    displayName, suggestions, streak, wins, focusAreas,
-    handleArchiveFocusArea, setActiveTab, setShowSettings,
-    openSession, currentSessionId,
+    displayName, understandingSnippet, focusAreas,
+    savedInsights, wins, setActiveTab, setShowSettings,
   } = useToney();
-  const { notes: lastNotes } = useLastSession();
+  const { session: lastSession, notes: lastNotes } = useLastSession();
   const [showNotes, setShowNotes] = useState(false);
 
   const firstName = displayName?.split(' ')[0] ?? null;
@@ -34,20 +23,27 @@ export default function HomeScreen() {
     return 'Good evening';
   })();
 
-  const sortedSuggestions = [...suggestions].sort(
-    (a, b) => lengthOrder.indexOf(a.length) - lengthOrder.indexOf(b.length)
-  );
+  // "X days ago" for last session
+  const daysAgo = lastSession?.createdAt
+    ? Math.floor((Date.now() - lastSession.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const daysAgoText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
 
-  const handleSuggestionTap = (suggestionIndex: number) => {
-    const original = suggestions.indexOf(sortedSuggestions[suggestionIndex]);
-    openSession(currentSessionId ?? undefined, false, original);
-    setActiveTab('chat');
-  };
+  // Most recent rewire card
+  const latestCard = savedInsights[0] || null;
+
+  // Most recent win
+  const latestWin = wins[0] || null;
+  const winDate = latestWin?.date ? new Date(latestWin.date) : null;
+  const winDaysAgo = winDate
+    ? Math.floor((Date.now() - winDate.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const winDaysAgoText = winDaysAgo === 0 ? 'Today' : winDaysAgo === 1 ? 'Yesterday' : winDaysAgo != null ? `${winDaysAgo}d ago` : '';
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-2 hide-scrollbar">
+    <div className="flex-1 min-h-0 flex flex-col px-5 pt-5 pb-2 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">
           {greeting}{firstName ? `, ${firstName}` : ''}
         </h1>
@@ -56,165 +52,99 @@ export default function HomeScreen() {
           className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-all"
         >
           <Settings className="w-4 h-4 text-gray-500" />
-          <span className="text-xs font-medium text-gray-500">Settings</span>
         </button>
       </div>
 
-      {/* Session Suggestions or generic CTA */}
-      {sortedSuggestions.length > 0 ? (
-        <div className="mb-5">
-          {/* Featured suggestion — first card gets the gradient treatment */}
-          <button
-            onClick={() => handleSuggestionTap(0)}
-            className="w-full bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-left mb-3"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white">
-                <Clock className="w-3 h-3" />
-                {lengthConfig[sortedSuggestions[0].length].label}
-              </span>
-              <ArrowRight className="w-4 h-4 text-white/60" />
-            </div>
-            <p className="text-base font-semibold text-white leading-snug mb-1.5">
-              {sortedSuggestions[0].title}
-            </p>
-            <p className="text-sm text-white/75 leading-relaxed line-clamp-2">
-              {sortedSuggestions[0].teaser}
-            </p>
-          </button>
-
-          {/* Remaining suggestions — compact list */}
-          <div className="space-y-2">
-            {sortedSuggestions.slice(1).map((s, i) => {
-              const cfg = lengthConfig[s.length];
-              return (
-                <button
-                  key={i + 1}
-                  onClick={() => handleSuggestionTap(i + 1)}
-                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3.5 text-left hover:border-indigo-200 transition-all flex items-center gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 leading-snug">{s.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{s.teaser}</p>
-                  </div>
-                  <span className={`flex-shrink-0 text-[11px] font-semibold ${cfg.color}`}>
-                    {cfg.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Free conversation option */}
-          <button
-            onClick={() => setActiveTab('chat')}
-            className="w-full mt-3 py-3 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-all flex items-center justify-center gap-1.5"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Or just start talking
-          </button>
-        </div>
-      ) : (
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white mb-5">
-          <p className="text-sm font-medium opacity-80 mb-1">Ready to talk?</p>
-          <p className="text-lg font-semibold leading-snug mb-4">
-            Start a conversation about what&apos;s on your mind with money.
+      {/* Last Session — hero tile */}
+      {lastNotes ? (
+        <button
+          onClick={() => setShowNotes(true)}
+          className="w-full bg-white border border-gray-100 rounded-2xl p-5 text-left mb-3"
+        >
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2">Last Session</p>
+          <p className="text-base font-semibold text-gray-900 leading-snug mb-1.5 line-clamp-2">
+            {lastNotes.headline}
           </p>
-          <button
-            onClick={() => setActiveTab('chat')}
-            className="bg-white/20 backdrop-blur text-white py-2.5 px-5 rounded-xl text-sm font-semibold hover:bg-white/30 transition-all flex items-center gap-2"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Start Session
-          </button>
+          <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
+            {lastNotes.narrative.substring(0, 150)}
+          </p>
+          <p className="text-xs text-gray-400 mt-2">{daysAgoText}</p>
+        </button>
+      ) : (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-3">
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2">Last Session</p>
+          <p className="text-sm text-gray-400">No sessions yet. Start a conversation.</p>
         </div>
       )}
 
-      {/* Last Session preview */}
-      {lastNotes && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-gray-400" />
-              <h3 className="font-semibold text-gray-900 text-sm">Last Session</h3>
-            </div>
-            <button
-              onClick={() => setShowNotes(true)}
-              className="text-indigo-600 text-xs font-medium"
-            >
-              View notes
-            </button>
-          </div>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4">
-            <p className="text-sm font-medium text-gray-900 leading-snug mb-1">
-              {lastNotes.headline}
-            </p>
-            <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
-              {lastNotes.narrative.substring(0, 150)}
-            </p>
-            {lastNotes.cardsCreated && lastNotes.cardsCreated.length > 0 && (
-              <p className="text-xs text-gray-400 mt-2">
-                {lastNotes.cardsCreated.length} card{lastNotes.cardsCreated.length !== 1 ? 's' : ''} created
-              </p>
-            )}
-          </div>
+      {/* Two side-by-side tiles */}
+      <div className="flex gap-3 mb-3">
+        {/* Understanding snippet — "What Toney Sees" */}
+        <div className="flex-1 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100/60 rounded-2xl p-4">
+          <p className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wider mb-2">
+            What Toney Sees
+          </p>
+          <p className="text-sm text-gray-700 leading-snug line-clamp-4">
+            {understandingSnippet || 'Will appear after your first session.'}
+          </p>
         </div>
-      )}
 
-      {/* Focus Areas */}
+        {/* Latest rewire card */}
+        <button
+          onClick={() => setActiveTab('rewire')}
+          className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 text-left"
+        >
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2">
+            Latest Card
+          </p>
+          {latestCard ? (
+            <p className="text-sm text-gray-800 leading-snug line-clamp-4 font-medium">
+              {latestCard.title || latestCard.content.substring(0, 80)}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400 leading-snug">Cards appear after coaching.</p>
+          )}
+        </button>
+      </div>
+
+      {/* Focus areas strip */}
       {focusAreas.length > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Target className="w-4 h-4 text-gray-400" />
-            <h3 className="font-semibold text-gray-900 text-sm">What I&apos;m Working On</h3>
-          </div>
-          <div className="space-y-2">
+        <div className="mb-3">
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2">Working on</p>
+          <div className="flex flex-wrap gap-2">
             {focusAreas.map(area => (
-              <div
+              <span
                 key={area.id}
-                className="bg-white border border-gray-100 rounded-2xl p-4 flex items-start gap-3"
+                className="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-full"
               >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-indigo-50">
-                  <Target className="w-4 h-4 text-indigo-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800 leading-snug">{area.text}</p>
-                  <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider font-medium">
-                    {area.source === 'onboarding' ? 'From onboarding' : area.source === 'coach' ? 'From Toney' : 'Added by you'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleArchiveFocusArea(area.id)}
-                  className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                {area.text}
+              </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Streak + Wins */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center">
-              <Flame className="w-6 h-6 text-orange-500" />
-            </div>
-            <div>
-              <div className="font-bold text-gray-900 text-lg">{streak} day streak</div>
-              <div className="text-xs text-gray-400">{wins.length} wins logged</div>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveTab('journey')}
-            className="text-indigo-600 text-xs font-medium"
-          >
-            Log a win
-          </button>
+      {/* Last win */}
+      {latestWin ? (
+        <button
+          onClick={() => setActiveTab('journey')}
+          className="w-full bg-white border border-gray-100 rounded-2xl p-4 text-left"
+        >
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Latest Win</p>
+          <p className="text-sm text-gray-800 leading-snug line-clamp-2">{latestWin.text}</p>
+          {winDaysAgoText && (
+            <p className="text-xs text-gray-400 mt-1.5">{winDaysAgoText}</p>
+          )}
+        </button>
+      ) : (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4">
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Latest Win</p>
+          <p className="text-sm text-gray-400">Wins show up as you grow.</p>
         </div>
-      </div>
+      )}
+
+      {/* Spacer — pushes content up, absorbs remaining space */}
+      <div className="flex-1" />
 
       {/* Session notes overlay */}
       {showNotes && lastNotes && (

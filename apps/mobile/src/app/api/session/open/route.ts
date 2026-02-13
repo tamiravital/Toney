@@ -234,6 +234,7 @@ export async function POST(request: NextRequest) {
 
           const { error: deferredProfileErr } = await supabase.from('profiles').update({
             understanding: closeResult.understanding.understanding,
+            understanding_snippet: closeResult.understanding.snippet || null,
             ...(closeResult.understanding.stageOfChange && {
               stage_of_change: closeResult.understanding.stageOfChange,
             }),

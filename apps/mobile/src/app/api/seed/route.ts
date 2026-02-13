@@ -56,6 +56,7 @@ export async function POST() {
     // ── Save to profile ──
     await supabase.from('profiles').update({
       understanding: result.understanding,
+      understanding_snippet: result.snippet || null,
       tension_type: result.tensionLabel,
       secondary_tension_type: result.secondaryTensionLabel || null,
     }).eq('id', user.id);

@@ -85,6 +85,7 @@ interface ToneyContextValue {
   // Profile
   displayName: string | null;
   setDisplayName: (name: string | null) => void;
+  understandingSnippet: string | null;
 
   // Session suggestions
   suggestions: SessionSuggestion[];
@@ -177,6 +178,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [showSettings, setShowSettings] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(loadJSON<string | null>('toney_display_name', null));
+  const [understandingSnippet, setUnderstandingSnippet] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SessionSuggestion[]>([]);
 
   // Onboarding state
@@ -251,7 +253,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           if (user) {
             const { data: profile } = await supabase
               .from('profiles')
-              .select('onboarding_completed, tension_type, secondary_tension_type, tone, depth, learning_styles, display_name')
+              .select('onboarding_completed, tension_type, secondary_tension_type, tone, depth, learning_styles, display_name, understanding_snippet')
               .eq('id', user.id)
               .single();
 
@@ -281,6 +283,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 saveJSON('toney_style', style);
                 setStyleProfile(style);
                 setTempStyle(style);
+              }
+              if (profile.understanding_snippet) {
+                setUnderstandingSnippet(profile.understanding_snippet);
               }
             }
           }
@@ -904,6 +909,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (openSessionInFlightRef.current) return; // Bug 2: Already opening a session
     openSessionInFlightRef.current = true;
     sessionOpenedRef.current = true; // Prevent auto-open from re-firing
+    userInitiatedSessionRef.current = true; // Mark as user-initiated (not auto-open)
     openSessionFailedRef.current = false; // Clear any previous failure
 
     setLoadingChat(true);
@@ -1052,6 +1058,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const openSessionInFlightRef = useRef(false); // Bug 2: mutex for concurrent openSession calls
   const openSessionFailedRef = useRef(false); // Bug 3: prevent auto-retry after failure
   const messagesRef = useRef<Message[]>([]); // Bug 4: current messages for openSession closure
+  const userInitiatedSessionRef = useRef(false); // Suppress auto-open when suggestion picker should show
 
   const startNewSession = useCallback(async () => {
     const prevId = currentSessionId;
@@ -1077,6 +1084,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       // Only reset if no failure — prevents retry loop on tab return
       if (!openSessionFailedRef.current) {
         sessionOpenedRef.current = false;
+        userInitiatedSessionRef.current = false;
       }
       return;
     }
@@ -1085,6 +1093,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (openSessionFailedRef.current) return; // Don't auto-retry after failure
     if (sessionOpenedRef.current) return;
     if (sessionStatus !== 'active') return;
+
+    // If suggestions exist, show picker first — don't auto-open unless user tapped a suggestion
+    if (suggestions.length > 0 && !userInitiatedSessionRef.current) return;
 
     // If we have messages, this is a live session — resume
     if (messages.length > 0) return;
@@ -1107,7 +1118,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       // No existing session or no timestamp — open fresh
       openSession();
     }
-  }, [activeTab, appPhase, loadingChat, messages.length, sessionStatus, currentSessionId, openSession]);
+  }, [activeTab, appPhase, loadingChat, messages.length, sessionStatus, currentSessionId, openSession, suggestions.length]);
 
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {
     setSavedInsights(prev =>
@@ -1403,6 +1414,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setShowSettings,
         displayName,
         setDisplayName,
+        understandingSnippet,
         suggestions,
         onboardingStep,
         setOnboardingStep,
