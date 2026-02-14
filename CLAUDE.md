@@ -199,7 +199,7 @@ The system maintains a single evolving narrative on `profiles.understanding` ins
 `buildSystemPrompt()` is pure code (no LLM). Called every chat message with fresh data from DB.
 
 ### Coaching Tone
-Tone is a continuous 1-10 scale (not discrete buckets). 1-4 = Gentle, 5-6 = Balanced, 7-10 = Direct.
+Tone is a continuous 1-5 scale (not discrete buckets). 1-2 = Gentle, 3 = Balanced, 4-5 = Direct.
 
 ### Money Tensions (not "patterns")
 7 tension types: `avoid`, `worry`, `chase`, `perform`, `numb`, `give`, `grip`. Use "tension" terminology.

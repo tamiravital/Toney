@@ -1,5 +1,20 @@
 # Toney — Changelog
 
+## 2026-02-14 — Tone/Depth Scale + Coach Prompt Tuning
+- **Tone and depth scales unified**: Both are now 1-5 sliders (tone was 1-10, depth was text labels). Database migrated, all code updated.
+- **Coach prompt tuned from real session analysis** (6 fixes):
+  - No more repetitive dramatic reveals ("There it is" said 4x in one session — now explicitly blocked)
+  - Bold used sparingly — max one bold phrase per response instead of 2-4
+  - Coach won't infer facts you haven't stated (no more "you have a lot of money" when you never said that)
+  - Card signals detected — when you ask to see something again or express satisfaction with a co-created phrase, Toney now wraps it in a saveable card
+  - Win threshold lowered — recognizing your own capability ("I can do this") now counts as a win, not just deep pattern insights
+  - Coach stays in exploration longer before jumping to solutions — the first thing you say is usually the presenting problem, not the real one
+
+## 2026-02-14 — Seed Speed Optimization
+- **Faster onboarding**: The "Getting to know you..." wait after the quiz is now ~50% faster. Two AI calls run in parallel instead of one large sequential call, prompts are compressed, and unnecessary database reads and API calls are eliminated.
+- **Fixed broken first session**: After onboarding, the suggestion picker now reliably appears. Previously, 4 bugs caused a ~45-second wait, empty coaching fields, and duplicate suggestions — all traced to a race condition where the app started the session before the AI finished processing quiz answers.
+- **Loading indicator**: A "Getting to know you..." screen now shows during onboarding processing, with a spinner and status text.
+
 ## 2026-02-13 — Kill Coaching Briefings
 - **Faster session opens**: Opening a session now makes 1 AI call instead of 2. The system prompt is built instantly from pure code — no more waiting for the Strategist to prepare a briefing.
 - **Faster session closes**: Understanding evolution and suggestion generation now happen in a single AI call instead of two separate ones. Combined with the existing "notes return immediately" pattern, this cuts background processing time by ~40%.
@@ -7,6 +22,13 @@
 - **Dropped the `coaching_briefings` table**: Coaching plan fields (hypothesis, leverage point, curiosities) are now stored directly on the session row. One less table, simpler queries, no stale briefing snapshots.
 - **Chat system prompt is always fresh**: Each message rebuilds the system prompt from the latest profile, cards, wins, and focus areas — not a stale briefing snapshot. If you save a card mid-session, the next message's coaching context includes it.
 - Admin intel page reads coaching plan from sessions instead of briefings. Full intel rebuild simplified.
+
+## 2026-02-13 — UX Revamp — Calm Dashboard
+- **Home screen redesigned as a calm dashboard**: No scrolling, no streaks, no gamification. Five tiles — last session card, "What Toney Sees" (a single evolving sentence about you), your latest Rewire Card, focus area pills, and your last win. Everything fits on one screen.
+- **Session suggestions moved to chat screen**: When you open Chat with no active session, you see the suggestion picker (featured card + compact rows + "Or just start talking"). When a session is active, you see the conversation. Home screen no longer shows suggestions.
+- **"What Toney Sees" tile**: A new one-sentence snapshot of Toney's current understanding of you — generated after each session and after onboarding. Changes meaningfully session to session. Shows growth through language, not numbers.
+- **Chat input auto-expands**: The text box grows as you type (up to 3 lines), so you can see what you're writing.
+- New `understanding_snippet` column on profiles (migration 024).
 
 ## 2026-02-13 — Suggestion Picker Fix
 - **Session suggestions now appear when you open chat** — previously, returning users with all completed sessions would see stale messages from their last conversation instead of the suggestion picker. Now the picker shows correctly with personalized suggestions.

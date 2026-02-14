@@ -27,8 +27,8 @@ export function formatFocusAreas(areas: FocusArea[]): string {
 
 export function formatCoachingStyle(profile: Profile): string {
   const lines: string[] = [];
-  lines.push(`Tone: ${profile.tone ?? 5}/10 (1=gentle, 10=direct)`);
-  lines.push(`Depth: ${profile.depth || 'balanced'}`);
+  lines.push(`Tone: ${profile.tone ?? 3}/5 (1=gentle, 5=direct)`);
+  lines.push(`Depth: ${profile.depth ?? 3}/5 (1=surface, 5=deep)`);
   if (profile.learning_styles?.length) lines.push(`Learning styles: ${profile.learning_styles.join(', ')}`);
   return lines.join('\n');
 }

@@ -96,9 +96,9 @@ export function depthLabel(depth: number | string | null | undefined): string {
 }
 
 export function toneLabel(tone: number): string {
-  if (tone <= 4) return `${tone} — Gentle`;
-  if (tone <= 6) return `${tone} — Balanced`;
-  return `${tone} — Direct`;
+  if (tone <= 2) return `${tone} — Gentle`;
+  if (tone >= 4) return `${tone} — Direct`;
+  return `${tone} — Balanced`;
 }
 
 export function engagementLabel(level: string | null | undefined): string {

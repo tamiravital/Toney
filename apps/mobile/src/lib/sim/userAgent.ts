@@ -115,8 +115,8 @@ export async function synthesizeCharacterProfile(
   const profileBlock = `Profile data:
 - Tension type: ${profile.tension_type || 'unknown'}
 - Emotional why: "${profile.emotional_why || ''}"
-- Tone preference: ${profile.tone || 5}/10
-- Depth: ${profile.depth || 'balanced'}
+- Tone preference: ${profile.tone || 3}/5 (1=gentle, 5=direct)
+- Depth: ${profile.depth ?? 3}/5 (1=surface, 5=deep)
 - Life stage: ${profile.life_stage || 'unknown'}
 - Income type: ${profile.income_type || 'unknown'}
 - Relationship status: ${profile.relationship_status || 'unknown'}

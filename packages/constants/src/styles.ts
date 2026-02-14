@@ -25,9 +25,9 @@ export const toneExamples: Record<string, ToneExample> = {
 };
 
 export const toneMap: Record<string, number> = {
-  gentle: 3,
-  balanced: 5,
-  direct: 8,
+  gentle: 1,
+  balanced: 3,
+  direct: 5,
 };
 
 export function toneLabel(tone: number): string {

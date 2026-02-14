@@ -11,7 +11,7 @@ export interface SimProfile {
   tension_type: string | null;
   secondary_tension_type: string | null;
   tone: number;
-  depth: string;
+  depth: number;
   learning_styles: string[];
   life_stage: string | null;
   income_type: string | null;
@@ -62,7 +62,7 @@ export async function createSimProfile(config: Partial<Profile> & {
       tension_type: config.tension_type ?? null,
       secondary_tension_type: config.secondary_tension_type ?? null,
       tone: config.tone ?? 5,
-      depth: config.depth ?? 'balanced',
+      depth: config.depth ?? 3,
       learning_styles: config.learning_styles ?? [],
       life_stage: config.life_stage ?? null,
       income_type: config.income_type ?? null,
