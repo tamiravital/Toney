@@ -89,6 +89,7 @@ interface ToneyContextValue {
 
   // Session suggestions
   suggestions: SessionSuggestion[];
+  seedingInProgress: boolean;
 
   // Onboarding
   onboardingStep: OnboardingStep;
@@ -184,6 +185,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [displayName, setDisplayName] = useState<string | null>(loadJSON<string | null>('toney_display_name', null));
   const [understandingSnippet, setUnderstandingSnippet] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SessionSuggestion[]>([]);
+  const [seedingInProgress, setSeedingInProgress] = useState(false);
 
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
@@ -1278,6 +1280,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (loadingChat) return;
+    if (seedingInProgress) return; // Wait for seed to complete before auto-opening
     if (!messagesLoadedRef.current) return; // Wait for message loader to finish first
     if (openSessionFailedRef.current) return; // Don't auto-retry after failure
     if (sessionOpenedRef.current) return;
@@ -1307,7 +1310,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       // No existing session or no timestamp — open fresh
       openSession();
     }
-  }, [activeTab, appPhase, loadingChat, messages.length, sessionStatus, currentSessionId, openSession, suggestions.length]);
+  }, [activeTab, appPhase, loadingChat, seedingInProgress, messages.length, sessionStatus, currentSessionId, openSession, suggestions.length]);
 
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {
     setSavedInsights(prev =>
@@ -1515,29 +1518,42 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('[Sim] save-onboarding threw:', err);
       }
-      // Transition to chat immediately — session open will handle missing understanding
+      // Transition to chat with loading state — seed must complete before suggestions exist
       setAppPhase('main');
       setActiveTab('chat');
-      // Seed understanding in background (session open has legacy-user fallback for missing understanding)
-      fetch(buildApiUrl('/api/seed'), { method: 'POST' }).then(async (seedRes) => {
+      setSeedingInProgress(true);
+
+      try {
+        const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
         if (!seedRes.ok) {
           console.error('[Sim] seed failed:', seedRes.status, await seedRes.text().catch(() => ''));
-          return;
+        } else {
+          const seedData = await seedRes.json();
+          if (seedData.tensionType) {
+            const tension: IdentifiedTension = {
+              primary: seedData.tensionType as TensionType,
+              primaryScore: 5,
+              primaryDetails: tensionDetails[seedData.tensionType as TensionType],
+              ...(seedData.secondaryTensionType && {
+                secondary: seedData.secondaryTensionType as TensionType,
+                secondaryDetails: tensionDetails[seedData.secondaryTensionType as TensionType],
+              }),
+            };
+            setIdentifiedTension(tension);
+          }
         }
-        const seedData = await seedRes.json();
-        if (seedData.tensionType) {
-          const tension: IdentifiedTension = {
-            primary: seedData.tensionType as TensionType,
-            primaryScore: 5,
-            primaryDetails: tensionDetails[seedData.tensionType as TensionType],
-            ...(seedData.secondaryTensionType && {
-              secondary: seedData.secondaryTensionType as TensionType,
-              secondaryDetails: tensionDetails[seedData.secondaryTensionType as TensionType],
-            }),
-          };
-          setIdentifiedTension(tension);
+
+        // Load suggestions that seed just created
+        const sugRes = await fetch(buildApiUrl('/api/suggestions'));
+        if (sugRes.ok) {
+          const { suggestions: s } = await sugRes.json();
+          if (Array.isArray(s) && s.length > 0) setSuggestions(s);
         }
-      }).catch(err => console.error('[Sim] seed threw:', err));
+      } catch (err) {
+        console.error('[Sim] seed threw:', err);
+      } finally {
+        setSeedingInProgress(false);
+      }
       return;
     }
 
@@ -1556,7 +1572,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             ...(goalsText && { what_brought_you: goalsText }),
           }).eq('id', user.id);
 
-          // Seed understanding — determines tension + creates initial narrative
+          // Transition to chat with loading state while seed runs
+          setAppPhase('main');
+          setActiveTab('chat');
+          setSeedingInProgress(true);
+
+          // Seed understanding — determines tension + creates initial narrative + suggestions
           try {
             const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
             if (seedRes.ok) {
@@ -1575,8 +1596,17 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 setIdentifiedTension(tension);
               }
             }
+
+            // Load suggestions that seed just created
+            const sugRes = await fetch(buildApiUrl('/api/suggestions'));
+            if (sugRes.ok) {
+              const { suggestions: s } = await sugRes.json();
+              if (Array.isArray(s) && s.length > 0) setSuggestions(s);
+            }
           } catch {
             // Non-fatal — session open handles missing understanding
+          } finally {
+            setSeedingInProgress(false);
           }
         }
       } catch {
@@ -1584,10 +1614,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Go to main app — straight to chat
-    setAppPhase('main');
-    setActiveTab('chat');
-  }, [answers, simMode, buildApiUrl]);
+    // Go to main app — if not already transitioned above
+    if (appPhase !== 'main') {
+      setAppPhase('main');
+      setActiveTab('chat');
+    }
+  }, [answers, simMode, buildApiUrl, appPhase]);
 
   const handleNextQuestion = useCallback(() => {
     if (currentQuestionIndex < questions.length - 1) {
@@ -1659,6 +1691,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         setDisplayName,
         understandingSnippet,
         suggestions,
+        seedingInProgress,
         onboardingStep,
         setOnboardingStep,
         currentQuestionIndex,

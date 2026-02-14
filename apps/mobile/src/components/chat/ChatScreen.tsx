@@ -143,6 +143,7 @@ export default function ChatScreen() {
     previousSessionCollapsed,
     setPreviousSessionCollapsed,
     suggestions,
+    seedingInProgress,
     openSession,
     simMode,
     buildApiUrl,
@@ -219,6 +220,22 @@ export default function ChatScreen() {
   const showSuggestionPicker = !loadingChat && messages.length === 0
     && previousSessionMessages.length === 0
     && (sessionStatus === 'completed' || sessionStatus === 'active');
+
+  // ── Seeding in progress: show loading screen ──
+  if (seedingInProgress) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
+          <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
+          <p className="text-base font-medium text-gray-900 mb-1">Getting to know you...</p>
+          <p className="text-sm text-gray-400 text-center">Preparing your first coaching sessions</p>
+        </div>
+      </div>
+    );
+  }
 
   // ── Suggestion picker screen ──
   if (showSuggestionPicker && !isTyping) {
