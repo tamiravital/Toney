@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
-import { buildSystemPromptFromBriefing } from '@toney/coaching';
-import { SystemPromptBlock, CoachingBriefing } from '@toney/types';
+import { buildSystemPrompt } from '@toney/coaching';
+import { SystemPromptBlock, Profile, RewireCard, Win, FocusArea } from '@toney/types';
 
 // Sonnet streaming response
 export const maxDuration = 60;
@@ -26,47 +26,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing message or sessionId' }, { status: 400 });
     }
 
-    // ── Load Strategist briefing ──
-    // Session opening (Strategist, session creation) is handled by /api/session/open.
-    // By the time /api/chat is called, the briefing should already exist.
-    let briefing: CoachingBriefing | null = null;
-    try {
-      const { data } = await ctx.supabase
-        .from(ctx.table('coaching_briefings'))
+    // ── Load session context + message history in parallel ──
+    const [sessionResult, profileResult, cardsResult, winsResult, focusAreasResult, historyResult] = await Promise.all([
+      ctx.supabase
+        .from(ctx.table('sessions'))
+        .select('hypothesis, leverage_point, curiosities')
+        .eq('id', sessionId)
+        .single(),
+      ctx.supabase
+        .from(ctx.table('profiles'))
+        .select('*')
+        .eq('id', ctx.userId)
+        .single(),
+      ctx.supabase
+        .from(ctx.table('rewire_cards'))
         .select('*')
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      briefing = data as CoachingBriefing | null;
-    } catch { /* no briefing yet */ }
+        .limit(20),
+      ctx.supabase
+        .from(ctx.table('wins'))
+        .select('*')
+        .eq('user_id', ctx.userId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      ctx.supabase
+        .from(ctx.table('focus_areas'))
+        .select('*')
+        .eq('user_id', ctx.userId)
+        .is('archived_at', null),
+      ctx.supabase
+        .from(ctx.table('messages'))
+        .select('role, content')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true })
+        .limit(50),
+    ]);
 
-    // ── Build system prompt ──
-    if (!briefing) {
-      console.error('[Chat] No briefing found for user', ctx.userId, 'session', sessionId);
-      return NextResponse.json(
-        {
-          message: {
-            id: `msg-error-${Date.now()}`,
-            role: 'assistant',
-            content: "I'm still getting ready — give me a moment and try sending that again?",
-            timestamp: new Date().toISOString(),
-            canSave: false,
-          },
-        },
-        { status: 200 }
-      );
+    const profile = profileResult.data as Profile | null;
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefing.briefing_content);
+    const session = sessionResult.data as { hypothesis: string | null; leverage_point: string | null; curiosities: string | null } | null;
 
-    // Load session history (last 50 messages)
-    const { data: historyRows } = await ctx.supabase
-      .from(ctx.table('messages'))
-      .select('role, content')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true })
-      .limit(50);
+    // ── Build system prompt from session + profile + DB context ──
+    const systemPromptBlocks: SystemPromptBlock[] = buildSystemPrompt({
+      understanding: profile.understanding || '',
+      hypothesis: session?.hypothesis,
+      leveragePoint: session?.leverage_point,
+      curiosities: session?.curiosities,
+      profile,
+      rewireCards: (cardsResult.data || []) as RewireCard[],
+      recentWins: (winsResult.data || []) as Win[],
+      activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
+    });
+
+    const historyRows = historyResult.data;
 
     // Save user message
     const { error: msgError } = await ctx.supabase

@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { resolveContext } from '@/lib/supabase/sim';
-import { generateSessionNotes, evolveUnderstanding, generateSessionSuggestions } from '@toney/coaching';
+import { generateSessionNotes, evolveAndSuggest } from '@toney/coaching';
 import type { FocusArea, RewireCard, Win } from '@toney/types';
 
-// Notes return in ~3-5s. Background work (evolve + suggestions) runs via after().
+// Notes return in ~3-5s. Background work (evolve + suggest) runs via after().
 export const maxDuration = 60;
 
 /**
  * POST /api/session/close
  *
  * Returns session notes immediately (~3-5s via Haiku).
- * Understanding evolution + suggestion generation run in the background via after().
+ * Understanding evolution + suggestion generation run in the background via after()
+ * as a SINGLE Sonnet call (evolveAndSuggest).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,8 +25,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
     }
 
-    // ── Load data in parallel ──
-    const [messagesResult, profileResult, briefingResult, cardsResult, allCardsResult, sessionResult, prevNotesResult, focusAreasResult, winsResult, prevSuggestionsResult] = await Promise.all([
+    // ── Load data in parallel (no coaching_briefings query — dropped) ──
+    const [messagesResult, profileResult, cardsResult, allCardsResult, sessionResult, prevNotesResult, focusAreasResult, winsResult, prevSuggestionsResult] = await Promise.all([
       ctx.supabase
         .from(ctx.table('messages'))
         .select('role, content')
@@ -35,13 +36,6 @@ export async function POST(request: NextRequest) {
         .from(ctx.table('profiles'))
         .select('tension_type, stage_of_change, understanding')
         .eq('id', ctx.userId)
-        .single(),
-      ctx.supabase
-        .from(ctx.table('coaching_briefings'))
-        .select('hypothesis')
-        .eq('user_id', ctx.userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
         .single(),
       // Cards from this session (for notes)
       ctx.supabase
@@ -53,9 +47,10 @@ export async function POST(request: NextRequest) {
         .from(ctx.table('rewire_cards'))
         .select('id, title, category, times_completed')
         .eq('user_id', ctx.userId),
+      // Read hypothesis from session row (not briefing)
       ctx.supabase
         .from(ctx.table('sessions'))
-        .select('session_number')
+        .select('session_number, hypothesis')
         .eq('id', sessionId)
         .single(),
       ctx.supabase
@@ -107,7 +102,7 @@ export async function POST(request: NextRequest) {
     const recentWins = (winsResult.data || []) as Win[];
 
     const tensionType = profileResult.data?.tension_type || null;
-    const hypothesis = briefingResult.data?.hypothesis || null;
+    const hypothesis = sessionResult.data?.hypothesis || null;
     const currentStageOfChange = profileResult.data?.stage_of_change || null;
     const currentUnderstanding = profileResult.data?.understanding || null;
 
@@ -162,21 +157,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save session' }, { status: 500 });
     }
 
-    // ── Background: evolve understanding + generate suggestions ──
+    // ── Background: evolve understanding + generate suggestions (ONE Sonnet call) ──
     // Runs after response is sent. Vercel waits for completion within maxDuration.
     after(async () => {
       try {
-        // Step 1: Evolve understanding (Sonnet, ~5-8s)
-        const evolved = await evolveUnderstanding({
+        // Single Sonnet call: evolve understanding AND generate suggestions
+        const evolved = await evolveAndSuggest({
           currentUnderstanding,
           messages,
           tensionType,
           hypothesis,
           currentStageOfChange,
           activeFocusAreas,
+          rewireCards: allCards,
+          recentWins,
+          recentSessionHeadline: sessionNotes.headline,
+          recentKeyMoments: sessionNotes.keyMoments,
+          previousSuggestionTitles,
         });
 
-        // Step 2: Save evolved understanding to profile
+        // Save evolved understanding to profile
         const { error: profileUpdateErr } = await ctx.supabase.from(ctx.table('profiles')).update({
           understanding: evolved.understanding,
           understanding_snippet: evolved.snippet || null,
@@ -189,23 +189,11 @@ export async function POST(request: NextRequest) {
           console.error('Background: Profile update failed:', profileUpdateErr);
         }
 
-        // Step 3: Generate suggestions (Sonnet, ~8-12s)
-        const suggestionsResult = await generateSessionSuggestions({
-          understanding: evolved.understanding,
-          tensionType,
-          recentSessionHeadline: sessionNotes.headline,
-          recentKeyMoments: sessionNotes.keyMoments,
-          rewireCards: allCards,
-          recentWins,
-          activeFocusAreas,
-          previousSuggestionTitles,
-        });
-
-        // Step 4: Save suggestions
-        if (suggestionsResult.suggestions.length > 0) {
+        // Save suggestions (from the same Sonnet call)
+        if (evolved.suggestions.length > 0) {
           const { error: suggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
             user_id: ctx.userId,
-            suggestions: suggestionsResult.suggestions,
+            suggestions: evolved.suggestions,
             generated_after_session_id: sessionId,
           });
           if (suggestionsErr) {

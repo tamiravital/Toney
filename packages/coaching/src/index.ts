@@ -1,17 +1,14 @@
-export { buildSystemPromptFromBriefing, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from './prompts/systemPromptBuilder';
-export { prepareSession } from './strategist';
-export type { PrepareSessionInput, SessionPreparation } from './strategist';
-export { evolveUnderstanding, seedUnderstanding } from './strategist';
+export { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from './prompts/systemPromptBuilder';
+export type { BuildSystemPromptInput } from './prompts/systemPromptBuilder';
+export { evolveUnderstanding, evolveAndSuggest, seedUnderstanding } from './strategist';
 export type {
   EvolveUnderstandingInput,
   EvolveUnderstandingOutput,
+  EvolveAndSuggestInput,
+  EvolveAndSuggestOutput,
   SeedUnderstandingInput,
   SeedUnderstandingOutput,
 } from './strategist';
-export { generateSessionSuggestions } from './strategist';
-export type { GenerateSuggestionsInput, GenerateSuggestionsOutput } from './strategist';
-export { assembleBriefingDocument } from './strategist';
-export type { AssembleBriefingInput } from './strategist';
 export { detectSessionBoundary } from './session';
 export type { SessionBoundary } from './session';
 export { generateSessionNotes } from './session-notes';

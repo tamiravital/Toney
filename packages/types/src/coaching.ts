@@ -18,21 +18,8 @@ export interface UserKnowledge {
   created_at: string;
 }
 
-// --- Coaching Briefings ---
-
-export interface CoachingBriefing {
-  id: string;
-  user_id: string;
-  session_id?: string | null;
-  briefing_content: string;
-  hypothesis?: string | null;
-  leverage_point?: string | null;
-  curiosities?: string | null;
-  tension_narrative?: string | null;
-  growth_edges: Record<string, unknown>;
-  version: number;
-  created_at: string;
-}
+// --- Coaching Briefings (REMOVED — coaching plan fields now live on sessions) ---
+// CoachingBriefing type deleted. Use Session.hypothesis / leverage_point / curiosities instead.
 
 // --- Session ---
 

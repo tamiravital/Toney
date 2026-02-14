@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { SessionSuggestion, RewireCard, Win, FocusArea } from '@toney/types';
 import { GROWTH_LENSES_DESCRIPTION } from './constants';
+import { formatToolkit, formatWins, formatFocusAreas } from './formatters';
 
 // ────────────────────────────────────────────
 // Understanding Evolution — The living clinical narrative
@@ -35,6 +37,227 @@ export interface EvolveUnderstandingOutput {
   /** One-sentence home screen snippet: what Toney sees right now */
   snippet?: string;
 }
+
+// ────────────────────────────────────────────
+// Evolve + Suggest — Combined single Sonnet call
+// ────────────────────────────────────────────
+// Merges evolveUnderstanding + generateSessionSuggestions into one call.
+// The LLM already has the transcript + understanding context — it's the
+// perfect moment to generate suggestions because it knows exactly what happened.
+
+export interface EvolveAndSuggestInput extends EvolveUnderstandingInput {
+  /** User's rewire cards (for suggestion context) */
+  rewireCards?: RewireCard[] | null;
+  /** Recent wins (for suggestion context) */
+  recentWins?: Win[] | null;
+  /** Headline from the session that just closed (for suggestion anti-repetition) */
+  recentSessionHeadline?: string | null;
+  /** Key moments from the session notes */
+  recentKeyMoments?: string[] | null;
+  /** Previous suggestion titles (to avoid repetition) */
+  previousSuggestionTitles?: string[];
+}
+
+export interface EvolveAndSuggestOutput extends EvolveUnderstandingOutput {
+  /** Personalized session suggestions for the home screen (6-10) */
+  suggestions: SessionSuggestion[];
+}
+
+const EVOLVE_AND_SUGGEST_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. You maintain an evolving understanding of each person AND generate personalized session suggestions for their home screen.
+
+You just observed a coaching session. You have TWO jobs:
+1. EVOLVE the understanding narrative
+2. GENERATE session suggestions based on the evolved understanding
+
+---
+
+## PART 1: EVOLVING THE UNDERSTANDING
+
+Your job is to EVOLVE the understanding — not rewrite it from scratch.
+
+### How to evolve:
+
+1. **Keep what's still true.** Don't drop observations just because this session didn't mention them. A trigger identified 3 sessions ago is still a trigger unless new evidence contradicts it.
+
+2. **Add what's new.** New triggers, breakthroughs, resistance patterns, vocabulary, life details, coaching observations — weave them in naturally.
+
+3. **Deepen what you understand better.** If something you noted before got more nuanced this session, update the language to reflect your deeper understanding.
+
+4. **Update what changed.** If something shifted — a resistance softened, a new pattern emerged that contradicts an old one, a life circumstance changed — revise accordingly. Note the shift when it's significant ("Previously avoided checking accounts entirely; now checks weekly without spiraling").
+
+5. **Integrate, don't append.** The narrative should read as one coherent clinical picture, not session-by-session notes. No timestamps, no "in session 3 they said..." — just the current understanding.
+
+### What to capture:
+
+- **Their money tension** — how it manifests specifically for THEM, not just the label. What it looks like in their daily life.
+- **Triggers** — specific situations that provoke emotional reactions around money (e.g., "partner bringing up vacation budget," not "money conversations")
+- **Breakthroughs** — aha moments that stuck vs ones that were fleeting. What they connected.
+- **Resistance patterns** — where coaching bounces off, how they deflect. What topics they intellectualize, avoid, or redirect from.
+- **Emotional vocabulary** — words they actually use for money feelings, words they avoid, deflection phrases ("it's not a big deal," "I know I should")
+- **Life context that matters** — relationships (use names when known), work situation, financial specifics they've shared, family history that's relevant
+- **What coaching approaches work** — do they respond to direct naming? Somatic prompts? Humor? Reframing? What makes them shut down? What makes them light up? Note these as observations, NOT overrides of their stated preferences.
+- **Where growth is available** — which dimensions are active, stabilizing, or not yet ready. Weave these assessments into the narrative naturally:
+${GROWTH_LENSES_DESCRIPTION}
+- **Stage of change** — where they are in the change process. This should be evident from the narrative itself.
+
+---
+
+## PART 2: SESSION SUGGESTIONS
+
+Generate personalized session suggestions across four length categories. Each suggestion is a session the user would actually WANT to have — deeply specific to their story.
+
+### Length categories:
+- **quick** (2-5 min): A single focused moment. One question, one check-in, one follow-up on something specific.
+- **medium** (5-10 min): An exploration. Connect two dots, apply a breakthrough to a new area, practice something.
+- **deep** (10-15 min): Go to the root. Core wounds, family patterns, belief systems.
+- **standing** (always available): Recurring entry points that are always relevant — personalized to their patterns.
+
+### Suggestion rules:
+1. MINIMUM 1 suggestion per length category, 6-10 total
+2. Each must feel like something ONLY Toney could say to THIS person
+3. Titles: 3-7 words, conversational, intriguing — NOT clinical or generic
+4. Teasers: 1-2 sentences that make the person think "oh, I want to do that"
+5. Don't suggest what was JUST covered in this session
+6. Standing suggestions should reference their specific tension pattern
+7. Write all user-facing text (title, teaser) in second person — "you," not "they"
+
+---
+
+## Output format (JSON only, no other text):
+
+\`\`\`json
+{
+  "understanding": "The full evolved narrative. 3-8 paragraphs. Clinical but warm. Third person. 300-800 words.",
+  "stage_of_change": "Only if shifted THIS session. One of: precontemplation, contemplation, preparation, action, maintenance. Omit if unchanged.",
+  "snippet": "One sentence (15-30 words) capturing the most salient observation RIGHT NOW. Third person.",
+  "suggestions": [
+    {
+      "title": "string (3-7 words)",
+      "teaser": "string (1-2 sentences)",
+      "length": "quick|medium|deep|standing",
+      "hypothesis": "string (coaching insight driving this suggestion)",
+      "leveragePoint": "string (strength + goal + obstacle)",
+      "curiosities": "string (what to explore)",
+      "openingDirection": "string (how the Coach should open)"
+    }
+  ]
+}
+\`\`\`
+
+## Rules:
+- Understanding: 300-800 words, third person, specific, no session timestamps.
+- Suggestions: 6-10 total, at least 1 per length category.
+- Be specific — their actual words, actual situations, actual reactions. Not categories or labels.
+- If the session was short or casual, minimal evolution is fine. Don't manufacture depth.
+- Never drop facts (names, amounts, life details) that haven't been contradicted.`;
+
+export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<EvolveAndSuggestOutput> {
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  const transcript = input.messages
+    .map(m => `${m.role === 'user' ? 'USER' : 'COACH'}: ${m.content}`)
+    .join('\n\n');
+
+  const sections: string[] = [];
+
+  // Current understanding
+  if (input.currentUnderstanding) {
+    sections.push(`## Current Understanding\n${input.currentUnderstanding}`);
+  } else {
+    sections.push('## Current Understanding\nNo prior understanding — this is the first post-session evolution. Build a comprehensive picture from what the session revealed.');
+  }
+
+  // Context
+  const contextLines: string[] = [];
+  if (input.tensionType) contextLines.push(`Money tension: ${input.tensionType}`);
+  if (input.hypothesis) contextLines.push(`Hypothesis going into this session: ${input.hypothesis}`);
+  if (input.currentStageOfChange) contextLines.push(`Current stage of change: ${input.currentStageOfChange}`);
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    contextLines.push(`Active focus areas: ${input.activeFocusAreas.map(a => `"${a.text}"`).join(', ')}`);
+  }
+  if (contextLines.length > 0) {
+    sections.push(`## Context\n${contextLines.join('\n')}`);
+  }
+
+  // Session transcript
+  sections.push(`## Session Transcript\n\n${transcript}`);
+
+  // Suggestion context
+  if (input.rewireCards && input.rewireCards.length > 0) {
+    sections.push(`## Their Toolkit (for suggestion context)\n${formatToolkit(input.rewireCards)}`);
+  }
+  if (input.recentWins && input.recentWins.length > 0) {
+    sections.push(`## Recent Wins (for suggestion context)\n${formatWins(input.recentWins)}`);
+  }
+  if (input.recentSessionHeadline) {
+    sections.push(`## This Session's Headline: "${input.recentSessionHeadline}"\n(Do NOT suggest sessions covering the same ground — suggest what comes NEXT.)`);
+    if (input.recentKeyMoments && input.recentKeyMoments.length > 0) {
+      sections.push(`Key moments from this session:\n${input.recentKeyMoments.map(m => `- "${m}"`).join('\n')}`);
+    }
+  }
+  if (input.previousSuggestionTitles && input.previousSuggestionTitles.length > 0) {
+    sections.push(`## Previous Suggestion Titles (avoid repeating these exactly)\n${input.previousSuggestionTitles.map(t => `- "${t}"`).join('\n')}`);
+  }
+
+  const userMessage = `Evolve the understanding based on this session, then generate session suggestions.\n\n${sections.join('\n\n')}`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 5000,
+    temperature: 0.3,
+    system: EVOLVE_AND_SUGGEST_PROMPT,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+  const jsonStr = jsonMatch ? jsonMatch[1] : text;
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const result: EvolveAndSuggestOutput = {
+      understanding: parsed.understanding || input.currentUnderstanding || '',
+      suggestions: [],
+    };
+
+    if (parsed.stage_of_change && typeof parsed.stage_of_change === 'string') {
+      result.stageOfChange = parsed.stage_of_change;
+    }
+
+    if (parsed.snippet && typeof parsed.snippet === 'string') {
+      result.snippet = parsed.snippet;
+    }
+
+    if (Array.isArray(parsed.suggestions)) {
+      result.suggestions = parsed.suggestions.map((s: Record<string, unknown>) => ({
+        title: String(s.title || ''),
+        teaser: String(s.teaser || ''),
+        length: (['quick', 'medium', 'deep', 'standing'].includes(String(s.length)) ? s.length : 'medium') as SessionSuggestion['length'],
+        hypothesis: String(s.hypothesis || ''),
+        leveragePoint: String(s.leveragePoint || s.leverage_point || ''),
+        curiosities: String(s.curiosities || ''),
+        openingDirection: String(s.openingDirection || s.opening_direction || ''),
+      }));
+    }
+
+    return result;
+  } catch {
+    // Parse failed — return existing understanding unchanged with no suggestions
+    return {
+      understanding: input.currentUnderstanding || '',
+      suggestions: [],
+    };
+  }
+}
+
+// ────────────────────────────────────────────
+// Legacy evolveUnderstanding — kept for admin intel rebuild
+// ────────────────────────────────────────────
+// evolveAndSuggest() is the new main function. This is a thin wrapper
+// for callers that don't need suggestions (e.g., admin full intel rebuild).
 
 const EVOLVE_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. You maintain an evolving understanding of each person — a living document that captures who they are, how their relationship with money works, what's shifting, and what coaching approaches work.
 
@@ -156,8 +379,7 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
 // Seed Understanding — Initial narrative from onboarding
 // ────────────────────────────────────────────
 // Called once after onboarding completes.
-// Produces the initial understanding + tension determination.
-// After this, prepareSession always has a narrative to read.
+// Produces the initial understanding + tension determination + first suggestions.
 
 export interface SeedUnderstandingInput {
   /** Formatted readable quiz answers */
@@ -181,17 +403,21 @@ export interface SeedUnderstandingOutput {
   secondaryTensionLabel?: string | null;
   /** One-sentence home screen snippet: first impression */
   snippet?: string;
+  /** Initial session suggestions (4-5) */
+  suggestions: SessionSuggestion[];
 }
 
-const SEED_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. From their quiz answers and goals, form an initial understanding of this person's relationship with money.
+const SEED_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. From their quiz answers and goals, form an initial understanding AND generate their first session suggestions.
 
 This is your FIRST read on them — thoughtful but appropriately tentative. You're forming hypotheses, not conclusions.
 
 ## What to produce:
 
-1. An initial understanding narrative — who this person is, what their relationship with money looks like, what patterns you can see from the intake data. Written in third person.
+### 1. Understanding narrative
+Who this person is, what their relationship with money looks like, what patterns you can see from the intake data. Written in third person.
 
-2. A tension type determination — which money tension best describes their pattern based on ALL their answers read as a whole picture. The label follows your understanding, not the other way around.
+### 2. Tension type determination
+Which money tension best describes their pattern based on ALL their answers read as a whole picture.
 
 Tension types (pick ONE primary, optionally ONE secondary):
 - **avoid** — money feels threatening, so they don't look
@@ -202,23 +428,45 @@ Tension types (pick ONE primary, optionally ONE secondary):
 - **give** — takes care of everyone else before themselves
 - **grip** — real discipline, but the control has become a prison
 
+### 3. Session suggestions (4-5)
+Generate initial session suggestions to show on their home screen. Since you only have onboarding data (no session history, no cards, no wins), focus on:
+- What they shared in quiz answers and goals
+- Their likely tension patterns
+- Universal first-session territory personalized to their situation
+- Mix of lengths: at least 1 quick, 1-2 medium, 1 deep, 1 standing
+
+Suggestion format: each needs title (3-7 words, conversational), teaser (1-2 sentences, "I want to tap this"), length, hypothesis, leveragePoint, curiosities, openingDirection.
+
+Write all user-facing text (title, teaser) in second person — "you," not "they."
+
 ## Output format (JSON only, no other text):
 
 \`\`\`json
 {
-  "understanding": "2-4 paragraphs. What you can see from the intake. Thoughtful but tentative — these are first impressions, not conclusions. Third person. 150-400 words.",
+  "understanding": "2-4 paragraphs. What you can see from the intake. Thoughtful but tentative. Third person. 150-400 words.",
   "tension_label": "primary tension type (one of: avoid, worry, chase, perform, numb, give, grip)",
   "secondary_tension_label": "secondary tension or null",
-  "snippet": "One sentence (15-30 words) capturing your first-impression read on this person — what stands out about their relationship with money. Tentative language. Third person."
+  "snippet": "One sentence (15-30 words) capturing your first-impression read on this person. Tentative language. Third person.",
+  "suggestions": [
+    {
+      "title": "string (3-7 words)",
+      "teaser": "string (1-2 sentences)",
+      "length": "quick|medium|deep|standing",
+      "hypothesis": "string",
+      "leveragePoint": "string",
+      "curiosities": "string",
+      "openingDirection": "string"
+    }
+  ]
 }
 \`\`\`
 
 ## Rules:
 - Read ALL quiz answers as a WHOLE PICTURE. Look for patterns across answers, not individual data points.
 - Be specific to THIS person — reference their actual answers and goals.
-- 150-400 words. This is a starting point that will be evolved after each session.
+- 150-400 words for understanding. This is a starting point that will be evolved after each session.
 - Use tentative language ("suggests," "likely," "appears to") — you don't know them yet.
-- Don't overcommit to conclusions. The first session will reveal whether your read is right.`;
+- 4-5 suggestions, personalized to their onboarding answers and tension.`;
 
 export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<SeedUnderstandingOutput> {
   const anthropic = new Anthropic({
@@ -242,11 +490,11 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
     sections.push(`## Life Context\n${context.join('\n')}`);
   }
 
-  const userMessage = `Form an initial understanding of this person from their onboarding data.\n\n${sections.join('\n\n')}`;
+  const userMessage = `Form an initial understanding of this person from their onboarding data, then generate their first session suggestions.\n\n${sections.join('\n\n')}`;
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 1500,
+    max_tokens: 3000,
     temperature: 0.3,
     system: SEED_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
@@ -259,11 +507,26 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
 
   try {
     const parsed = JSON.parse(jsonStr);
+
+    let suggestions: SessionSuggestion[] = [];
+    if (Array.isArray(parsed.suggestions)) {
+      suggestions = parsed.suggestions.map((s: Record<string, unknown>) => ({
+        title: String(s.title || ''),
+        teaser: String(s.teaser || ''),
+        length: (['quick', 'medium', 'deep', 'standing'].includes(String(s.length)) ? s.length : 'medium') as SessionSuggestion['length'],
+        hypothesis: String(s.hypothesis || ''),
+        leveragePoint: String(s.leveragePoint || s.leverage_point || ''),
+        curiosities: String(s.curiosities || ''),
+        openingDirection: String(s.openingDirection || s.opening_direction || ''),
+      }));
+    }
+
     return {
       understanding: parsed.understanding || '',
       tensionLabel: parsed.tension_label || 'avoid',
       secondaryTensionLabel: parsed.secondary_tension_label || null,
       snippet: parsed.snippet || undefined,
+      suggestions,
     };
   } catch {
     // Parse failed — return minimal defaults
@@ -271,6 +534,7 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
       understanding: '',
       tensionLabel: 'avoid',
       secondaryTensionLabel: null,
+      suggestions: [],
     };
   }
 }

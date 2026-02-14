@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
         });
 
         send('complete', JSON.stringify({
-          hypothesis: result.hypothesis,
+          understanding: result.understanding ? 'updated' : null,
         }));
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Unknown error';

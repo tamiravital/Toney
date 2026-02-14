@@ -1,4 +1,6 @@
-import { SystemPromptBlock, SessionSuggestion } from '@toney/types';
+import { SystemPromptBlock, SessionSuggestion, Profile, RewireCard, Win, FocusArea } from '@toney/types';
+import { formatAnswersReadable } from '@toney/constants';
+import { formatToolkit, formatWins, formatFocusAreas, formatCoachingStyle } from '../strategist/formatters';
 
 // ────────────────────────────────────────────
 // Core Principles (static, ~200 tokens)
@@ -112,12 +114,69 @@ Your briefing follows this message. Here's how to use it:
 // System prompt from Strategist briefing
 // ────────────────────────────────────────────
 
+export interface BuildSystemPromptInput {
+  /** The understanding narrative from profiles.understanding */
+  understanding: string;
+  /** Coaching plan: one-sentence thesis for this session */
+  hypothesis?: string | null;
+  /** Coaching plan: strength + goal + obstacle intersection */
+  leveragePoint?: string | null;
+  /** Coaching plan: what to explore this session */
+  curiosities?: string | null;
+  /** User profile (for coaching style + fallback data) */
+  profile: Profile;
+  /** Current rewire cards */
+  rewireCards?: RewireCard[];
+  /** Recent wins */
+  recentWins?: Win[];
+  /** Active focus areas */
+  activeFocusAreas?: FocusArea[];
+}
+
 /**
- * Returns system prompt blocks using a pre-built Strategist briefing.
+ * Builds system prompt blocks from session + profile + DB context.
+ * Replaces buildSystemPromptFromBriefing() — assembles the briefing inline.
  * Block 1: Core principles (static, cached across all users).
- * Block 2: Strategist briefing (pre-built, cached within session).
+ * Block 2: Assembled briefing (per-user context, cached within session).
  */
-export function buildSystemPromptFromBriefing(briefingContent: string): SystemPromptBlock[] {
+export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBlock[] {
+  const { understanding, hypothesis, leveragePoint, curiosities, profile } = input;
+  const sections: string[] = [];
+
+  sections.push('COACH BRIEFING');
+
+  // The understanding IS the person model
+  if (understanding) {
+    sections.push(`WHO THEY ARE AND WHERE THEY ARE:\n${understanding}`);
+  } else {
+    // Fallback for edge cases (first session before seed completes)
+    const readableAnswers = profile.onboarding_answers
+      ? formatAnswersReadable(profile.onboarding_answers as Record<string, string>)
+      : 'No quiz answers';
+    sections.push(`WHAT THEY SHARED:\n${readableAnswers}${profile.what_brought_you ? `\nWhat would feel like progress: "${profile.what_brought_you}"` : ''}`);
+  }
+
+  // Coaching plan fields from the session
+  sections.push(`HYPOTHESIS:\n${hypothesis || 'Follow their lead — explore what they bring.'}`);
+  sections.push(`LEVERAGE POINT:\n${leveragePoint || 'Not yet identified — discover their strength in this session.'}`);
+  sections.push(`CURIOSITIES FOR THIS SESSION:\n${curiosities || 'Follow their lead.'}`);
+
+  if (input.rewireCards && input.rewireCards.length > 0) {
+    sections.push(`THEIR TOOLKIT:\n${formatToolkit(input.rewireCards)}`);
+  }
+
+  if (input.recentWins && input.recentWins.length > 0) {
+    sections.push(`RECENT WINS:\n${formatWins(input.recentWins)}`);
+  }
+
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    sections.push(`FOCUS AREAS:\n${formatFocusAreas(input.activeFocusAreas)}`);
+  }
+
+  sections.push(`COACHING STYLE:\n${formatCoachingStyle(profile)}`);
+
+  const briefingContent = sections.join('\n\n');
+
   return [
     {
       type: 'text',

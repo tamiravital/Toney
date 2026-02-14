@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney/coaching';
-import { Profile, RewireCard, Win, CoachingBriefing, FocusArea, SessionSuggestion } from '@toney/types';
+import { Profile, RewireCard, Win, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
-// Deferred close + plan + stream opening: can take 30s+
+// Deferred close + stream opening: can take 30s+
 export const maxDuration = 60;
 
 const anthropic = new Anthropic({
@@ -15,9 +15,9 @@ const anthropic = new Anthropic({
 /**
  * POST /api/session/open
  *
- * Thin shell: auth + data loading + pipeline + save.
+ * Thin shell: auth + data loading + pure-code prompt build + stream opening.
+ * No LLM calls except the opening message itself (Sonnet).
  * Accepts optional previousSessionId to close an old session first (deferred close).
- * All orchestration logic lives in @toney/coaching pipelines.
  */
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
       suggestionIndex = typeof body.suggestionIndex === 'number' ? body.suggestionIndex : null;
     } catch { /* empty body is fine */ }
 
-    // ── Load data in parallel ──
-    const [profileResult, winsResult, cardsResult, briefingResult, notesResult, focusAreasResult, suggestionsResult] = await Promise.all([
+    // ── Load data in parallel (no coaching_briefings query — dropped) ──
+    const [profileResult, winsResult, cardsResult, notesResult, focusAreasResult, suggestionsResult, completedSessionsResult] = await Promise.all([
       ctx.supabase
         .from(ctx.table('profiles'))
         .select('*')
@@ -58,13 +58,6 @@ export async function POST(request: NextRequest) {
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(20),
-      ctx.supabase
-        .from(ctx.table('coaching_briefings'))
-        .select('*')
-        .eq('user_id', ctx.userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single(),
       ctx.supabase
         .from(ctx.table('sessions'))
         .select('session_notes')
@@ -86,6 +79,13 @@ export async function POST(request: NextRequest) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
+      // Check if any completed sessions exist (for isFirstSession detection)
+      ctx.supabase
+        .from(ctx.table('sessions'))
+        .select('id')
+        .eq('user_id', ctx.userId)
+        .eq('session_status', 'completed')
+        .limit(1),
     ]);
 
     timing('data loaded (7 parallel queries)');
@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
+
+    const isFirstSession = !(completedSessionsResult.data && completedSessionsResult.data.length > 0);
 
     // ── Legacy user: seed understanding if missing ──
     if (!profile.understanding && profile.onboarding_completed) {
@@ -125,11 +127,20 @@ export async function POST(request: NextRequest) {
           if (seedSaveErr) {
             console.error('[session/open] Legacy seed save failed:', seedSaveErr);
           }
+
+          // Save suggestions from seed (if any)
+          if (seedResult.suggestions.length > 0) {
+            await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+              user_id: ctx.userId,
+              suggestions: seedResult.suggestions,
+            });
+          }
+
           timing('legacy seed complete');
         }
       } catch (err) {
         console.error('Legacy user seed failed:', err);
-        // Non-fatal — prepareSession handles null understanding
+        // Non-fatal — Coach works without understanding (fallback in buildSystemPrompt)
       }
     }
 
@@ -138,7 +149,7 @@ export async function POST(request: NextRequest) {
       // Check if session is already completed — no need to re-close
       const { data: prevSessionCheck } = await ctx.supabase
         .from(ctx.table('sessions'))
-        .select('session_status')
+        .select('session_status, hypothesis')
         .eq('id', previousSessionId)
         .single();
 
@@ -162,7 +173,7 @@ export async function POST(request: NextRequest) {
             .eq('session_id', previousSessionId),
           ctx.supabase
             .from(ctx.table('sessions'))
-            .select('session_number')
+            .select('session_number, hypothesis')
             .eq('id', previousSessionId)
             .single(),
           ctx.supabase
@@ -196,6 +207,7 @@ export async function POST(request: NextRequest) {
           }));
 
           const oldSessionNumber = oldSessionResult.data?.session_number || null;
+          const oldSessionHypothesis = oldSessionResult.data?.hypothesis || null;
           let oldPreviousHeadline: string | null = null;
           if (oldPrevNotesResult.data?.session_notes) {
             try {
@@ -221,7 +233,7 @@ export async function POST(request: NextRequest) {
             sessionId: previousSessionId,
             messages: oldMessages,
             tensionType: profile.tension_type || null,
-            hypothesis: (briefingResult.data as CoachingBriefing | null)?.hypothesis || null,
+            hypothesis: oldSessionHypothesis,
             currentStageOfChange: profile.stage_of_change || null,
             currentUnderstanding: profile.understanding || null,
             savedCards,
@@ -282,27 +294,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create session row
-    const { data: session } = await ctx.supabase
-      .from(ctx.table('sessions'))
-      .insert({ user_id: ctx.userId })
-      .select('id')
-      .single();
-
-    timing('session row created');
-
-    if (!session) {
-      return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
-    }
-
-    const sessionId = session.id;
-
     const recentWins = (winsResult.data || []) as Win[];
     const rewireCards = (cardsResult.data || []) as RewireCard[];
-    const previousBriefing = briefingResult.data as CoachingBriefing | null;
-    const recentSessionNotes = (notesResult.data || [])
-      .map((s: { session_notes: string | null }) => s.session_notes)
-      .filter(Boolean) as string[];
     const activeFocusAreas = (focusAreasResult.data || []) as FocusArea[];
 
     // Resolve selected suggestion (if any)
@@ -316,56 +309,44 @@ export async function POST(request: NextRequest) {
           const idx = suggestionIndex != null ? suggestionIndex : 0;
           selectedSuggestion = allSuggestions[idx] || allSuggestions[0];
         }
-      } catch { /* ignore — fall through to standard path */ }
+      } catch { /* ignore — fall through to no-suggestion path */ }
     }
 
-    // ── Pipeline Step 1: Prepare session ──
-    // Fast path (selectedSuggestion + not first session): pure code, ~0ms
-    // Standard path: prepareSession (Sonnet), ~3-5s
-    const plan = await planSessionStep({
+    // ── Build system prompt (pure code, always instant) ──
+    const plan = planSessionStep({
       profile,
       understanding: profile.understanding,
       recentWins,
       rewireCards,
-      previousBriefing,
-      recentSessionNotes,
+      isFirstSession,
       activeFocusAreas,
       selectedSuggestion,
     });
 
-    timing(selectedSuggestion ? 'assembleBriefing complete (fast path)' : 'prepareSession complete (Sonnet)');
+    timing('planSessionStep complete (pure code)');
 
-    // Save briefing — MUST complete before client can send messages
-    let version = 1;
-    if (previousBriefing) {
-      version = (previousBriefing.version || 0) + 1;
-    }
-
-    const [briefingRes] = await Promise.all([
-      ctx.supabase.from(ctx.table('coaching_briefings')).insert({
+    // ── Create session row WITH coaching plan fields ──
+    const { data: session } = await ctx.supabase
+      .from(ctx.table('sessions'))
+      .insert({
         user_id: ctx.userId,
-        session_id: sessionId,
-        briefing_content: plan.briefingContent,
         hypothesis: plan.hypothesis,
         leverage_point: plan.leveragePoint,
         curiosities: plan.curiosities,
-        growth_edges: {},
-        version,
-      }),
-      plan.tensionType
-        ? ctx.supabase.from(ctx.table('profiles')).update({
-            tension_type: plan.tensionType,
-            secondary_tension_type: plan.secondaryTensionType || null,
-          }).eq('id', ctx.userId)
-        : Promise.resolve(),
-    ]);
+        opening_direction: plan.openingDirection,
+      })
+      .select('id')
+      .single();
 
-    if (briefingRes && typeof briefingRes === 'object' && 'error' in briefingRes && briefingRes.error) {
-      console.error('[session/open] Briefing insert failed:', briefingRes.error);
+    timing('session row created');
+
+    if (!session) {
+      return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
     }
-    timing('briefing saved');
 
-    // ── Pipeline Step 2: Stream opening message (Sonnet) ──
+    const sessionId = session.id;
+
+    // ── Stream opening message (Sonnet) ──
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1500,

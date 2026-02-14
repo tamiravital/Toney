@@ -1,5 +1,23 @@
 # Toney — Changelog
 
+## 2026-02-13 — Kill Coaching Briefings
+- **Faster session opens**: Opening a session now makes 1 AI call instead of 2. The system prompt is built instantly from pure code — no more waiting for the Strategist to prepare a briefing.
+- **Faster session closes**: Understanding evolution and suggestion generation now happen in a single AI call instead of two separate ones. Combined with the existing "notes return immediately" pattern, this cuts background processing time by ~40%.
+- **Faster onboarding**: After the quiz, understanding + tension + initial suggestions are all generated in one AI call instead of two.
+- **Dropped the `coaching_briefings` table**: Coaching plan fields (hypothesis, leverage point, curiosities) are now stored directly on the session row. One less table, simpler queries, no stale briefing snapshots.
+- **Chat system prompt is always fresh**: Each message rebuilds the system prompt from the latest profile, cards, wins, and focus areas — not a stale briefing snapshot. If you save a card mid-session, the next message's coaching context includes it.
+- Admin intel page reads coaching plan from sessions instead of briefings. Full intel rebuild simplified.
+
+## 2026-02-13 — Suggestion Picker Fix
+- **Session suggestions now appear when you open chat** — previously, returning users with all completed sessions would see stale messages from their last conversation instead of the suggestion picker. Now the picker shows correctly with personalized suggestions.
+- **Starting a new session no longer fails with "I'm having trouble"** — tapping a suggestion was triggering a redundant 15-20 second close operation on an already-finished session, which often timed out. Removed the unnecessary close.
+
+## 2026-02-13 — Fast Session Close
+- **Ending a session now responds in ~3-5 seconds** instead of 15-20s. Session notes appear immediately; understanding evolution and suggestion generation happen in the background.
+- Fixed Vercel timeout issue where tapping "End Session" would show "Wrapping up..." and then nothing would happen — the session actually closed server-side but the client never received the response.
+- Added `maxDuration = 60` to all AI-calling API routes (chat, session open, session close, onboarding seed) to prevent Vercel's 10-second default timeout from killing long-running calls.
+- Coaching depth changed from text labels (Surface/Balanced/Deep) to a 1-5 slider scale, matching the tone slider. Settings screen updated.
+
 ## 2026-02-12 — Home Screen Redesign
 - **Session suggestions on home screen**: Personalized session ideas displayed as a vertical list — featured card with gradient treatment at top, compact rows below, each showing title, teaser, and time estimate
 - **Personalized greeting**: "Good evening, Tamir" using first name from Google sign-in

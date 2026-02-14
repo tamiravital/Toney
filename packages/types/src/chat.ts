@@ -26,4 +26,12 @@ export interface Session {
   session_number?: number | null;
   session_notes?: string | null;
   session_status?: 'active' | 'completed' | 'abandoned';
+  /** Coaching plan: one-sentence thesis for this session */
+  hypothesis?: string | null;
+  /** Coaching plan: strength + goal + obstacle intersection */
+  leverage_point?: string | null;
+  /** Coaching plan: what to explore this session */
+  curiosities?: string | null;
+  /** Coaching plan: how the Coach should open the session */
+  opening_direction?: string | null;
 }

@@ -1,20 +1,20 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { prepareSession, seedUnderstanding, evolveUnderstanding } from '@toney/coaching';
-import type { Profile, Win, RewireCard, CoachingBriefing } from '@toney/types';
-import type { SessionPreparation } from '@toney/coaching';
-import { saveProdBriefing } from '@/lib/queries/intel';
+import { seedUnderstanding, evolveUnderstanding } from '@toney/coaching';
+import type { Profile, Win, RewireCard } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
 // ────────────────────────────────────────────
 // Run full intel pipeline — session by session
-// Uses real session transcripts. Runs seed → evolve → prepareSession per session.
+// Uses real session transcripts. Runs seed → evolve per session.
 // Understanding accumulates session by session, like the real coaching flow.
+// No prepareSession/briefing step needed — system prompt is built from
+// pure code at runtime using session + profile + DB context.
 // ────────────────────────────────────────────
 
 export async function runFullIntel(
   userId: string,
   onProgress: (msg: string) => void,
-): Promise<SessionPreparation> {
+): Promise<{ understanding: string }> {
   const supabase = createAdminClient();
 
   // Load profile
@@ -31,16 +31,13 @@ export async function runFullIntel(
   onProgress('Loading sessions...');
   const { data: sessions } = await supabase
     .from('sessions')
-    .select('id, created_at, session_notes')
+    .select('id, created_at, session_notes, hypothesis')
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
 
   if (!sessions || sessions.length === 0) {
     throw new Error('No sessions found. Run "Split into Sessions" first.');
   }
-
-  // Load wins + cards once (they don't change during the intel rebuild)
-  const [wins, rewireCards] = await loadWinsAndCards(supabase, userId);
 
   onProgress(`Found ${sessions.length} sessions. Processing...`);
 
@@ -72,11 +69,19 @@ export async function runFullIntel(
     } catch { /* non-critical */ }
   }
 
+  // Save initial suggestions from seed (if any)
+  if (seedResult.suggestions && seedResult.suggestions.length > 0) {
+    try {
+      await supabase.from('session_suggestions').insert({
+        user_id: userId,
+        suggestions: seedResult.suggestions,
+      });
+    } catch { /* non-critical */ }
+  }
+
   onProgress('Initial understanding seeded.');
 
-  let lastResult: SessionPreparation | null = null;
-  let previousBriefing: CoachingBriefing | null = null;
-  let briefingVersion = 0;
+  let lastHypothesis: string | null = null;
 
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i];
@@ -100,13 +105,13 @@ export async function runFullIntel(
 
     onProgress(`Session ${i + 1} of ${sessions.length} (${dateStr}, ${sessionMessages.length} msgs) — evolving understanding...`);
 
-    // Step 2: Evolve understanding from this session's transcript
+    // Evolve understanding from this session's transcript
     try {
       const evolveResult = await evolveUnderstanding({
         currentUnderstanding: understanding,
         messages: sessionMessages,
         tensionType: (profile as Profile).tension_type || null,
-        hypothesis: lastResult?.hypothesis || null,
+        hypothesis: session.hypothesis || lastHypothesis || null,
         currentStageOfChange: (profile as Profile).stage_of_change || null,
       });
 
@@ -118,6 +123,7 @@ export async function runFullIntel(
       } catch { /* non-critical */ }
 
       understanding = evolveResult.understanding;
+      lastHypothesis = session.hypothesis || lastHypothesis;
 
       // Update stage of change if shifted
       if (evolveResult.stageOfChange) {
@@ -138,87 +144,9 @@ export async function runFullIntel(
       }).eq('id', userId);
     } catch { /* non-critical */ }
 
-    onProgress(`Session ${i + 1} — running Strategist...`);
-
-    // Step 3: Run prepareSession with current understanding
-    // Collect recent session notes (up to 3 most recent completed sessions before this one)
-    const completedSoFar = sessions.slice(0, i + 1);
-    const recentSessionNotes = completedSoFar
-      .slice(-3)
-      .map(s => s.session_notes)
-      .filter(Boolean) as string[];
-
-    const result = await prepareSession({
-      profile: profile as Profile,
-      understanding,
-      recentWins: wins,
-      rewireCards,
-      previousBriefing,
-      recentSessionNotes,
-    });
-
-    // Save briefing
-    await saveProdBriefing(userId, session.id, result);
-
-    // Track the briefing we just saved for next iteration's previousBriefing
-    briefingVersion += 1;
-    previousBriefing = {
-      id: '',
-      user_id: userId,
-      session_id: session.id,
-      briefing_content: result.briefing,
-      hypothesis: result.hypothesis,
-      leverage_point: result.leveragePoint,
-      curiosities: result.curiosities,
-      growth_edges: {},
-      version: briefingVersion,
-      created_at: new Date().toISOString(),
-    };
-
-    lastResult = result;
     onProgress(`Session ${i + 1} of ${sessions.length} complete.`);
   }
 
-  if (!lastResult) throw new Error('No sessions with messages found');
-
   onProgress('Complete!');
-  return lastResult;
-}
-
-// ────────────────────────────────────────────
-// Load wins + cards (once, before loop)
-// ────────────────────────────────────────────
-
-async function loadWinsAndCards(
-  supabase: ReturnType<typeof createAdminClient>,
-  userId: string,
-): Promise<[Win[], RewireCard[]]> {
-  let wins: Win[] = [];
-  try {
-    const { data } = await supabase
-      .from('wins')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(10);
-    wins = (data || []).map((w: Record<string, unknown>) => ({
-      id: w.id as string,
-      text: w.text as string,
-      tension_type: w.tension_type as string | null,
-      date: w.created_at ? new Date(w.created_at as string) : undefined,
-    })) as Win[];
-  } catch { /* none */ }
-
-  let rewireCards: RewireCard[] = [];
-  try {
-    const { data } = await supabase
-      .from('rewire_cards')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    rewireCards = (data || []) as RewireCard[];
-  } catch { /* none */ }
-
-  return [wins, rewireCards];
+  return { understanding };
 }

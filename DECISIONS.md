@@ -4,6 +4,27 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Kill coaching_briefings — store coaching plan on sessions row (2026-02-13)
+Reversed the 2026-02-11 decision to "keep sessions and coaching_briefings as separate tables." The original reasoning (clean queries, decoupled lifecycle, versioning) was valid at the time, but three things changed: (1) `assembleBriefingDocument()` proved the briefing can be built from pure code using suggestion data + profile + DB context — no LLM needed. (2) `prepareSession()` (Sonnet, 3-5s) was the session-open bottleneck that Noga experienced. (3) The briefing snapshot was always stale — cards/wins/focus areas saved mid-session weren't reflected until the next session. Moving hypothesis/leverage_point/curiosities/opening_direction to the sessions row eliminates a table, removes the `prepareSession()` LLM call, and lets each chat message build a fresh system prompt from the latest data. Trade-off: chat route now runs 5 parallel queries instead of 2, but these are small indexed lookups (~10ms each).
+
+### Merge evolve + suggestions into one Sonnet call (2026-02-13)
+Session close was running 2 separate Sonnet calls: `evolveUnderstanding()` (~5-8s) then `generateSessionSuggestions()` (~8-12s). But the suggestion generator needed the same context the evolve call already had — understanding + transcript + tension. Merged into `evolveAndSuggest()`: one Sonnet call, one prompt, one JSON response with both the evolved understanding and 6-10 suggestions. Same merge applied to `seedUnderstanding()` (now returns suggestions alongside understanding + tension). LLM call count: session close 2→1 Sonnet, post-onboarding 2→1 Sonnet, session open 2→1 Sonnet. Total: 6 Sonnet calls across the full lifecycle → 3.
+
+### Don't pass previousSessionId for already-completed sessions (2026-02-13)
+When the user opens a new session from the suggestion picker, the client was passing `currentSessionId` as `previousSessionId` to trigger deferred close. But if that session was already completed, the server ran `closeSessionPipeline()` on it anyway — 15-20s of wasted Sonnet calls that often timed out. Fix: client skips `previousSessionId` when `sessionStatus === 'completed'`. Server also guards with a `session_status` check before attempting deferred close. Both defenses needed — client for speed, server for correctness.
+
+### Simulator as mobile app in a new window, not rebuilt in admin (2026-02-13)
+The simulator could be: (1) mobile components rebuilt inside the admin app, (2) mobile app in an iframe inside admin layout, or (3) mobile app in a popup window. Chose popup window because: zero component duplication — every mobile screen (onboarding, home, chat, rewire, journey) works as-is. The mobile app gains a "sim mode" (`?sim=profileId`) that bypasses auth and swaps to sim_ tables. The simulator is always in sync with mobile automatically — no drift. Trade-off: the mobile API routes need a sim branch (~10 lines each), but that's far less work than rebuilding every screen. Admin simulator page becomes a simple profile grid with open/create/clone/delete.
+
+### Return session notes immediately, background the rest (2026-02-13)
+The close pipeline ran 3 sequential LLM calls (evolve → notes → suggestions, ~15-20s) and the client waited for all of them. But notes are the only thing the user sees — evolving understanding and generating suggestions are invisible background work. Restructured: generate notes first (Haiku, ~3-5s) using pre-evolution understanding (it's about what happened in the transcript, not clinical narrative updates), save to DB, return to client. Everything else runs in `after()`. The `closeSessionPipeline` pure function still exists for the simulator, but the production route now inlines the steps to control the response boundary.
+
+### Vercel maxDuration on all LLM routes (2026-02-13)
+Vercel Hobby plan defaults to 10s function timeout. Without `maxDuration`, the gateway returns 504 to the client while the function continues running — a split-brain where the server succeeds but the client fails. Every route that calls Claude must export `maxDuration = 60`. Learned this the hard way: Noga's session closes were silently succeeding in the DB while appearing stuck in the UI.
+
+### Depth as 1-5 number, not string union (2026-02-13)
+Changed `depth` from `DepthLevel = 'surface' | 'balanced' | 'deep'` to a 1-5 numeric scale matching tone. The string union was leftover from the original style quiz (eliminated in v3). A numeric scale gives finer granularity and consistent UI treatment (both are sliders now). `DepthLevel` type removed entirely.
+
 ### Vertical suggestion list with featured card, not horizontal scroll (2026-02-12)
 First iteration used horizontal scrollable cards (260px wide). Problems: (1) only 1.5 cards visible at a time — users couldn't see what was available, (2) the home screen felt empty with just a thin strip of cards + streak, (3) horizontal scroll is easy to miss on mobile. Switched to vertical layout: first suggestion gets a full-width gradient card (hero treatment), remaining suggestions are compact rows with title + teaser + time label. Fills the viewport, all options visible, and the featured card gives a clear primary CTA.
 

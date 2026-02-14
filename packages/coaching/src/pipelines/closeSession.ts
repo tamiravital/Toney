@@ -1,17 +1,15 @@
 import { SessionNotesOutput, SessionSuggestion, RewireCard, Win, FocusArea } from '@toney/types';
 import { generateSessionNotes } from '../session-notes/sessionNotes';
-import { evolveUnderstanding, EvolveUnderstandingOutput } from '../strategist/evolveUnderstanding';
-import { generateSessionSuggestions } from '../strategist/generateSuggestions';
+import { evolveAndSuggest, EvolveAndSuggestOutput } from '../strategist/evolveUnderstanding';
 
 // ────────────────────────────────────────────
 // Close Session Pipeline
 // ────────────────────────────────────────────
 // Orchestrates everything that happens when a session ends:
-//   1. evolveUnderstanding()          — Sonnet, evolve the clinical narrative (must complete first)
-//   2. generateSessionNotes()         — Haiku, user-facing recap (needs evolved understanding)
-//   3. generateSessionSuggestions()   — Sonnet, personalized next-session ideas (needs headline + key moments from notes)
+//   1. generateSessionNotes()  — Haiku, user-facing recap (fast, returned immediately)
+//   2. evolveAndSuggest()      — Sonnet, evolve understanding + generate suggestions (one call, background)
 //
-// Sequential — each step feeds the next. Session close is not latency-sensitive.
+// Two steps — notes return fast, evolve+suggest run in background.
 //
 // Pure function — no DB, no framework.
 // The caller handles: loading data, saving results, HTTP response.
@@ -49,32 +47,15 @@ export interface CloseSessionInput {
 export interface CloseSessionOutput {
   /** User-facing session notes */
   sessionNotes: SessionNotesOutput;
-  /** Evolved understanding narrative + optional stage shift */
-  understanding: EvolveUnderstandingOutput;
-  /** Personalized session suggestions for the home screen */
+  /** Evolved understanding narrative + optional stage shift + suggestions */
+  understanding: EvolveAndSuggestOutput;
+  /** Personalized session suggestions for the home screen (alias of understanding.suggestions) */
   suggestions: SessionSuggestion[];
 }
 
 export async function closeSessionPipeline(input: CloseSessionInput): Promise<CloseSessionOutput> {
-  // ── Step 1: Evolve understanding (Sonnet) ──
-  // Must complete first — notes and suggestions need the evolved narrative
-  let understanding: EvolveUnderstandingOutput;
-  try {
-    understanding = await evolveUnderstanding({
-      currentUnderstanding: input.currentUnderstanding ?? null,
-      messages: input.messages,
-      tensionType: input.tensionType,
-      hypothesis: input.hypothesis,
-      currentStageOfChange: input.currentStageOfChange,
-      activeFocusAreas: input.activeFocusAreas,
-    });
-  } catch (err) {
-    console.error('evolveUnderstanding failed:', err);
-    understanding = { understanding: input.currentUnderstanding || '' };
-  }
-
-  // ── Step 2: Generate session notes (Haiku) ──
-  // Needs evolved understanding for richer context
+  // ── Step 1: Generate session notes (Haiku — fast) ──
+  // Notes come first — they provide the headline for suggestion context
   let sessionNotes: SessionNotesOutput;
   try {
     sessionNotes = await generateSessionNotes({
@@ -83,8 +64,8 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       hypothesis: input.hypothesis,
       savedCards: input.savedCards,
       sessionNumber: input.sessionNumber,
-      understanding: understanding.understanding,
-      stageOfChange: understanding.stageOfChange || input.currentStageOfChange,
+      understanding: input.currentUnderstanding || undefined,
+      stageOfChange: input.currentStageOfChange || undefined,
       previousHeadline: input.previousHeadline,
       activeFocusAreas: input.activeFocusAreas,
     });
@@ -93,29 +74,33 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
     sessionNotes = { headline: 'Session complete', narrative: 'Notes could not be generated for this session.' };
   }
 
-  // ── Step 3: Generate session suggestions (Sonnet) ──
-  // Needs evolved understanding + headline + key moments from notes
-  let suggestions: SessionSuggestion[] = [];
+  // ── Step 2: Evolve understanding + generate suggestions (Sonnet — one call) ──
+  let understanding: EvolveAndSuggestOutput;
   try {
-    const suggestionsResult = await generateSessionSuggestions({
-      understanding: understanding.understanding,
+    understanding = await evolveAndSuggest({
+      currentUnderstanding: input.currentUnderstanding ?? null,
+      messages: input.messages,
       tensionType: input.tensionType,
-      recentSessionHeadline: sessionNotes.headline,
-      recentKeyMoments: sessionNotes.keyMoments,
+      hypothesis: input.hypothesis,
+      currentStageOfChange: input.currentStageOfChange,
+      activeFocusAreas: input.activeFocusAreas,
       rewireCards: input.rewireCards,
       recentWins: input.recentWins,
-      activeFocusAreas: input.activeFocusAreas,
+      recentSessionHeadline: sessionNotes.headline,
+      recentKeyMoments: sessionNotes.keyMoments,
       previousSuggestionTitles: input.previousSuggestionTitles,
     });
-    suggestions = suggestionsResult.suggestions;
   } catch (err) {
-    console.error('generateSessionSuggestions failed:', err);
-    // Non-fatal — user just won't get suggestions
+    console.error('evolveAndSuggest failed:', err);
+    understanding = {
+      understanding: input.currentUnderstanding || '',
+      suggestions: [],
+    };
   }
 
   return {
     sessionNotes,
     understanding,
-    suggestions,
+    suggestions: understanding.suggestions,
   };
 }

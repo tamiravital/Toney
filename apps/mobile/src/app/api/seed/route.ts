@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveContext } from '@/lib/supabase/sim';
-import { seedUnderstanding, generateSessionSuggestions } from '@toney/coaching';
+import { seedUnderstanding } from '@toney/coaching';
 import { formatAnswersReadable, questions } from '@toney/constants';
 
-// Seed understanding + generate suggestions: 2 Sonnet calls
+// Seed understanding + suggestions: 1 Sonnet call (merged)
 export const maxDuration = 60;
 
 /**
  * POST /api/seed
  *
  * Called after onboarding completes. Seeds profiles.understanding
- * so prepareSession always has a narrative to read.
- * Also determines tension type from quiz answers.
+ * so the Coach always has a narrative to read.
+ * Also determines tension type and generates initial session suggestions.
+ * All in ONE Sonnet call (seedUnderstanding now returns suggestions).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No quiz answers to seed from' }, { status: 400 });
     }
 
-    // ── Seed understanding ──
+    // ── Seed understanding (ONE Sonnet call — produces understanding + tension + suggestions) ──
     const result = await seedUnderstanding({
       quizAnswers: readableAnswers,
       whatBroughtYou: profile.what_brought_you,
@@ -92,23 +93,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Generate initial session suggestions (best-effort) ──
-    try {
-      const suggestionsResult = await generateSessionSuggestions({
-        understanding: result.understanding,
-        tensionType: result.tensionLabel,
-        isPostSeed: true,
+    // ── Save initial suggestions (from the same Sonnet call — no separate LLM call) ──
+    if (result.suggestions && result.suggestions.length > 0) {
+      const { error: suggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+        user_id: ctx.userId,
+        suggestions: result.suggestions,
       });
-
-      if (suggestionsResult.suggestions.length > 0) {
-        await ctx.supabase.from(ctx.table('session_suggestions')).insert({
-          user_id: ctx.userId,
-          suggestions: suggestionsResult.suggestions,
-        });
+      if (suggestionsErr) {
+        console.error('[Seed] Suggestions save failed (non-fatal):', suggestionsErr);
       }
-    } catch (err) {
-      console.error('Initial suggestions generation failed (non-fatal):', err);
-      // Non-fatal — user just won't have suggestions on first home screen
     }
 
     return NextResponse.json({

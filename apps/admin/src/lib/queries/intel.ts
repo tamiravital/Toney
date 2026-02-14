@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { RewireCard, Win, CoachingBriefing } from '@toney/types';
-import type { SessionPreparation } from '@toney/coaching';
+import type { RewireCard, Win } from '@toney/types';
 
 // ────────────────────────────────────────────
 // Read queries
@@ -36,15 +35,26 @@ export async function getUserWins(userId: string): Promise<Win[]> {
   return data ?? [];
 }
 
-export async function getLatestBriefing(userId: string): Promise<CoachingBriefing | null> {
+/**
+ * Get the latest session's coaching plan fields (replaces getLatestBriefing).
+ * Coaching plan fields are now stored directly on the sessions row.
+ */
+export async function getLatestSessionPlan(userId: string): Promise<{
+  hypothesis: string | null;
+  leverage_point: string | null;
+  curiosities: string | null;
+  opening_direction: string | null;
+  created_at: string;
+} | null> {
   const supabase = createAdminClient();
   const { data } = await supabase
-    .from('coaching_briefings')
-    .select('*')
+    .from('sessions')
+    .select('hypothesis, leverage_point, curiosities, opening_direction, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(1);
-  return (data && data.length > 0) ? data[0] as CoachingBriefing : null;
+    .limit(1)
+    .single();
+  return data || null;
 }
 
 export async function getAllUserMessages(userId: string): Promise<{ role: string; content: string; created_at: string }[]> {
@@ -68,38 +78,4 @@ export async function getAllUserMessages(userId: string): Promise<{ role: string
     .order('created_at', { ascending: true });
 
   return (messages ?? []) as { role: string; content: string; created_at: string }[];
-}
-
-// ────────────────────────────────────────────
-// Save helpers
-// ────────────────────────────────────────────
-
-export async function saveProdBriefing(userId: string, sessionId: string | null, preparation: SessionPreparation) {
-  const supabase = createAdminClient();
-
-  // Get current version number
-  let version = 1;
-  try {
-    const { data: latest } = await supabase
-      .from('coaching_briefings')
-      .select('version')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    if (latest) version = (latest.version || 0) + 1;
-  } catch { /* first briefing */ }
-
-  await supabase
-    .from('coaching_briefings')
-    .insert({
-      user_id: userId,
-      session_id: sessionId,
-      briefing_content: preparation.briefing,
-      hypothesis: preparation.hypothesis,
-      leverage_point: preparation.leveragePoint,
-      curiosities: preparation.curiosities,
-      growth_edges: {},
-      version,
-    });
 }

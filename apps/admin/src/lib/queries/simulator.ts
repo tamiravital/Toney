@@ -106,7 +106,6 @@ export async function deleteSimProfile(id: string): Promise<void> {
 
   await supabase.from('sim_runs').delete().eq('sim_profile_id', id);
   await supabase.from('sim_sessions').delete().eq('user_id', id);
-  await supabase.from('sim_coaching_briefings').delete().eq('user_id', id);
   await supabase.from('sim_rewire_cards').delete().eq('user_id', id);
   await supabase.from('sim_wins').delete().eq('user_id', id);
   try { await supabase.from('sim_user_knowledge').delete().eq('user_id', id); } catch { /* table may not exist yet */ }
@@ -147,28 +146,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     source_user_id: userId,
   });
 
-  // Copy briefing, cards, and wins
-  try {
-    const { data: briefing } = await supabase
-      .from('coaching_briefings')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    if (briefing) {
-      await supabase.from('sim_coaching_briefings').insert({
-        user_id: simProfile.id,
-        briefing_content: briefing.briefing_content,
-        hypothesis: briefing.hypothesis,
-        leverage_point: briefing.leverage_point,
-        curiosities: briefing.curiosities,
-        growth_edges: {},
-        version: briefing.version,
-      });
-    }
-  } catch { /* no briefing */ }
-
+  // Copy cards and wins (no briefing copy — coaching plan fields are on session rows now)
   try {
     const { data: cards } = await supabase
       .from('rewire_cards')

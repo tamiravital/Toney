@@ -1,26 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, RewireCard, Win, CoachingBriefing, SystemPromptBlock, FocusArea, SessionSuggestion } from '@toney/types';
-import { prepareSession, SessionPreparation } from '../strategist/prepareSession';
-import { assembleBriefingDocument } from '../strategist/assembleBriefing';
-import { buildSystemPromptFromBriefing, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from '../prompts/systemPromptBuilder';
+import { Profile, RewireCard, Win, SystemPromptBlock, FocusArea, SessionSuggestion } from '@toney/types';
+import { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from '../prompts/systemPromptBuilder';
 
 // ────────────────────────────────────────────
 // Open Session Pipeline
 // ────────────────────────────────────────────
 // Orchestrates everything that happens when a session starts:
 //
-// Fast path (selectedSuggestion exists + not first session):
-//   1. assembleBriefingDocument() — pure code, instant, no LLM
-//   2. Build system prompt from assembled briefing + suggestion opening
-//   3. Stream Coach opening message using suggestion's openingDirection
+// 1. buildSystemPrompt() — pure code, instant, no LLM
+// 2. Append opening block (suggestion-aware or first-session)
+// 3. Stream/generate the Coach's opening message (Sonnet)
 //
-// Standard path (first session or no suggestions):
-//   1. prepareSession() — Sonnet, plans from understanding narrative
-//   2. Build the Coach's system prompt from the briefing
-//   3. Generate the Coach's opening message (Sonnet) — can stream or block
+// All paths are now pure code + 1 Sonnet call (opening message only).
+// No prepareSession() LLM call needed.
 //
 // Pure function — no DB, no framework.
-// The caller handles: loading data, creating session row, saving briefing + message.
+// The caller handles: loading data, creating session row, saving message.
 // Reusable by: mobile API routes, admin simulator, future native backend.
 
 export interface OpenSessionInput {
@@ -32,31 +27,25 @@ export interface OpenSessionInput {
   recentWins?: Win[] | null;
   /** User's rewire cards */
   rewireCards?: RewireCard[] | null;
-  /** Previous briefing (for continuity — its existence means not first session) */
-  previousBriefing?: CoachingBriefing | null;
-  /** Recent session notes as stored JSON strings (most recent first) */
-  recentSessionNotes?: string[] | null;
+  /** Whether this is the first session (no previous session exists) */
+  isFirstSession?: boolean;
   /** Active focus areas */
   activeFocusAreas?: FocusArea[] | null;
-  /** Pre-generated suggestion to use (skips prepareSession Sonnet call) */
+  /** Pre-generated suggestion to use (determines hypothesis/leverage/curiosities) */
   selectedSuggestion?: SessionSuggestion | null;
 }
 
 export interface PlanSessionOutput {
-  /** The assembled briefing content the Coach reads */
-  briefingContent: string;
-  /** One-sentence coaching thesis */
-  hypothesis: string;
-  /** Strength + goal + what's in the way */
-  leveragePoint: string;
-  /** What to explore this session */
-  curiosities: string;
+  /** One-sentence coaching thesis (from suggestion or null) */
+  hypothesis: string | null;
+  /** Strength + goal + what's in the way (from suggestion or null) */
+  leveragePoint: string | null;
+  /** What to explore this session (from suggestion or null) */
+  curiosities: string | null;
+  /** How to open (from suggestion or null) */
+  openingDirection: string | null;
   /** System prompt blocks for the Coach (ready to use) */
   systemPromptBlocks: SystemPromptBlock[];
-  /** Tension type determined by Strategist (first session, from seed) */
-  tensionType?: string | null;
-  /** Secondary tension type (first session) */
-  secondaryTensionType?: string | null;
 }
 
 export interface OpenSessionOutput extends PlanSessionOutput {
@@ -65,60 +54,46 @@ export interface OpenSessionOutput extends PlanSessionOutput {
 }
 
 /**
- * Step 1+2: Prepare the session and build system prompt blocks.
- * Does NOT generate the opening message — caller can stream that separately.
+ * Step 1: Build system prompt blocks from suggestion + profile + DB context.
+ * Pure code — no LLM call. Always instant.
  *
- * Fast path: if selectedSuggestion is provided AND it's not the first session,
- * uses assembleBriefingDocument() (pure code, instant) instead of prepareSession() (Sonnet).
+ * Does NOT generate the opening message — caller can stream that separately.
  */
-export async function planSessionStep(input: OpenSessionInput): Promise<PlanSessionOutput> {
-  const isFirstSession = !input.previousBriefing;
+export function planSessionStep(input: OpenSessionInput): PlanSessionOutput {
+  const isFirstSession = input.isFirstSession ?? false;
+  const suggestion = input.selectedSuggestion;
 
-  // ── Fast path: use pre-generated suggestion ──
-  if (input.selectedSuggestion && !isFirstSession && input.understanding) {
-    const briefingContent = assembleBriefingDocument({
-      understanding: input.understanding,
-      profile: input.profile,
-      suggestion: input.selectedSuggestion,
-      rewireCards: (input.rewireCards || undefined) as RewireCard[] | undefined,
-      recentWins: (input.recentWins || undefined) as Win[] | undefined,
-      activeFocusAreas: (input.activeFocusAreas || undefined) as FocusArea[] | undefined,
-    });
+  // Extract coaching plan from suggestion (or null for first session / no suggestion)
+  const hypothesis = suggestion?.hypothesis || null;
+  const leveragePoint = suggestion?.leveragePoint || null;
+  const curiosities = suggestion?.curiosities || null;
+  const openingDirection = suggestion?.openingDirection || null;
 
-    const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(briefingContent);
-    systemPromptBlocks.push(buildSessionOpeningFromSuggestion(input.selectedSuggestion));
-
-    return {
-      briefingContent,
-      hypothesis: input.selectedSuggestion.hypothesis,
-      leveragePoint: input.selectedSuggestion.leveragePoint,
-      curiosities: input.selectedSuggestion.curiosities,
-      systemPromptBlocks,
-    };
-  }
-
-  // ── Standard path: run Strategist (Sonnet) ──
-  const preparation: SessionPreparation = await prepareSession({
+  // Build system prompt — always pure code
+  const systemPromptBlocks: SystemPromptBlock[] = buildSystemPrompt({
+    understanding: input.understanding || '',
+    hypothesis,
+    leveragePoint,
+    curiosities,
     profile: input.profile,
-    understanding: input.understanding,
-    recentWins: input.recentWins,
-    rewireCards: input.rewireCards,
-    previousBriefing: input.previousBriefing,
-    recentSessionNotes: input.recentSessionNotes,
-    activeFocusAreas: input.activeFocusAreas,
+    rewireCards: (input.rewireCards || undefined) as RewireCard[] | undefined,
+    recentWins: (input.recentWins || undefined) as Win[] | undefined,
+    activeFocusAreas: (input.activeFocusAreas || undefined) as FocusArea[] | undefined,
   });
 
-  const systemPromptBlocks: SystemPromptBlock[] = buildSystemPromptFromBriefing(preparation.briefing);
-  systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession));
+  // Append opening block
+  if (suggestion) {
+    systemPromptBlocks.push(buildSessionOpeningFromSuggestion(suggestion));
+  } else {
+    systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession));
+  }
 
   return {
-    briefingContent: preparation.briefing,
-    hypothesis: preparation.hypothesis,
-    leveragePoint: preparation.leveragePoint,
-    curiosities: preparation.curiosities,
+    hypothesis,
+    leveragePoint,
+    curiosities,
+    openingDirection,
     systemPromptBlocks,
-    tensionType: preparation.tensionLabel,
-    secondaryTensionType: preparation.secondaryTensionLabel,
   };
 }
 
@@ -127,7 +102,7 @@ export async function planSessionStep(input: OpenSessionInput): Promise<PlanSess
  * Used by: admin simulator, tests, any non-streaming caller.
  */
 export async function openSessionPipeline(input: OpenSessionInput): Promise<OpenSessionOutput> {
-  const plan = await planSessionStep(input);
+  const plan = planSessionStep(input);
 
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,

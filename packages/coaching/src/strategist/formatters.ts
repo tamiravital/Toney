@@ -3,7 +3,7 @@ import { Profile, RewireCard, Win, FocusArea } from '@toney/types';
 // ────────────────────────────────────────────
 // Shared formatting helpers for briefing assembly
 // ────────────────────────────────────────────
-// Used by: prepareSession.ts, assembleBriefing.ts, generateSuggestions.ts
+// Used by: buildSystemPrompt(), evolveAndSuggest(), and the Coach prompt.
 // Extracted here to avoid duplication.
 
 export function formatToolkit(cards: RewireCard[]): string {
