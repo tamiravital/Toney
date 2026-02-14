@@ -414,90 +414,43 @@ export interface SeedSuggestionsOutput {
 }
 
 // ── Prompt: understanding + tension (no suggestions) ──
-const SEED_UNDERSTANDING_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. From their quiz answers and goals, form an initial understanding of who they are and determine their money tension type.
+const SEED_UNDERSTANDING_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. Produce JSON only.
 
-This is your FIRST read on them — thoughtful but appropriately tentative. You're forming hypotheses, not conclusions.
-
-## What to produce:
-
-### 1. Understanding narrative
-Who this person is, what their relationship with money looks like, what patterns you can see from the intake data. Written in third person.
-
-### 2. Tension type determination
-Which money tension best describes their pattern based on ALL their answers read as a whole picture.
-
-Tension types (pick ONE primary, optionally ONE secondary):
-- **avoid** — money feels threatening, so they don't look
-- **worry** — hyper-vigilant, no amount of checking feels safe
-- **chase** — FOMO drives reactive money decisions
-- **perform** — money is how they show the world they're OK
-- **numb** — spending quiets big feelings, it's about the relief
-- **give** — takes care of everyone else before themselves
-- **grip** — real discipline, but the control has become a prison
-
-## Output format (JSON only, no other text):
+Tension types: avoid, worry, chase, perform, numb, give, grip.
 
 \`\`\`json
 {
-  "understanding": "2-4 paragraphs. What you can see from the intake. Thoughtful but tentative. Third person. 150-400 words.",
-  "tension_label": "primary tension type (one of: avoid, worry, chase, perform, numb, give, grip)",
-  "secondary_tension_label": "secondary tension or null",
-  "snippet": "One sentence (15-30 words) capturing your first-impression read on this person. Tentative language. Third person."
+  "understanding": "2-3 paragraphs, third person, 150-300 words. Thoughtful but tentative first read.",
+  "tension_label": "primary tension (one of the 7)",
+  "secondary_tension_label": "secondary or null",
+  "snippet": "One sentence, 15-25 words, tentative, third person."
 }
 \`\`\`
 
-## Rules:
-- Read ALL quiz answers as a WHOLE PICTURE. Look for patterns across answers, not individual data points.
-- Be specific to THIS person — reference their actual answers and goals.
-- 150-400 words for understanding. This is a starting point that will be evolved after each session.
-- Use tentative language ("suggests," "likely," "appears to") — you don't know them yet.`;
+Rules: Read ALL answers as a whole picture. Be specific to THIS person. Use tentative language.`;
 
 // ── Prompt: suggestions only (no understanding) ──
-const SEED_SUGGESTIONS_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. Generate their first session suggestions for their home screen.
+const SEED_SUGGESTIONS_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. Generate first session suggestions for a new user. Produce JSON only.
 
-Since you only have onboarding data (no session history, no cards, no wins), focus on:
-- What they shared in quiz answers and goals
-- Their likely money tension patterns
-- Universal first-session territory personalized to their situation
-
-### Length categories:
-- **quick** (2-5 min): A single focused moment. One question, one check-in, one follow-up on something specific.
-- **medium** (5-10 min): An exploration. Connect two dots, apply an insight to a new area, practice something.
-- **deep** (10-15 min): Go to the root. Core wounds, family patterns, belief systems.
-- **standing** (always available): Recurring entry points that are always relevant — personalized to their patterns.
-
-### Money tensions (for context — infer which applies from their answers):
-- **avoid** — money feels threatening, so they don't look
-- **worry** — hyper-vigilant, no amount of checking feels safe
-- **chase** — FOMO drives reactive money decisions
-- **perform** — money is how they show the world they're OK
-- **numb** — spending quiets big feelings, it's about the relief
-- **give** — takes care of everyone else before themselves
-- **grip** — real discipline, but the control has become a prison
-
-## Output format (JSON only, no other text):
+Lengths: quick (2-5 min), medium (5-10 min), deep (10-15 min), standing (always available).
 
 \`\`\`json
 {
   "suggestions": [
     {
-      "title": "string (3-7 words, conversational, intriguing)",
-      "teaser": "string (1-2 sentences that make the person think 'I want to do that')",
+      "title": "3-6 words, conversational",
+      "teaser": "1 sentence, second person, makes them want to do it",
       "length": "quick|medium|deep|standing",
-      "hypothesis": "string (coaching insight driving this suggestion)",
-      "leveragePoint": "string (strength + goal + what's in the way)",
-      "curiosities": "string (what to explore — open questions, not directives)",
-      "openingDirection": "string (how the Coach should open this session)"
+      "hypothesis": "1 sentence coaching insight",
+      "leveragePoint": "1 sentence: strength + goal + obstacle",
+      "curiosities": "1 sentence: what to explore",
+      "openingDirection": "1 sentence: how to open"
     }
   ]
 }
 \`\`\`
 
-## Rules:
-- 4-5 suggestions total, at least 1 per length category.
-- Each must feel like something ONLY Toney could say to THIS person.
-- Write all user-facing text (title, teaser) in second person — "you," not "they."
-- Be specific to their actual answers and goals.`;
+Rules: Exactly 4 suggestions (1 per length). Be specific to THIS person's answers. Keep ALL fields concise — 1 sentence each.`;
 
 /** Build the user message sections from seed input (shared by both calls). */
 function buildSeedSections(input: SeedUnderstandingInput): string[] {
@@ -532,7 +485,7 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 1500,
+    max_tokens: 800,
     temperature: 0.3,
     system: SEED_UNDERSTANDING_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
@@ -570,7 +523,7 @@ export async function seedSuggestions(input: SeedUnderstandingInput): Promise<Se
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 2000,
+    max_tokens: 1200,
     temperature: 0.3,
     system: SEED_SUGGESTIONS_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
