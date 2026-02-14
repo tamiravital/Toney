@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { seedUnderstanding, evolveUnderstanding } from '@toney/coaching';
+import { seedUnderstanding, seedSuggestions, evolveUnderstanding } from '@toney/coaching';
 import type { Profile, Win, RewireCard } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
@@ -48,14 +48,20 @@ export async function runFullIntel(
     ? formatAnswersReadable((profile as Profile).onboarding_answers as Record<string, string>)
     : '';
 
-  const seedResult = await seedUnderstanding({
+  const seedInput = {
     quizAnswers,
     whatBroughtYou: (profile as Profile).what_brought_you || undefined,
     emotionalWhy: (profile as Profile).emotional_why || undefined,
     lifeStage: (profile as Profile).life_stage || undefined,
     incomeType: (profile as Profile).income_type || undefined,
     relationshipStatus: (profile as Profile).relationship_status || undefined,
-  });
+  };
+
+  // Two parallel Sonnet calls
+  const [seedResult, sugResult] = await Promise.all([
+    seedUnderstanding(seedInput),
+    seedSuggestions(seedInput),
+  ]);
 
   let understanding: string = seedResult.understanding;
 
@@ -70,11 +76,11 @@ export async function runFullIntel(
   }
 
   // Save initial suggestions from seed (if any)
-  if (seedResult.suggestions && seedResult.suggestions.length > 0) {
+  if (sugResult.suggestions.length > 0) {
     try {
       await supabase.from('session_suggestions').insert({
         user_id: userId,
-        suggestions: seedResult.suggestions,
+        suggestions: sugResult.suggestions,
       });
     } catch { /* non-critical */ }
   }

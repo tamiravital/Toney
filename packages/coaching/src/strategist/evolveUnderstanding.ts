@@ -379,7 +379,10 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
 // Seed Understanding — Initial narrative from onboarding
 // ────────────────────────────────────────────
 // Called once after onboarding completes.
-// Produces the initial understanding + tension determination + first suggestions.
+// Split into TWO parallel Sonnet calls for speed:
+//   seedUnderstanding() — narrative + tension + snippet
+//   seedSuggestions()   — 4-5 session suggestions with coaching plan fields
+// Both read the same quiz answers independently — no dependency between them.
 
 export interface SeedUnderstandingInput {
   /** Formatted readable quiz answers */
@@ -403,11 +406,15 @@ export interface SeedUnderstandingOutput {
   secondaryTensionLabel?: string | null;
   /** One-sentence home screen snippet: first impression */
   snippet?: string;
+}
+
+export interface SeedSuggestionsOutput {
   /** Initial session suggestions (4-5) */
   suggestions: SessionSuggestion[];
 }
 
-const SEED_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. From their quiz answers and goals, form an initial understanding AND generate their first session suggestions.
+// ── Prompt: understanding + tension (no suggestions) ──
+const SEED_UNDERSTANDING_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. From their quiz answers and goals, form an initial understanding of who they are and determine their money tension type.
 
 This is your FIRST read on them — thoughtful but appropriately tentative. You're forming hypotheses, not conclusions.
 
@@ -428,17 +435,6 @@ Tension types (pick ONE primary, optionally ONE secondary):
 - **give** — takes care of everyone else before themselves
 - **grip** — real discipline, but the control has become a prison
 
-### 3. Session suggestions (4-5)
-Generate initial session suggestions to show on their home screen. Since you only have onboarding data (no session history, no cards, no wins), focus on:
-- What they shared in quiz answers and goals
-- Their likely tension patterns
-- Universal first-session territory personalized to their situation
-- Mix of lengths: at least 1 quick, 1-2 medium, 1 deep, 1 standing
-
-Suggestion format: each needs title (3-7 words, conversational), teaser (1-2 sentences, "I want to tap this"), length, hypothesis, leveragePoint, curiosities, openingDirection.
-
-Write all user-facing text (title, teaser) in second person — "you," not "they."
-
 ## Output format (JSON only, no other text):
 
 \`\`\`json
@@ -446,18 +442,7 @@ Write all user-facing text (title, teaser) in second person — "you," not "they
   "understanding": "2-4 paragraphs. What you can see from the intake. Thoughtful but tentative. Third person. 150-400 words.",
   "tension_label": "primary tension type (one of: avoid, worry, chase, perform, numb, give, grip)",
   "secondary_tension_label": "secondary tension or null",
-  "snippet": "One sentence (15-30 words) capturing your first-impression read on this person. Tentative language. Third person.",
-  "suggestions": [
-    {
-      "title": "string (3-7 words)",
-      "teaser": "string (1-2 sentences)",
-      "length": "quick|medium|deep|standing",
-      "hypothesis": "string",
-      "leveragePoint": "string",
-      "curiosities": "string",
-      "openingDirection": "string"
-    }
-  ]
+  "snippet": "One sentence (15-30 words) capturing your first-impression read on this person. Tentative language. Third person."
 }
 \`\`\`
 
@@ -465,14 +450,57 @@ Write all user-facing text (title, teaser) in second person — "you," not "they
 - Read ALL quiz answers as a WHOLE PICTURE. Look for patterns across answers, not individual data points.
 - Be specific to THIS person — reference their actual answers and goals.
 - 150-400 words for understanding. This is a starting point that will be evolved after each session.
-- Use tentative language ("suggests," "likely," "appears to") — you don't know them yet.
-- 4-5 suggestions, personalized to their onboarding answers and tension.`;
+- Use tentative language ("suggests," "likely," "appears to") — you don't know them yet.`;
 
-export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<SeedUnderstandingOutput> {
-  const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+// ── Prompt: suggestions only (no understanding) ──
+const SEED_SUGGESTIONS_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. A new person just completed onboarding. Generate their first session suggestions for their home screen.
 
+Since you only have onboarding data (no session history, no cards, no wins), focus on:
+- What they shared in quiz answers and goals
+- Their likely money tension patterns
+- Universal first-session territory personalized to their situation
+
+### Length categories:
+- **quick** (2-5 min): A single focused moment. One question, one check-in, one follow-up on something specific.
+- **medium** (5-10 min): An exploration. Connect two dots, apply an insight to a new area, practice something.
+- **deep** (10-15 min): Go to the root. Core wounds, family patterns, belief systems.
+- **standing** (always available): Recurring entry points that are always relevant — personalized to their patterns.
+
+### Money tensions (for context — infer which applies from their answers):
+- **avoid** — money feels threatening, so they don't look
+- **worry** — hyper-vigilant, no amount of checking feels safe
+- **chase** — FOMO drives reactive money decisions
+- **perform** — money is how they show the world they're OK
+- **numb** — spending quiets big feelings, it's about the relief
+- **give** — takes care of everyone else before themselves
+- **grip** — real discipline, but the control has become a prison
+
+## Output format (JSON only, no other text):
+
+\`\`\`json
+{
+  "suggestions": [
+    {
+      "title": "string (3-7 words, conversational, intriguing)",
+      "teaser": "string (1-2 sentences that make the person think 'I want to do that')",
+      "length": "quick|medium|deep|standing",
+      "hypothesis": "string (coaching insight driving this suggestion)",
+      "leveragePoint": "string (strength + goal + what's in the way)",
+      "curiosities": "string (what to explore — open questions, not directives)",
+      "openingDirection": "string (how the Coach should open this session)"
+    }
+  ]
+}
+\`\`\`
+
+## Rules:
+- 4-5 suggestions total, at least 1 per length category.
+- Each must feel like something ONLY Toney could say to THIS person.
+- Write all user-facing text (title, teaser) in second person — "you," not "they."
+- Be specific to their actual answers and goals.`;
+
+/** Build the user message sections from seed input (shared by both calls). */
+function buildSeedSections(input: SeedUnderstandingInput): string[] {
   const sections: string[] = [];
 
   sections.push(`## Their Quiz Answers\n${input.quizAnswers}`);
@@ -490,18 +518,65 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
     sections.push(`## Life Context\n${context.join('\n')}`);
   }
 
-  const userMessage = `Form an initial understanding of this person from their onboarding data, then generate their first session suggestions.\n\n${sections.join('\n\n')}`;
+  return sections;
+}
+
+/** Seed understanding: narrative + tension + snippet. One Sonnet call. */
+export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<SeedUnderstandingOutput> {
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  const sections = buildSeedSections(input);
+  const userMessage = `Form an initial understanding of this person from their onboarding data.\n\n${sections.join('\n\n')}`;
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 3000,
+    max_tokens: 1500,
     temperature: 0.3,
-    system: SEED_PROMPT,
+    system: SEED_UNDERSTANDING_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
   });
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+  const jsonStr = jsonMatch ? jsonMatch[1] : text;
 
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return {
+      understanding: parsed.understanding || '',
+      tensionLabel: parsed.tension_label || 'avoid',
+      secondaryTensionLabel: parsed.secondary_tension_label || null,
+      snippet: parsed.snippet || undefined,
+    };
+  } catch {
+    return {
+      understanding: '',
+      tensionLabel: 'avoid',
+      secondaryTensionLabel: null,
+    };
+  }
+}
+
+/** Seed suggestions: 4-5 session suggestions with coaching plan fields. One Sonnet call. */
+export async function seedSuggestions(input: SeedUnderstandingInput): Promise<SeedSuggestionsOutput> {
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  const sections = buildSeedSections(input);
+  const userMessage = `Generate initial session suggestions for this person based on their onboarding data.\n\n${sections.join('\n\n')}`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 2000,
+    temperature: 0.3,
+    system: SEED_SUGGESTIONS_PROMPT,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   const jsonStr = jsonMatch ? jsonMatch[1] : text;
 
@@ -521,20 +596,8 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
       }));
     }
 
-    return {
-      understanding: parsed.understanding || '',
-      tensionLabel: parsed.tension_label || 'avoid',
-      secondaryTensionLabel: parsed.secondary_tension_label || null,
-      snippet: parsed.snippet || undefined,
-      suggestions,
-    };
+    return { suggestions };
   } catch {
-    // Parse failed — return minimal defaults
-    return {
-      understanding: '',
-      tensionLabel: 'avoid',
-      secondaryTensionLabel: null,
-      suggestions: [],
-    };
+    return { suggestions: [] };
   }
 }

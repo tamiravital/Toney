@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveContext } from '@/lib/supabase/sim';
-import { seedUnderstanding } from '@toney/coaching';
+import { seedUnderstanding, seedSuggestions } from '@toney/coaching';
 import { formatAnswersReadable, questions } from '@toney/constants';
 
-// Seed understanding + suggestions: 1 Sonnet call (merged)
+// Two parallel Sonnet calls + DB saves
 export const maxDuration = 60;
 
 /**
  * POST /api/seed
  *
- * Called after onboarding completes. Seeds profiles.understanding
- * so the Coach always has a narrative to read.
- * Also determines tension type and generates initial session suggestions.
- * All in ONE Sonnet call (seedUnderstanding now returns suggestions).
+ * Called after onboarding completes. Two parallel Sonnet calls:
+ *   1. seedUnderstanding() — narrative + tension + snippet
+ *   2. seedSuggestions()   — 4-5 session suggestions with coaching plan fields
+ *
+ * Accepts quiz data in request body (skips DB read) or falls back to loading from profile.
+ * Returns suggestions directly in response (client skips GET /api/suggestions).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -21,66 +23,98 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ── Load profile ──
-    const { data: profile } = await ctx.supabase
-      .from(ctx.table('profiles'))
-      .select('onboarding_answers, what_brought_you, emotional_why, life_stage, income_type, relationship_status')
-      .eq('id', ctx.userId)
-      .single();
+    // ── Get quiz data: from request body (fast) or DB (fallback) ──
+    let readableAnswers = '';
+    let whatBroughtYou: string | null = null;
+    let emotionalWhy: string | null = null;
+    let lifeStage: string | null = null;
+    let incomeType: string | null = null;
+    let relationshipStatus: string | null = null;
+    let onboardingAnswers: Record<string, string> | null = null;
 
-    if (!profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    try {
+      const body = await request.clone().json();
+      if (body.answers && Object.keys(body.answers).length > 0) {
+        onboardingAnswers = body.answers;
+        readableAnswers = formatAnswersReadable(body.answers);
+        whatBroughtYou = body.whatBroughtYou || null;
+        emotionalWhy = body.emotionalWhy || null;
+        lifeStage = body.lifeStage || null;
+        incomeType = body.incomeType || null;
+        relationshipStatus = body.relationshipStatus || null;
+      }
+    } catch { /* no body or parse error — fall through to DB read */ }
+
+    // Fall back to DB if no body data
+    if (!readableAnswers) {
+      const { data: profile } = await ctx.supabase
+        .from(ctx.table('profiles'))
+        .select('onboarding_answers, what_brought_you, emotional_why, life_stage, income_type, relationship_status')
+        .eq('id', ctx.userId)
+        .single();
+
+      if (!profile) {
+        return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+      }
+
+      onboardingAnswers = profile.onboarding_answers as Record<string, string> | null;
+      readableAnswers = onboardingAnswers
+        ? formatAnswersReadable(onboardingAnswers)
+        : '';
+      whatBroughtYou = profile.what_brought_you;
+      emotionalWhy = profile.emotional_why;
+      lifeStage = profile.life_stage;
+      incomeType = profile.income_type;
+      relationshipStatus = profile.relationship_status;
     }
-
-    // ── Format quiz answers ──
-    const readableAnswers = profile.onboarding_answers
-      ? formatAnswersReadable(profile.onboarding_answers as Record<string, string>)
-      : '';
 
     if (!readableAnswers) {
       return NextResponse.json({ error: 'No quiz answers to seed from' }, { status: 400 });
     }
 
-    // ── Seed understanding (ONE Sonnet call — produces understanding + tension + suggestions) ──
-    const result = await seedUnderstanding({
+    const seedInput = {
       quizAnswers: readableAnswers,
-      whatBroughtYou: profile.what_brought_you,
-      emotionalWhy: profile.emotional_why,
-      lifeStage: profile.life_stage,
-      incomeType: profile.income_type,
-      relationshipStatus: profile.relationship_status,
-    });
+      whatBroughtYou,
+      emotionalWhy,
+      lifeStage,
+      incomeType,
+      relationshipStatus,
+    };
 
-    // ── Save to profile ──
-    // Split into two updates: core fields that always exist, and newer columns
-    // that may not exist if migrations haven't been applied (Supabase rejects
-    // the ENTIRE update if any column is unknown).
-    const { error: coreErr } = await ctx.supabase.from(ctx.table('profiles')).update({
-      understanding: result.understanding,
-      tension_type: result.tensionLabel,
-      secondary_tension_type: result.secondaryTensionLabel || null,
-    }).eq('id', ctx.userId);
+    // ── TWO parallel Sonnet calls: understanding + suggestions ──
+    const [understandingResult, suggestionsResult] = await Promise.all([
+      seedUnderstanding(seedInput),
+      seedSuggestions(seedInput),
+    ]);
 
-    if (coreErr) {
-      console.error('[Seed] Core profile update failed:', coreErr);
-    }
-
-    // understanding_snippet may not exist on older schemas
-    if (result.snippet) {
-      const { error: snippetErr } = await ctx.supabase.from(ctx.table('profiles')).update({
-        understanding_snippet: result.snippet,
-      }).eq('id', ctx.userId);
-      if (snippetErr) {
-        console.error('[Seed] Snippet update failed (non-fatal):', snippetErr);
-      }
-    }
-
-    // ── Create focus area rows from Q7 goals ──
-    const goalsAnswer = (profile.onboarding_answers as Record<string, string>)?.goals;
-    if (goalsAnswer) {
-      const selectedValues = goalsAnswer.split(',').filter(Boolean);
-      const goalsQuestion = questions.find(q => q.id === 'goals');
-      if (goalsQuestion && selectedValues.length > 0) {
+    // ── Save all results in parallel ──
+    const saves = await Promise.all([
+      // Core profile fields
+      ctx.supabase.from(ctx.table('profiles')).update({
+        understanding: understandingResult.understanding,
+        tension_type: understandingResult.tensionLabel,
+        secondary_tension_type: understandingResult.secondaryTensionLabel || null,
+      }).eq('id', ctx.userId),
+      // Snippet (separate update — column may not exist on older schemas)
+      understandingResult.snippet
+        ? ctx.supabase.from(ctx.table('profiles')).update({
+            understanding_snippet: understandingResult.snippet,
+          }).eq('id', ctx.userId)
+        : Promise.resolve({ error: null }),
+      // Initial suggestions
+      suggestionsResult.suggestions.length > 0
+        ? ctx.supabase.from(ctx.table('session_suggestions')).insert({
+            user_id: ctx.userId,
+            suggestions: suggestionsResult.suggestions,
+          })
+        : Promise.resolve({ error: null }),
+      // Focus area rows from Q7 goals
+      (async () => {
+        const goalsAnswer = onboardingAnswers?.goals;
+        if (!goalsAnswer) return { error: null };
+        const selectedValues = goalsAnswer.split(',').filter(Boolean);
+        const goalsQuestion = questions.find(q => q.id === 'goals');
+        if (!goalsQuestion || selectedValues.length === 0) return { error: null };
         const focusAreaRows = selectedValues.map(v => {
           const opt = goalsQuestion.options.find(o => o.value === v);
           return {
@@ -89,24 +123,19 @@ export async function POST(request: NextRequest) {
             source: 'onboarding' as const,
           };
         });
-        await ctx.supabase.from(ctx.table('focus_areas')).insert(focusAreaRows);
-      }
-    }
+        return ctx.supabase.from(ctx.table('focus_areas')).insert(focusAreaRows);
+      })(),
+    ]);
 
-    // ── Save initial suggestions (from the same Sonnet call — no separate LLM call) ──
-    if (result.suggestions && result.suggestions.length > 0) {
-      const { error: suggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
-        user_id: ctx.userId,
-        suggestions: result.suggestions,
-      });
-      if (suggestionsErr) {
-        console.error('[Seed] Suggestions save failed (non-fatal):', suggestionsErr);
-      }
-    }
+    if (saves[0].error) console.error('[Seed] Core profile update failed:', saves[0].error);
+    if (saves[1].error) console.error('[Seed] Snippet update failed (non-fatal):', saves[1].error);
+    if (saves[2].error) console.error('[Seed] Suggestions save failed (non-fatal):', saves[2].error);
+    if (saves[3].error) console.error('[Seed] Focus areas save failed (non-fatal):', saves[3].error);
 
     return NextResponse.json({
-      tensionType: result.tensionLabel,
-      secondaryTensionType: result.secondaryTensionLabel,
+      tensionType: understandingResult.tensionLabel,
+      secondaryTensionType: understandingResult.secondaryTensionLabel,
+      suggestions: suggestionsResult.suggestions,
     });
   } catch (error) {
     console.error('Seed understanding error:', error);

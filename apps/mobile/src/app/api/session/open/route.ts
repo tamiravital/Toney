@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
-import { planSessionStep, closeSessionPipeline, seedUnderstanding } from '@toney/coaching';
+import { planSessionStep, closeSessionPipeline, seedUnderstanding, seedSuggestions } from '@toney/coaching';
 import { Profile, RewireCard, Win, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
@@ -105,14 +105,20 @@ export async function POST(request: NextRequest) {
           : '';
 
         if (readableAnswers) {
-          const seedResult = await seedUnderstanding({
+          const seedInput = {
             quizAnswers: readableAnswers,
             whatBroughtYou: profile.what_brought_you,
             emotionalWhy: profile.emotional_why,
             lifeStage: profile.life_stage,
             incomeType: profile.income_type,
             relationshipStatus: profile.relationship_status,
-          });
+          };
+
+          // Two parallel Sonnet calls
+          const [seedResult, sugResult] = await Promise.all([
+            seedUnderstanding(seedInput),
+            seedSuggestions(seedInput),
+          ]);
 
           profile.understanding = seedResult.understanding;
 
@@ -129,10 +135,10 @@ export async function POST(request: NextRequest) {
           }
 
           // Save suggestions from seed (if any)
-          if (seedResult.suggestions.length > 0) {
+          if (sugResult.suggestions.length > 0) {
             await ctx.supabase.from(ctx.table('session_suggestions')).insert({
               user_id: ctx.userId,
-              suggestions: seedResult.suggestions,
+              suggestions: sugResult.suggestions,
             });
           }
 

@@ -1,6 +1,6 @@
 export { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from './prompts/systemPromptBuilder';
 export type { BuildSystemPromptInput } from './prompts/systemPromptBuilder';
-export { evolveUnderstanding, evolveAndSuggest, seedUnderstanding } from './strategist';
+export { evolveUnderstanding, evolveAndSuggest, seedUnderstanding, seedSuggestions } from './strategist';
 export type {
   EvolveUnderstandingInput,
   EvolveUnderstandingOutput,
@@ -8,6 +8,7 @@ export type {
   EvolveAndSuggestOutput,
   SeedUnderstandingInput,
   SeedUnderstandingOutput,
+  SeedSuggestionsOutput,
 } from './strategist';
 export { detectSessionBoundary } from './session';
 export type { SessionBoundary } from './session';

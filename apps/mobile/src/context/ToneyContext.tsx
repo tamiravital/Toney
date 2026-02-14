@@ -1524,7 +1524,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       setSeedingInProgress(true);
 
       try {
-        const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
+        // Pass quiz data directly — seed skips DB read
+        const seedRes = await fetch(buildApiUrl('/api/seed'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers }),
+        });
         if (!seedRes.ok) {
           console.error('[Sim] seed failed:', seedRes.status, await seedRes.text().catch(() => ''));
         } else {
@@ -1541,13 +1546,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             };
             setIdentifiedTension(tension);
           }
-        }
-
-        // Load suggestions that seed just created
-        const sugRes = await fetch(buildApiUrl('/api/suggestions'));
-        if (sugRes.ok) {
-          const { suggestions: s } = await sugRes.json();
-          if (Array.isArray(s) && s.length > 0) setSuggestions(s);
+          // Suggestions returned directly in seed response — no extra API call
+          if (Array.isArray(seedData.suggestions) && seedData.suggestions.length > 0) {
+            setSuggestions(seedData.suggestions);
+          }
         }
       } catch (err) {
         console.error('[Sim] seed threw:', err);
@@ -1577,9 +1579,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           setActiveTab('chat');
           setSeedingInProgress(true);
 
-          // Seed understanding — determines tension + creates initial narrative + suggestions
+          // Seed understanding — pass quiz data directly, get suggestions back
           try {
-            const seedRes = await fetch(buildApiUrl('/api/seed'), { method: 'POST' });
+            const seedRes = await fetch(buildApiUrl('/api/seed'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ answers }),
+            });
             if (seedRes.ok) {
               const seedData = await seedRes.json();
               if (seedData.tensionType) {
@@ -1595,13 +1601,10 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 saveJSON('toney_tension', tension);
                 setIdentifiedTension(tension);
               }
-            }
-
-            // Load suggestions that seed just created
-            const sugRes = await fetch(buildApiUrl('/api/suggestions'));
-            if (sugRes.ok) {
-              const { suggestions: s } = await sugRes.json();
-              if (Array.isArray(s) && s.length > 0) setSuggestions(s);
+              // Suggestions returned directly — no extra API call
+              if (Array.isArray(seedData.suggestions) && seedData.suggestions.length > 0) {
+                setSuggestions(seedData.suggestions);
+              }
             }
           } catch {
             // Non-fatal — session open handles missing understanding
