@@ -17,11 +17,15 @@ export const maxDuration = 60;
  * Returns suggestions directly in response (client skips GET /api/suggestions).
  */
 export async function POST(request: NextRequest) {
+  const t0 = Date.now();
+  const timing = (label: string) => console.log(`[seed] ${label}: ${Date.now() - t0}ms`);
+
   try {
     const ctx = await resolveContext(request);
     if (!ctx) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    timing('auth');
 
     // ── Get quiz data: from request body (fast) or DB (fallback) ──
     let readableAnswers = '';
@@ -81,11 +85,14 @@ export async function POST(request: NextRequest) {
       relationshipStatus,
     };
 
+    timing('input ready');
+
     // ── TWO parallel Sonnet calls: understanding + suggestions ──
     const [understandingResult, suggestionsResult] = await Promise.all([
       seedUnderstanding(seedInput),
       seedSuggestions(seedInput),
     ]);
+    timing('both Sonnet calls complete');
 
     // ── Save all results in parallel ──
     const saves = await Promise.all([
@@ -126,6 +133,8 @@ export async function POST(request: NextRequest) {
         return ctx.supabase.from(ctx.table('focus_areas')).insert(focusAreaRows);
       })(),
     ]);
+
+    timing('DB saves complete');
 
     if (saves[0].error) console.error('[Seed] Core profile update failed:', saves[0].error);
     if (saves[1].error) console.error('[Seed] Snippet update failed (non-fatal):', saves[1].error);
