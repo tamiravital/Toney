@@ -1,222 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { Brain, RotateCcw, Lightbulb, ClipboardList, MessageCircle, Sparkles, Pencil, Trash2, X, Target } from 'lucide-react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import { useState, useEffect, useCallback } from 'react';
+import { Pencil, Trash2, X } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { RewireCardCategory, Insight } from '@toney/types';
-import { ComponentType, ComponentPropsWithoutRef } from 'react';
-
-const mdComponents: Components = {
-  p: (props: ComponentPropsWithoutRef<'p'>) => <p className="text-sm text-gray-700 leading-relaxed mb-2 last:mb-0" {...props} />,
-  strong: (props: ComponentPropsWithoutRef<'strong'>) => <strong className="font-semibold text-gray-900" {...props} />,
-  em: (props: ComponentPropsWithoutRef<'em'>) => <em className="italic" {...props} />,
-  ul: (props: ComponentPropsWithoutRef<'ul'>) => <ul className="list-disc pl-4 space-y-1 mb-2 last:mb-0" {...props} />,
-  ol: (props: ComponentPropsWithoutRef<'ol'>) => <ol className="list-decimal pl-4 space-y-1 mb-2 last:mb-0" {...props} />,
-  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm text-gray-700 leading-relaxed" {...props} />,
-};
-
-type Category = 'all' | RewireCardCategory;
-
-interface CategoryConfig {
-  id: Category;
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-  color: string;
-  bgColor: string;
-}
-
-const categories: CategoryConfig[] = [
-  { id: 'all', label: 'All', icon: Sparkles, color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
-  { id: 'reframe', label: 'Reframes', icon: Brain, color: 'text-purple-600', bgColor: 'bg-purple-50' },
-  { id: 'truth', label: 'Truths', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
-  { id: 'plan', label: 'Plans', icon: ClipboardList, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { id: 'practice', label: 'Practices', icon: RotateCcw, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { id: 'conversation_kit', label: 'Kits', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
-];
-
-const cardStyles: Record<RewireCardCategory, { shell: string; accent: string; iconBg: string }> = {
-  reframe: {
-    shell: 'bg-white border border-purple-100',
-    accent: 'text-purple-600',
-    iconBg: 'bg-purple-50',
-  },
-  truth: {
-    shell: 'bg-gradient-to-br from-amber-50/80 to-white border border-amber-100/60',
-    accent: 'text-amber-600',
-    iconBg: 'bg-amber-100',
-  },
-  plan: {
-    shell: 'bg-white border border-blue-100',
-    accent: 'text-blue-600',
-    iconBg: 'bg-blue-50',
-  },
-  practice: {
-    shell: 'bg-white border border-green-100',
-    accent: 'text-green-600',
-    iconBg: 'bg-green-50',
-  },
-  conversation_kit: {
-    shell: 'bg-white border border-teal-100',
-    accent: 'text-teal-600',
-    iconBg: 'bg-teal-50',
-  },
-};
-
-const categoryLabels: Record<RewireCardCategory, string> = {
-  reframe: 'Reframe',
-  truth: 'Truth',
-  plan: 'Plan',
-  practice: 'Practice',
-  conversation_kit: 'Conversation Kit',
-};
-
-const categoryHints: Record<RewireCardCategory, string> = {
-  reframe: 'Will display as a new perspective',
-  truth: 'First line will be highlighted as your truth',
-  plan: 'Numbered steps will be formatted automatically',
-  practice: 'Will display as an action to try',
-  conversation_kit: 'Will display as a conversation starter',
-};
-
-const emptyStates: Record<Category, { title: string; desc: string }> = {
-  all: {
-    title: 'No insights saved yet',
-    desc: 'When Toney shares something that resonates, tap the bookmark to save it here.',
-  },
-  reframe: {
-    title: 'No reframes yet',
-    desc: 'Reframes are new ways to see old beliefs. They\'ll appear here when you save one.',
-  },
-  truth: {
-    title: 'No truths yet',
-    desc: 'Truths are things you realize about yourself. Save them when they come up in conversation.',
-  },
-  plan: {
-    title: 'No plans yet',
-    desc: 'Plans are concrete strategies with steps. Toney will suggest them as you go deeper.',
-  },
-  practice: {
-    title: 'No practices yet',
-    desc: 'Practices are actions to try between sessions. They build new money habits.',
-  },
-  conversation_kit: {
-    title: 'No conversation kits yet',
-    desc: 'Kits help you talk about money with others. Ask Toney for one anytime.',
-  },
-};
-
-function guessCategory(content: string): RewireCardCategory {
-  const lower = content.toLowerCase();
-  if (lower.includes('step 1') || lower.includes('step 2') || lower.includes('1)') || (lower.includes('1.') && lower.includes('2.'))) return 'plan';
-  if (lower.includes('every day') || lower.includes('each time') || lower.includes('before any') || lower.includes('when you') || lower.includes('one breath') || lower.includes('pause')) return 'practice';
-  if (lower.includes('realize') || lower.includes('truth') || lower.includes('actually') || lower.includes('the real')) return 'truth';
-  if (lower.includes('conversation') || lower.includes('money talk') || lower.includes('approach kit')) return 'conversation_kit';
-  return 'reframe';
-}
-
-// ── Card content with category-specific styling + markdown ──
-
-const categoryWrapperStyles: Record<string, string> = {
-  reframe: 'pl-3 border-l-2 border-purple-200',
-  practice: 'bg-green-50/60 rounded-xl px-3.5 py-3',
-  conversation_kit: 'bg-teal-50/50 rounded-xl px-4 py-3',
-};
-
-function CardContent({ category, content }: { category: RewireCardCategory; content: string }) {
-  const wrapperClass = categoryWrapperStyles[category] || '';
-  return (
-    <div className={wrapperClass}>
-      <ReactMarkdown components={mdComponents}>{content}</ReactMarkdown>
-    </div>
-  );
-}
-
-// ── Rewire Card Component ──
-
-interface CategorizedInsight extends Insight {
-  category: RewireCardCategory;
-  is_focus?: boolean;
-}
-
-function RewireCard({
-  insight,
-  onEdit,
-  onDelete,
-  onRevisit,
-}: {
-  insight: CategorizedInsight;
-  onEdit: () => void;
-  onDelete: () => void;
-  onRevisit: () => void;
-}) {
-  const style = cardStyles[insight.category] || cardStyles.reframe;
-  const CatIcon = categories.find(c => c.id === insight.category)?.icon || Sparkles;
-
-  return (
-    <div className={`rounded-2xl p-5 ${style.shell} ${insight.is_focus ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-lg ${style.iconBg} flex items-center justify-center`}>
-            <CatIcon className={`w-4 h-4 ${style.accent}`} />
-          </div>
-          <span className={`text-xs font-semibold ${style.accent} uppercase tracking-wide`}>
-            {categoryLabels[insight.category]}
-          </span>
-          {insight.is_focus && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wide">
-              <Target className="w-3 h-3" />
-              Focus
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[11px] text-gray-300 mr-1">
-            {insight.savedAt ? new Date(insight.savedAt).toLocaleDateString() : ''}
-          </span>
-          <button
-            onClick={onEdit}
-            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-all"
-          >
-            <Pencil className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-all"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-gray-300 hover:text-red-400" />
-          </button>
-        </div>
-      </div>
-
-      {/* Title */}
-      {insight.title && (
-        <p className="text-sm font-semibold text-gray-900 mb-2">{insight.title}</p>
-      )}
-
-      {/* Category-specific content */}
-      <CardContent category={insight.category} content={insight.content} />
-
-      {/* Footer */}
-      <div className="mt-4 pt-3 border-t border-gray-50">
-        <button
-          onClick={onRevisit}
-          className={`flex items-center gap-1.5 ${style.accent} text-xs font-semibold hover:opacity-80 transition-all`}
-        >
-          <MessageCircle className="w-3.5 h-3.5" />
-          Revisit with Toney
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Main Screen ──
+import { RewireCardCategory } from '@toney/types';
+import CardDeck from './CardDeck';
+import {
+  categories,
+  categoryHints,
+  emptyStates,
+  guessCategory,
+  Sparkles,
+  type Category,
+  type CategorizedInsight,
+} from './rewireConstants';
 
 export default function RewireScreen() {
   const { savedInsights, updateInsight, deleteInsight, setActiveTab, setChatInput } = useToney();
   const [activeCategory, setActiveCategory] = useState<Category>('all');
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [editingInsight, setEditingInsight] = useState<{
     id: string;
     content: string;
@@ -224,7 +26,7 @@ export default function RewireScreen() {
   } | null>(null);
   const [deletingInsightId, setDeletingInsightId] = useState<string | null>(null);
 
-  // Use the saved category if available, otherwise guess from content
+  // Categorize insights
   const categorizedInsights: CategorizedInsight[] = savedInsights.map(insight => ({
     ...insight,
     category: (insight.category as RewireCardCategory) || guessCategory(insight.content),
@@ -233,6 +35,18 @@ export default function RewireScreen() {
   const filtered = activeCategory === 'all'
     ? categorizedInsights
     : categorizedInsights.filter(i => i.category === activeCategory);
+
+  // Reset index when category changes
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [activeCategory]);
+
+  // Clamp index when filtered list shrinks (e.g., after delete)
+  useEffect(() => {
+    if (filtered.length > 0 && currentIndex >= filtered.length) {
+      setCurrentIndex(Math.max(0, filtered.length - 1));
+    }
+  }, [filtered.length, currentIndex]);
 
   // Count per category for tab badges
   const counts: Record<Category, number> = {
@@ -243,6 +57,10 @@ export default function RewireScreen() {
     practice: categorizedInsights.filter(i => i.category === 'practice').length,
     conversation_kit: categorizedInsights.filter(i => i.category === 'conversation_kit').length,
   };
+
+  const handleIndexChange = useCallback((index: number) => {
+    setCurrentIndex(index);
+  }, []);
 
   const handleEditSave = () => {
     if (editingInsight && editingInsight.content.trim()) {
@@ -264,9 +82,9 @@ export default function RewireScreen() {
   const emptyCatConfig = categories.find(c => c.id === activeCategory);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-2 hide-scrollbar">
+    <div className="flex-1 min-h-0 flex flex-col px-6 py-6 pb-2">
       {/* Header */}
-      <div className="mb-5">
+      <div className="mb-5 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-900 mb-0.5">Your Rewire Cards</h1>
         <p className="text-sm text-gray-400">
           {categorizedInsights.length} insight{categorizedInsights.length !== 1 ? 's' : ''} saved
@@ -274,7 +92,7 @@ export default function RewireScreen() {
       </div>
 
       {/* Category filter tabs */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar">
+      <div className="flex gap-2 mb-5 overflow-x-auto pb-2 hide-scrollbar flex-shrink-0">
         {categories.map((cat) => {
           const Icon = cat.icon;
           const isActive = activeCategory === cat.id;
@@ -301,44 +119,43 @@ export default function RewireScreen() {
         })}
       </div>
 
-      {/* Cards or empty state */}
+      {/* Deck or empty state */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <div className={`w-14 h-14 mx-auto mb-4 rounded-2xl ${emptyCatConfig?.bgColor || 'bg-indigo-50'} flex items-center justify-center`}>
-            <EmptyIcon className={`w-7 h-7 ${emptyCatConfig?.color || 'text-indigo-600'}`} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className={`w-14 h-14 mx-auto mb-4 rounded-2xl ${emptyCatConfig?.bgColor || 'bg-indigo-50'} flex items-center justify-center`}>
+              <EmptyIcon className={`w-7 h-7 ${emptyCatConfig?.color || 'text-indigo-600'}`} />
+            </div>
+            <h3 className="text-base font-semibold text-gray-900 mb-1.5">
+              {emptyState.title}
+            </h3>
+            <p className="text-sm text-gray-400 mb-6 max-w-[260px] mx-auto leading-relaxed">
+              {emptyState.desc}
+            </p>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className="bg-indigo-600 text-white py-3 px-6 rounded-2xl font-semibold text-sm hover:bg-indigo-700 transition-all active:scale-[0.98]"
+            >
+              Start a conversation
+            </button>
           </div>
-          <h3 className="text-base font-semibold text-gray-900 mb-1.5">
-            {emptyState.title}
-          </h3>
-          <p className="text-sm text-gray-400 mb-6 max-w-[260px] mx-auto leading-relaxed">
-            {emptyState.desc}
-          </p>
-          <button
-            onClick={() => setActiveTab('chat')}
-            className="bg-indigo-600 text-white py-3 px-6 rounded-2xl font-semibold text-sm hover:bg-indigo-700 transition-all active:scale-[0.98]"
-          >
-            Start a conversation
-          </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((insight) => (
-            <RewireCard
-              key={insight.id}
-              insight={insight}
-              onEdit={() => setEditingInsight({
-                id: insight.id,
-                content: insight.content,
-                category: insight.category,
-              })}
-              onDelete={() => setDeletingInsightId(insight.id)}
-              onRevisit={() => {
-                setChatInput(`I want to revisit this insight: "${insight.content.substring(0, 80)}..."`);
-                setActiveTab('chat');
-              }}
-            />
-          ))}
-        </div>
+        <CardDeck
+          cards={filtered}
+          currentIndex={currentIndex}
+          onIndexChange={handleIndexChange}
+          onEdit={(card) => setEditingInsight({
+            id: card.id,
+            content: card.content,
+            category: card.category,
+          })}
+          onDelete={(id) => setDeletingInsightId(id)}
+          onRevisit={(card) => {
+            setChatInput(`I want to revisit this insight: "${card.content.substring(0, 80)}..."`);
+            setActiveTab('chat');
+          }}
+        />
       )}
 
       {/* Edit insight sheet */}
