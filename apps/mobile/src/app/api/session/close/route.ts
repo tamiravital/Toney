@@ -200,6 +200,31 @@ export async function POST(request: NextRequest) {
             console.error('Background: Suggestions save failed:', suggestionsErr);
           }
         }
+
+        // Save per-focus-area growth reflections
+        if (evolved.focusAreaReflections && evolved.focusAreaReflections.length > 0) {
+          for (const ref of evolved.focusAreaReflections) {
+            const match = activeFocusAreas.find(a => a.text === ref.focusAreaText);
+            if (!match) {
+              console.warn('Background: Focus area reflection text mismatch:', ref.focusAreaText);
+              continue;
+            }
+            const existing = (match as { reflections?: unknown[] }).reflections || [];
+            const { error: refErr } = await ctx.supabase
+              .from(ctx.table('focus_areas'))
+              .update({
+                reflections: [...existing, {
+                  date: new Date().toISOString(),
+                  sessionId,
+                  text: ref.reflection,
+                }],
+              })
+              .eq('id', match.id);
+            if (refErr) {
+              console.error('Background: Focus area reflection save failed:', refErr);
+            }
+          }
+        }
       } catch (err) {
         console.error('Background close tasks failed:', err);
       }

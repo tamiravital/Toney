@@ -48,7 +48,8 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 - Don't invent insights that didn't happen
 - Keep it concise — quality over length
 - If you have context about who this person is (below), connect this session to their larger journey — reference known patterns, note progress. Keep it natural, not clinical.
-- If you know the previous session headline, show movement or contrast — don't repeat it.`;
+- If you know the previous session headline, show movement or contrast — don't repeat it.
+- If the session made progress on any of their focus areas, weave that into the narrative naturally. Name the focus area. Help them see their intentions becoming real.`;
 
 export async function generateSessionNotes(input: SessionNotesInput): Promise<SessionNotesOutput> {
   const anthropic = new Anthropic({

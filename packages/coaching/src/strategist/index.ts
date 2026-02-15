@@ -4,6 +4,7 @@ export type {
   EvolveUnderstandingOutput,
   EvolveAndSuggestInput,
   EvolveAndSuggestOutput,
+  FocusAreaGrowthReflection,
   SeedUnderstandingInput,
   SeedUnderstandingOutput,
   SeedSuggestionsOutput,

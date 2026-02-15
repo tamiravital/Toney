@@ -107,19 +107,30 @@ export default function HomeScreen() {
         </button>
       </div>
 
-      {/* Focus areas strip */}
+      {/* Focus areas with latest reflections */}
       {focusAreas.length > 0 && (
         <div className="mb-3">
           <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2">Working on</p>
-          <div className="flex flex-wrap gap-2">
-            {focusAreas.map(area => (
-              <span
-                key={area.id}
-                className="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-full"
-              >
-                {area.text}
-              </span>
-            ))}
+          <div className="flex flex-col gap-2">
+            {focusAreas.map(area => {
+              const latestReflection = area.reflections && area.reflections.length > 0
+                ? area.reflections[area.reflections.length - 1]
+                : null;
+              return (
+                <button
+                  key={area.id}
+                  onClick={() => setActiveTab('journey')}
+                  className="w-full bg-white border border-gray-100 rounded-2xl p-4 text-left hover:border-indigo-200 transition-colors"
+                >
+                  <p className="text-sm font-semibold text-indigo-700 leading-snug">{area.text}</p>
+                  <p className="text-sm text-gray-500 leading-snug mt-1 line-clamp-2">
+                    {latestReflection
+                      ? latestReflection.text
+                      : 'Reflections appear after your next session.'}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

@@ -22,7 +22,14 @@ export function formatWins(wins: Win[]): string {
 
 export function formatFocusAreas(areas: FocusArea[]): string {
   if (!areas || areas.length === 0) return 'No focus areas set yet.';
-  return areas.map(a => `- "${a.text}"`).join('\n');
+  return areas.map(a => {
+    let line = `- "${a.text}"`;
+    if (a.reflections && a.reflections.length > 0) {
+      const latest = a.reflections[a.reflections.length - 1];
+      line += ` — Latest observation: ${latest.text}`;
+    }
+    return line;
+  }).join('\n');
 }
 
 export function formatCoachingStyle(profile: Profile): string {

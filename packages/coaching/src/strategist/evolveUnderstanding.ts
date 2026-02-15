@@ -58,9 +58,18 @@ export interface EvolveAndSuggestInput extends EvolveUnderstandingInput {
   previousSuggestionTitles?: string[];
 }
 
+export interface FocusAreaGrowthReflection {
+  /** The exact text of the focus area (used for matching) */
+  focusAreaText: string;
+  /** 1-3 sentences: what shifted, what's emerging, or what's stuck */
+  reflection: string;
+}
+
 export interface EvolveAndSuggestOutput extends EvolveUnderstandingOutput {
   /** Personalized session suggestions for the home screen (6-10) */
   suggestions: SessionSuggestion[];
+  /** Per-focus-area growth observations from this session (only for areas that were relevant) */
+  focusAreaReflections?: FocusAreaGrowthReflection[];
 }
 
 const EVOLVE_AND_SUGGEST_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. You maintain an evolving understanding of each person AND generate personalized session suggestions for their home screen.
@@ -123,6 +132,20 @@ Generate personalized session suggestions across four length categories. Each su
 
 ---
 
+## PART 3: FOCUS AREA REFLECTIONS
+
+For each active focus area that this session touched on (directly or indirectly), write a 1-3 sentence observation. These accumulate over time and show the person their own evolution.
+
+Rules:
+- Only include areas relevant to this session. Skip areas that weren't touched.
+- Second person ("You..." not "She...") — these are shown directly to the user.
+- Be specific — use what they actually said or did.
+- Note movement when visible: "You used to [X] — now you're [Y]."
+- Noting stuckness is okay: "You're still navigating [X], even as the desire to change grows."
+- Don't force it — omit areas with nothing to say.
+
+---
+
 ## Output format (JSON only, no other text):
 
 \`\`\`json
@@ -139,6 +162,12 @@ Generate personalized session suggestions across four length categories. Each su
       "leveragePoint": "string (strength + goal + obstacle)",
       "curiosities": "string (what to explore)",
       "openingDirection": "string (how the Coach should open)"
+    }
+  ],
+  "focus_area_reflections": [
+    {
+      "focus_area_text": "exact text of the focus area",
+      "reflection": "1-3 sentences, second person, specific"
     }
   ]
 }
@@ -241,6 +270,15 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
         curiosities: String(s.curiosities || ''),
         openingDirection: String(s.openingDirection || s.opening_direction || ''),
       }));
+    }
+
+    if (Array.isArray(parsed.focus_area_reflections)) {
+      result.focusAreaReflections = parsed.focus_area_reflections
+        .filter((r: Record<string, unknown>) => r.focus_area_text && r.reflection)
+        .map((r: Record<string, unknown>) => ({
+          focusAreaText: String(r.focus_area_text),
+          reflection: String(r.reflection),
+        }));
     }
 
     return result;

@@ -44,6 +44,15 @@ export interface Win {
 
 export type FocusAreaSource = 'onboarding' | 'coach' | 'user';
 
+export interface FocusAreaReflection {
+  /** When this observation was made (session close timestamp) */
+  date: string;
+  /** The session that generated this observation */
+  sessionId: string;
+  /** A 1-3 sentence narrative observation about movement/growth/stuckness */
+  text: string;
+}
+
 export interface FocusArea {
   id: string;
   user_id: string;
@@ -52,6 +61,8 @@ export interface FocusArea {
   session_id?: string | null;
   archived_at?: string | null;
   created_at: string;
+  /** Accumulated growth reflections generated at session close */
+  reflections?: FocusAreaReflection[];
 }
 
 export interface Insight {

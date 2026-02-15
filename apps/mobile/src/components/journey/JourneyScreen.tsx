@@ -1,19 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Trophy, Flame, CheckCircle, FileText, X, Layers } from 'lucide-react';
+import { Trophy, Flame, CheckCircle, FileText, X, Layers, TrendingUp } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useSessionHistory, type SessionHistoryItem, type WinHistoryItem } from '@/hooks/useSessionHistory';
 import SessionNotesView from '@/components/chat/SessionNotesView';
+import FocusAreaGrowthView from '@/components/journey/FocusAreaGrowthView';
 import { suggestedWins } from '@toney/constants';
-import type { SessionNotesOutput } from '@toney/types';
+import type { SessionNotesOutput, FocusArea } from '@toney/types';
 
 export default function JourneyScreen() {
-  const { identifiedTension, wins, streak, handleLogWin, deleteWin } = useToney();
+  const { identifiedTension, wins, streak, focusAreas, handleArchiveFocusArea, handleLogWin, deleteWin } = useToney();
   const { days, loading } = useSessionHistory();
   const [newWin, setNewWin] = useState('');
   const [showInput, setShowInput] = useState(false);
   const [viewingNotes, setViewingNotes] = useState<SessionNotesOutput | null>(null);
+  const [viewingFocusArea, setViewingFocusArea] = useState<FocusArea | null>(null);
 
   const tensionWins = identifiedTension ? suggestedWins[identifiedTension.primary] || [] : [];
 
@@ -32,6 +34,45 @@ export default function JourneyScreen() {
           <span className="text-sm font-bold text-orange-600">{streak}</span>
         </div>
       </div>
+
+      {/* Focus Areas — growth stories */}
+      {focusAreas.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Focus Areas</h3>
+          <div className="space-y-2">
+            {focusAreas.map(area => {
+              const reflectionCount = area.reflections?.length || 0;
+              const latestReflection = reflectionCount > 0
+                ? area.reflections![reflectionCount - 1]
+                : null;
+              return (
+                <button
+                  key={area.id}
+                  onClick={() => setViewingFocusArea(area)}
+                  className="w-full bg-white border border-gray-100 rounded-2xl p-4 text-left hover:border-indigo-200 transition-all active:scale-[0.99]"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <TrendingUp className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-indigo-700 leading-snug mb-0.5">{area.text}</p>
+                      <p className="text-sm text-gray-500 leading-snug line-clamp-2">
+                        {latestReflection
+                          ? latestReflection.text
+                          : 'Your growth story starts after your next session.'}
+                      </p>
+                      {reflectionCount > 1 && (
+                        <p className="text-xs text-gray-400 mt-1">{reflectionCount} reflections</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Log a win */}
       {!showInput ? (
@@ -161,6 +202,15 @@ export default function JourneyScreen() {
       {/* Session notes overlay */}
       {viewingNotes && (
         <SessionNotesView notes={viewingNotes} onDismiss={() => setViewingNotes(null)} />
+      )}
+
+      {/* Focus area growth view overlay */}
+      {viewingFocusArea && (
+        <FocusAreaGrowthView
+          focusArea={viewingFocusArea}
+          onDismiss={() => setViewingFocusArea(null)}
+          onArchive={() => handleArchiveFocusArea(viewingFocusArea.id)}
+        />
       )}
     </div>
   );
