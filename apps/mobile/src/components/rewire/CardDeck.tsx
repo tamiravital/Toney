@@ -91,14 +91,16 @@ export default function CardDeck({
 
   const animateSwipeOut = useCallback((direction: number) => {
     setIsAnimating(true);
+    // Slide current card fully off-screen
     setSwipeOffset(direction > 0 ? -SWIPE_OUT_PX : SWIPE_OUT_PX);
 
     setTimeout(() => {
       const nextIndex = currentIndex + direction;
       const clampedIndex = Math.max(0, Math.min(nextIndex, cards.length - 1));
       onIndexChange(clampedIndex);
-      setSwipeOffset(0);
+      // Reset instantly (no transition) — new card appears in place
       setIsAnimating(false);
+      setSwipeOffset(0);
     }, TRANSITION_MS);
   }, [currentIndex, cards.length, onIndexChange]);
 
@@ -168,54 +170,33 @@ export default function CardDeck({
 
   const tapGuard = useCallback(() => didSwipeRef.current, []);
 
-  // Show up to 3 cards: current + 2 behind for depth
-  const visibleCards = cards.slice(currentIndex, currentIndex + 3);
+  const currentCard = cards[currentIndex];
 
   return (
     <div className="flex-1 flex flex-col items-center min-h-0">
-      {/* Deck container */}
+      {/* Carousel container */}
       <div
-        className="relative w-full flex-1 min-h-0"
+        className="relative w-full flex-1 min-h-0 overflow-hidden"
         style={{ maxHeight: '420px' }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {visibleCards.map((card, stackIndex) => {
-          const isTop = stackIndex === 0;
-          const scale = 1 - stackIndex * 0.04;
-          const translateY = stackIndex * 8;
-          const opacity = 1 - stackIndex * 0.15;
-          const zIndex = 3 - stackIndex;
-
-          const cardStyle: React.CSSProperties = isTop
-            ? {
-                transform: `translateX(${swipeOffset}px) rotate(${swipeOffset * 0.05}deg)`,
-                transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
-                opacity,
-                zIndex,
-              }
-            : {
-                transform: `translateY(${translateY}px) scale(${scale})`,
-                transition: `transform ${TRANSITION_MS + 100}ms ease-out`,
-                opacity,
-                zIndex,
-                pointerEvents: 'none' as const,
-              };
-
-          return (
-            <FlashCard
-              key={card.id}
-              insight={card}
-              isTop={isTop}
-              style={cardStyle}
-              onTapGuard={tapGuard}
-              onEdit={() => onEdit(card)}
-              onDelete={() => onDelete(card.id)}
-              onRevisit={() => onRevisit(card)}
-            />
-          );
-        }).reverse() /* render bottom cards first so top card is last in DOM (on top) */}
+        {currentCard && (
+          <FlashCard
+            key={currentCard.id}
+            insight={currentCard}
+            isTop={true}
+            style={{
+              transform: `translateX(${swipeOffset}px)`,
+              transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
+            }}
+            onTapGuard={tapGuard}
+            onEdit={() => onEdit(currentCard)}
+            onDelete={() => onDelete(currentCard.id)}
+            onRevisit={() => onRevisit(currentCard)}
+          />
+        )}
       </div>
 
       {/* Dot indicators */}
