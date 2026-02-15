@@ -1,15 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { CategorizedInsight } from './rewireConstants';
-import { cardStyles } from './rewireConstants';
 import FlashCard from './FlashCard';
 
-const SWIPE_THRESHOLD = 50;  // px to confirm a swipe
-const LOCK_ANGLE = 30;        // degrees from vertical to ignore horizontal swipe
-const SWIPE_OUT_PX = 300;     // how far the card slides off-screen
-const TRANSITION_MS = 200;    // animation duration
-const PEEK_WIDTH = 32;        // px visible of neighbor cards on each side
+const SWIPE_THRESHOLD = 50;   // px to confirm a swipe
+const LOCK_ANGLE = 30;         // degrees from vertical to ignore horizontal swipe
+const TRANSITION_MS = 250;     // animation duration
 
 // ── Dot Indicators ──
 
@@ -91,26 +88,40 @@ export default function CardDeck({
 }: CardDeckProps) {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
   const didSwipeRef = useRef(false);
 
+  // Measure container width
+  useEffect(() => {
+    const measure = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
   const animateSwipeOut = useCallback((direction: number) => {
+    if (!containerWidth) return;
     setIsAnimating(true);
-    // Slide current card off-screen
-    setSwipeOffset(direction > 0 ? -SWIPE_OUT_PX : SWIPE_OUT_PX);
+    // Animate strip to show prev or next slot
+    setSwipeOffset(direction > 0 ? -containerWidth : containerWidth);
 
     setTimeout(() => {
-      // Wrap around for infinite loop
       const nextIndex = wrapIndex(currentIndex + direction, cards.length);
       onIndexChange(nextIndex);
-      // Reset instantly (no transition) — new card appears in place
+      // Reset instantly — strip snaps back to center slot showing NEW current
       setIsAnimating(false);
       setSwipeOffset(0);
     }, TRANSITION_MS);
-  }, [currentIndex, cards.length, onIndexChange]);
+  }, [currentIndex, cards.length, onIndexChange, containerWidth]);
 
   const animateSnapBack = useCallback(() => {
     setIsAnimating(true);
@@ -155,14 +166,12 @@ export default function CardDeck({
     isDragging.current = false;
 
     if (Math.abs(swipeOffset) > SWIPE_THRESHOLD) {
-      // Commit swipe: swipe left (negative offset) = go to next card
       const direction = swipeOffset < 0 ? 1 : -1;
       animateSwipeOut(direction);
     } else {
       animateSnapBack();
     }
 
-    // Clear swipe guard after a short delay
     setTimeout(() => { didSwipeRef.current = false; }, 100);
   }, [swipeOffset, animateSwipeOut, animateSnapBack]);
 
@@ -174,73 +183,80 @@ export default function CardDeck({
   const prevCard = hasMultiple ? cards[wrapIndex(currentIndex - 1, cards.length)] : null;
   const nextCard = hasMultiple ? cards[wrapIndex(currentIndex + 1, cards.length)] : null;
 
-  // The main card is inset by PEEK_WIDTH on each side to leave room for hints
-  const mainInset = hasMultiple ? PEEK_WIDTH : 0;
+  // Strip offset: center slot (slot 1) is at -containerWidth, plus swipeOffset for drag
+  const stripTranslateX = hasMultiple
+    ? -containerWidth + swipeOffset
+    : 0;
 
   return (
     <div className="flex-1 flex flex-col items-center min-h-0">
-      {/* Carousel container */}
+      {/* Carousel container — clips to one card width */}
       <div
+        ref={containerRef}
         className="relative w-full flex-1 min-h-0 overflow-hidden"
         style={{ maxHeight: '420px' }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* Previous card hint (left) */}
-        {prevCard && (
+        {containerWidth > 0 && (
           <div
-            className="absolute top-2 bottom-2 opacity-40 pointer-events-none"
             style={{
-              left: 0,
-              width: `${PEEK_WIDTH - 4}px`,
-              transform: `translateX(${Math.min(swipeOffset * 0.3, 0)}px)`,
+              display: 'flex',
+              width: hasMultiple ? containerWidth * 3 : containerWidth,
+              height: '100%',
+              transform: `translateX(${stripTranslateX}px)`,
               transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
             }}
           >
-            <div className={`w-full h-full rounded-2xl ${
-              cardStyles[prevCard.category].shell
-            } shadow-sm scale-[0.92]`} />
-          </div>
-        )}
+            {/* Slot 0: previous card */}
+            {hasMultiple && (
+              <div style={{ width: containerWidth, height: '100%', flexShrink: 0, position: 'relative' }}>
+                {prevCard && (
+                  <FlashCard
+                    key={`prev-${prevCard.id}`}
+                    insight={prevCard}
+                    isTop={false}
+                    onTapGuard={tapGuard}
+                    onEdit={() => onEdit(prevCard)}
+                    onDelete={() => onDelete(prevCard.id)}
+                    onRevisit={() => onRevisit(prevCard)}
+                  />
+                )}
+              </div>
+            )}
 
-        {/* Current card — inset to leave room for peek hints */}
-        {currentCard && (
-          <div
-            className="absolute top-0 bottom-0"
-            style={{
-              left: `${mainInset}px`,
-              right: `${mainInset}px`,
-              transform: `translateX(${swipeOffset}px)`,
-              transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
-            }}
-          >
-            <FlashCard
-              key={currentCard.id}
-              insight={currentCard}
-              isTop={true}
-              onTapGuard={tapGuard}
-              onEdit={() => onEdit(currentCard)}
-              onDelete={() => onDelete(currentCard.id)}
-              onRevisit={() => onRevisit(currentCard)}
-            />
-          </div>
-        )}
+            {/* Slot 1 (or 0 if single): current card */}
+            <div style={{ width: containerWidth, height: '100%', flexShrink: 0, position: 'relative' }}>
+              {currentCard && (
+                <FlashCard
+                  key={currentCard.id}
+                  insight={currentCard}
+                  isTop={true}
+                  onTapGuard={tapGuard}
+                  onEdit={() => onEdit(currentCard)}
+                  onDelete={() => onDelete(currentCard.id)}
+                  onRevisit={() => onRevisit(currentCard)}
+                />
+              )}
+            </div>
 
-        {/* Next card hint (right) */}
-        {nextCard && (
-          <div
-            className="absolute top-2 bottom-2 opacity-40 pointer-events-none"
-            style={{
-              right: 0,
-              width: `${PEEK_WIDTH - 4}px`,
-              transform: `translateX(${Math.max(swipeOffset * 0.3, 0)}px)`,
-              transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
-            }}
-          >
-            <div className={`w-full h-full rounded-2xl ${
-              cardStyles[nextCard.category].shell
-            } shadow-sm scale-[0.92]`} />
+            {/* Slot 2: next card */}
+            {hasMultiple && (
+              <div style={{ width: containerWidth, height: '100%', flexShrink: 0, position: 'relative' }}>
+                {nextCard && (
+                  <FlashCard
+                    key={`next-${nextCard.id}`}
+                    insight={nextCard}
+                    isTop={false}
+                    onTapGuard={tapGuard}
+                    onEdit={() => onEdit(nextCard)}
+                    onDelete={() => onDelete(nextCard.id)}
+                    onRevisit={() => onRevisit(nextCard)}
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
