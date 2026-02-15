@@ -4,9 +4,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type { CategorizedInsight } from './rewireConstants';
 import FlashCard from './FlashCard';
 
-const SWIPE_THRESHOLD = 50;   // px to confirm a swipe
-const LOCK_ANGLE = 30;         // degrees from vertical to ignore horizontal swipe
-const TRANSITION_MS = 250;     // animation duration
+const VELOCITY_THRESHOLD = 0.3;  // px/ms — a quick flick commits
+const LOCK_ANGLE = 30;           // degrees from vertical to ignore horizontal swipe
+const BASE_DURATION = 300;       // ms — base animation duration
+const MIN_DURATION = 150;        // ms — fastest possible animation
+const MAX_DURATION = 350;        // ms — slowest animation
 
 // ── Dot Indicators ──
 
@@ -89,12 +91,22 @@ export default function CardDeck({
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [transitionDuration, setTransitionDuration] = useState(BASE_DURATION);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
   const didSwipeRef = useRef(false);
+
+  // Velocity tracking
+  const velocityRef = useRef(0);
+  const lastTouchX = useRef(0);
+  const lastTouchTime = useRef(0);
+
+  // Pending snap callback (for transitionend)
+  const pendingSnap = useRef<(() => void) | null>(null);
 
   // Measure container width
   useEffect(() => {
@@ -108,26 +120,61 @@ export default function CardDeck({
     return () => window.removeEventListener('resize', measure);
   }, []);
 
+  // Execute the pending snap (shared by transitionend + safety timeout)
+  const executePendingSnap = useCallback(() => {
+    if (pendingSnap.current) {
+      pendingSnap.current();
+      pendingSnap.current = null;
+    }
+  }, []);
+
   const animateSwipeOut = useCallback((direction: number) => {
     if (!containerWidth) return;
+
+    // Calculate dynamic duration based on remaining distance
+    const remaining = containerWidth - Math.abs(swipeOffset);
+    const ratio = remaining / containerWidth;
+    const dynamicDuration = Math.max(MIN_DURATION, Math.min(MAX_DURATION, ratio * BASE_DURATION));
+
+    setTransitionDuration(dynamicDuration);
     setIsAnimating(true);
     // Animate strip to show prev or next slot
     setSwipeOffset(direction > 0 ? -containerWidth : containerWidth);
 
-    setTimeout(() => {
+    // Set up the snap callback
+    pendingSnap.current = () => {
       const nextIndex = wrapIndex(currentIndex + direction, cards.length);
       onIndexChange(nextIndex);
       // Reset instantly — strip snaps back to center slot showing NEW current
       setIsAnimating(false);
       setSwipeOffset(0);
-    }, TRANSITION_MS);
-  }, [currentIndex, cards.length, onIndexChange, containerWidth]);
+      setTransitionDuration(BASE_DURATION);
+    };
+
+    // Safety timeout fallback (in case transitionend doesn't fire)
+    setTimeout(() => {
+      executePendingSnap();
+    }, dynamicDuration + 50);
+  }, [currentIndex, cards.length, onIndexChange, containerWidth, swipeOffset, executePendingSnap]);
 
   const animateSnapBack = useCallback(() => {
+    // Dynamic duration for snap-back too
+    const ratio = Math.abs(swipeOffset) / (containerWidth || 1);
+    const dynamicDuration = Math.max(MIN_DURATION, Math.min(MAX_DURATION, ratio * BASE_DURATION));
+
+    setTransitionDuration(dynamicDuration);
     setIsAnimating(true);
     setSwipeOffset(0);
-    setTimeout(() => setIsAnimating(false), TRANSITION_MS);
-  }, []);
+
+    pendingSnap.current = () => {
+      setIsAnimating(false);
+      setTransitionDuration(BASE_DURATION);
+    };
+
+    setTimeout(() => {
+      executePendingSnap();
+    }, dynamicDuration + 50);
+  }, [swipeOffset, containerWidth, executePendingSnap]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (isAnimating) return;
@@ -136,6 +183,10 @@ export default function CardDeck({
     touchStartY.current = touch.clientY;
     isDragging.current = false;
     didSwipeRef.current = false;
+    // Initialize velocity tracking
+    velocityRef.current = 0;
+    lastTouchX.current = touch.clientX;
+    lastTouchTime.current = Date.now();
   }, [isAnimating]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -158,6 +209,15 @@ export default function CardDeck({
     if (isDragging.current) {
       e.preventDefault();
       setSwipeOffset(dx);
+
+      // Track velocity
+      const now = Date.now();
+      const dt = now - lastTouchTime.current;
+      if (dt > 0) {
+        velocityRef.current = (touch.clientX - lastTouchX.current) / dt;
+      }
+      lastTouchX.current = touch.clientX;
+      lastTouchTime.current = now;
     }
   }, [isAnimating]);
 
@@ -165,15 +225,30 @@ export default function CardDeck({
     if (!isDragging.current) return;
     isDragging.current = false;
 
-    if (Math.abs(swipeOffset) > SWIPE_THRESHOLD) {
-      const direction = swipeOffset < 0 ? 1 : -1;
+    const velocity = velocityRef.current;
+    const distanceThreshold = containerWidth * 0.25; // 25% of card width
+
+    // Commit if fast flick OR dragged far enough
+    const shouldCommit =
+      Math.abs(velocity) > VELOCITY_THRESHOLD ||
+      Math.abs(swipeOffset) > distanceThreshold;
+
+    if (shouldCommit) {
+      // Use velocity direction if significant, otherwise use offset direction
+      const direction = Math.abs(velocity) > VELOCITY_THRESHOLD
+        ? (velocity < 0 ? 1 : -1)
+        : (swipeOffset < 0 ? 1 : -1);
       animateSwipeOut(direction);
     } else {
       animateSnapBack();
     }
 
     setTimeout(() => { didSwipeRef.current = false; }, 100);
-  }, [swipeOffset, animateSwipeOut, animateSnapBack]);
+  }, [swipeOffset, containerWidth, animateSwipeOut, animateSnapBack]);
+
+  const handleTransitionEnd = useCallback(() => {
+    executePendingSnap();
+  }, [executePendingSnap]);
 
   const tapGuard = useCallback(() => didSwipeRef.current, []);
 
@@ -201,12 +276,16 @@ export default function CardDeck({
       >
         {containerWidth > 0 && (
           <div
+            ref={stripRef}
+            onTransitionEnd={handleTransitionEnd}
             style={{
               display: 'flex',
               width: hasMultiple ? containerWidth * 3 : containerWidth,
               height: '100%',
               transform: `translateX(${stripTranslateX}px)`,
-              transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
+              transition: isAnimating
+                ? `transform ${transitionDuration}ms cubic-bezier(0.25, 1, 0.5, 1)`
+                : 'none',
             }}
           >
             {/* Slot 0: previous card */}

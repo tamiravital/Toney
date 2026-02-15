@@ -35,7 +35,7 @@ function CardFront({ insight }: { insight: CategorizedInsight }) {
     || insight.content.split('\n')[0].replace(/^[#*]+\s*/, '').substring(0, 100);
 
   return (
-    <div className={`w-full h-full rounded-3xl p-8 flex flex-col items-center justify-center ${style.shell} shadow-lg relative`}>
+    <div className={`w-full h-full rounded-3xl p-8 flex flex-col items-center justify-center ${style.shell} relative`}>
       {/* Category icon — large, centered */}
       <div className={`w-16 h-16 rounded-2xl ${style.iconBg} flex items-center justify-center mb-6`}>
         <CatIcon className={`w-8 h-8 ${style.accent}`} />
@@ -79,7 +79,7 @@ function CardBack({ insight, onEdit, onDelete, onRevisit }: {
   const CatIcon = categories.find(c => c.id === insight.category)?.icon || Sparkles;
 
   return (
-    <div className={`w-full h-full rounded-3xl flex flex-col ${style.shell} shadow-lg overflow-hidden`}>
+    <div className={`w-full h-full rounded-3xl flex flex-col ${style.shell} overflow-hidden`}>
       {/* Header bar */}
       <div className="flex items-center gap-2 px-5 pt-5 pb-3 flex-shrink-0">
         <div className={`w-6 h-6 rounded-lg ${style.iconBg} flex items-center justify-center`}>
@@ -171,7 +171,7 @@ export default function FlashCard({
 
   return (
     <div
-      className="absolute inset-0 perspective-1000"
+      className="absolute inset-0 perspective-1000 p-1"
       style={isTop ? externalStyle : externalStyle}
       onClick={isTop ? handleClick : undefined}
     >
