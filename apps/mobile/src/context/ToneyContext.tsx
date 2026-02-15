@@ -128,7 +128,7 @@ interface ToneyContextValue {
   sessionNotes: SessionNotesOutput | null;
   endSession: () => Promise<void>;
   dismissSessionNotes: () => void;
-  openSession: (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number) => Promise<void>;
+  openSession: (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number, continuationNotes?: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] }) => Promise<void>;
   startNewSession: () => Promise<void>;
   loadingChat: boolean;
   isFirstSession: boolean;
@@ -816,135 +816,141 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const handleSendMessage = useCallback(async (overrideText?: string) => {
     const text = overrideText || chatInput;
     if (!text.trim()) return;
+    if (sendMessageInFlightRef.current) return;
+    sendMessageInFlightRef.current = true;
 
-    const userMsg: Message = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMsg]);
-    setChatInput('');
-    setIsTyping(true);
+    try {
+      const userMsg: Message = {
+        id: `msg-${Date.now()}`,
+        role: 'user',
+        content: text.trim(),
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMsg]);
+      setChatInput('');
+      setIsTyping(true);
 
-    if (isSupabaseConfigured() || simMode) {
-      try {
-        const sessId = sessionIdRef.current;
+      if (isSupabaseConfigured() || simMode) {
+        try {
+          const sessId = sessionIdRef.current;
 
-        // Session should already exist via auto-open
-        if (!sessId) {
-          console.error('[Toney] No session ID — auto-open may not have fired');
-          setIsTyping(false);
-          return;
-        }
-
-        const res = await fetch(buildApiUrl('/api/chat'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: userMsg.content,
-            sessionId: sessId,
-          }),
-        });
-
-        // Check if response is streaming (SSE) or JSON fallback
-        const contentType = res.headers.get('content-type') || '';
-
-        if (contentType.includes('text/event-stream')) {
-          // Streaming response — progressively render
-          const streamingMsgId = `msg-streaming-${Date.now()}`;
-
-          // Add empty assistant message that will be filled progressively
-          const streamingMsg: Message = {
-            id: streamingMsgId,
-            role: 'assistant',
-            content: '',
-            timestamp: new Date(),
-            canSave: true,
-            saved: false,
-          };
-          setMessages(prev => [...prev, streamingMsg]);
-          setIsTyping(false); // Hide typing dots — text is streaming in
-
-          const reader = res.body!.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              try {
-                const event = JSON.parse(line.slice(6));
-                if (event.type === 'delta') {
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === streamingMsgId
-                        ? { ...m, content: m.content + event.text }
-                        : m
-                    )
-                  );
-                } else if (event.type === 'done') {
-                  // Update message ID to the saved DB ID
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === streamingMsgId
-                        ? { ...m, id: event.id }
-                        : m
-                    )
-                  );
-                } else if (event.type === 'error') {
-                  setMessages(prev =>
-                    prev.map(m =>
-                      m.id === streamingMsgId
-                        ? { ...m, content: event.text, canSave: false }
-                        : m
-                    )
-                  );
-                }
-              } catch { /* skip malformed SSE events */ }
-            }
-          }
-          return;
-        } else {
-          // JSON fallback (error responses)
-          const data = await res.json();
-          console.error('[Toney] Chat API returned JSON (non-streaming):', res.status, data);
-          if (data.message) {
-            const toneyMsg: Message = {
-              id: data.message.id || `msg-${Date.now() + 1}`,
-              role: 'assistant',
-              content: data.message.content,
-              timestamp: new Date(data.message.timestamp || Date.now()),
-              canSave: data.message.canSave ?? true,
-              saved: false,
-            };
-            setMessages(prev => [...prev, toneyMsg]);
+          // Session should already exist via auto-open
+          if (!sessId) {
+            console.error('[Toney] No session ID — auto-open may not have fired');
             setIsTyping(false);
             return;
           }
-        }
-      } catch (err) {
-        console.error('[Toney] Chat API failed:', err);
-      }
-    }
 
-    // API failed — show error
-    setMessages(prev => [...prev, {
-      id: `msg-${Date.now() + 1}`,
-      role: 'assistant' as const,
-      content: "I'm having trouble connecting right now. Give me a moment and try again?",
-      timestamp: new Date(),
-      canSave: false,
-      saved: false,
-    }]);
-    setIsTyping(false);
+          const res = await fetch(buildApiUrl('/api/chat'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: userMsg.content,
+              sessionId: sessId,
+            }),
+          });
+
+          // Check if response is streaming (SSE) or JSON fallback
+          const contentType = res.headers.get('content-type') || '';
+
+          if (contentType.includes('text/event-stream')) {
+            // Streaming response — progressively render
+            const streamingMsgId = `msg-streaming-${Date.now()}`;
+
+            // Add empty assistant message that will be filled progressively
+            const streamingMsg: Message = {
+              id: streamingMsgId,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date(),
+              canSave: true,
+              saved: false,
+            };
+            setMessages(prev => [...prev, streamingMsg]);
+            setIsTyping(false); // Hide typing dots — text is streaming in
+
+            const reader = res.body!.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  const event = JSON.parse(line.slice(6));
+                  if (event.type === 'delta') {
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === streamingMsgId
+                          ? { ...m, content: m.content + event.text }
+                          : m
+                      )
+                    );
+                  } else if (event.type === 'done') {
+                    // Update message ID to the saved DB ID
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === streamingMsgId
+                          ? { ...m, id: event.id }
+                          : m
+                      )
+                    );
+                  } else if (event.type === 'error') {
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === streamingMsgId
+                          ? { ...m, content: event.text, canSave: false }
+                          : m
+                      )
+                    );
+                  }
+                } catch { /* skip malformed SSE events */ }
+              }
+            }
+            return;
+          } else {
+            // JSON fallback (error responses)
+            const data = await res.json();
+            console.error('[Toney] Chat API returned JSON (non-streaming):', res.status, data);
+            if (data.message) {
+              const toneyMsg: Message = {
+                id: data.message.id || `msg-${Date.now() + 1}`,
+                role: 'assistant',
+                content: data.message.content,
+                timestamp: new Date(data.message.timestamp || Date.now()),
+                canSave: data.message.canSave ?? true,
+                saved: false,
+              };
+              setMessages(prev => [...prev, toneyMsg]);
+              setIsTyping(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error('[Toney] Chat API failed:', err);
+        }
+      }
+
+      // API failed — show error
+      setMessages(prev => [...prev, {
+        id: `msg-${Date.now() + 1}`,
+        role: 'assistant' as const,
+        content: "I'm having trouble connecting right now. Give me a moment and try again?",
+        timestamp: new Date(),
+        canSave: false,
+        saved: false,
+      }]);
+      setIsTyping(false);
+    } finally {
+      sendMessageInFlightRef.current = false;
+    }
   }, [chatInput, simMode, buildApiUrl]);
 
   const handleSaveInsight = useCallback(async (messageId: string, editedContent?: string, category?: string): Promise<string | null> => {
@@ -1095,7 +1101,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionNotes(null);
   }, []);
 
-  const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number) => {
+  const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number, continuationNotes?: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] }) => {
     if (!isSupabaseConfigured() && !simMode) return;
     if (openSessionInFlightRef.current) return; // Bug 2: Already opening a session
     openSessionInFlightRef.current = true;
@@ -1127,6 +1133,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           ...(previousSessionId && { previousSessionId }),
           ...(suggestionIndex != null && { suggestionIndex }),
+          ...(continuationNotes && { continuationNotes }),
         }),
       });
 
@@ -1247,6 +1254,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const skipMessageLoadRef = useRef(false); // Skip message reload during inline session open
   const messagesLoadedRef = useRef(false); // Bug 1: block auto-open until messages loaded
   const openSessionInFlightRef = useRef(false); // Bug 2: mutex for concurrent openSession calls
+  const sendMessageInFlightRef = useRef(false); // Mutex for concurrent handleSendMessage calls
   const openSessionFailedRef = useRef(false); // Bug 3: prevent auto-retry after failure
   const messagesRef = useRef<Message[]>([]); // Bug 4: current messages for openSession closure
   const userInitiatedSessionRef = useRef(false); // Suppress auto-open when suggestion picker should show

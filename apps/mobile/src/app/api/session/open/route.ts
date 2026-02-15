@@ -33,10 +33,12 @@ export async function POST(request: NextRequest) {
     // ── Parse optional body ──
     let previousSessionId: string | null = null;
     let suggestionIndex: number | null = null;
+    let continuationNotes: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] } | null = null;
     try {
       const body = await request.json();
       previousSessionId = body.previousSessionId || null;
       suggestionIndex = typeof body.suggestionIndex === 'number' ? body.suggestionIndex : null;
+      continuationNotes = body.continuationNotes || null;
     } catch { /* empty body is fine */ }
 
     // ── Load data in parallel (no coaching_briefings query — dropped) ──
@@ -327,6 +329,7 @@ export async function POST(request: NextRequest) {
       isFirstSession,
       activeFocusAreas,
       selectedSuggestion,
+      continuationNotes,
     });
 
     timing('planSessionStep complete (pure code)');

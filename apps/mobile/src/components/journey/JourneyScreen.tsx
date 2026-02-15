@@ -10,7 +10,7 @@ import { suggestedWins } from '@toney/constants';
 import type { SessionNotesOutput, FocusArea } from '@toney/types';
 
 export default function JourneyScreen() {
-  const { identifiedTension, wins, streak, focusAreas, handleArchiveFocusArea, handleLogWin, deleteWin } = useToney();
+  const { identifiedTension, wins, streak, focusAreas, handleArchiveFocusArea, handleLogWin, deleteWin, openSession, setActiveTab } = useToney();
   const { days, loading } = useSessionHistory();
   const [newWin, setNewWin] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -201,7 +201,17 @@ export default function JourneyScreen() {
 
       {/* Session notes overlay */}
       {viewingNotes && (
-        <SessionNotesView notes={viewingNotes} onDismiss={() => setViewingNotes(null)} />
+        <SessionNotesView
+          notes={viewingNotes}
+          onDismiss={() => setViewingNotes(null)}
+          onContinue={() => {
+            const notes = viewingNotes;
+            setViewingNotes(null);
+            openSession(undefined, false, undefined, notes);
+            setActiveTab('chat');
+            window.location.hash = '#chat';
+          }}
+        />
       )}
 
       {/* Focus area growth view overlay */}

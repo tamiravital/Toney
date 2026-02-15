@@ -1,4 +1,4 @@
-export { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from './prompts/systemPromptBuilder';
+export { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion, buildSessionContinuationBlock } from './prompts/systemPromptBuilder';
 export type { BuildSystemPromptInput } from './prompts/systemPromptBuilder';
 export { evolveUnderstanding, evolveAndSuggest, seedUnderstanding, seedSuggestions } from './strategist';
 export type {

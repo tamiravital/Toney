@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Profile, RewireCard, Win, SystemPromptBlock, FocusArea, SessionSuggestion } from '@toney/types';
-import { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion } from '../prompts/systemPromptBuilder';
+import { Profile, RewireCard, Win, SystemPromptBlock, FocusArea, SessionSuggestion, SessionNotesOutput } from '@toney/types';
+import { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion, buildSessionContinuationBlock } from '../prompts/systemPromptBuilder';
 
 // ────────────────────────────────────────────
 // Open Session Pipeline
@@ -33,6 +33,8 @@ export interface OpenSessionInput {
   activeFocusAreas?: FocusArea[] | null;
   /** Pre-generated suggestion to use (determines hypothesis/leverage/curiosities) */
   selectedSuggestion?: SessionSuggestion | null;
+  /** Notes from a previous session to continue (from Journey "Continue" button) */
+  continuationNotes?: SessionNotesOutput | null;
 }
 
 export interface PlanSessionOutput {
@@ -82,7 +84,9 @@ export function planSessionStep(input: OpenSessionInput): PlanSessionOutput {
   });
 
   // Append opening block
-  if (suggestion) {
+  if (input.continuationNotes) {
+    systemPromptBlocks.push(buildSessionContinuationBlock(input.continuationNotes));
+  } else if (suggestion) {
     systemPromptBlocks.push(buildSessionOpeningFromSuggestion(suggestion));
   } else {
     systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession));

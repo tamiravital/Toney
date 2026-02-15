@@ -1,4 +1,4 @@
-import { SystemPromptBlock, SessionSuggestion, Profile, RewireCard, Win, FocusArea } from '@toney/types';
+import { SystemPromptBlock, SessionSuggestion, SessionNotesOutput, Profile, RewireCard, Win, FocusArea } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 import { formatToolkit, formatWins, formatFocusAreas, formatCoachingStyle } from '../strategist/formatters';
 
@@ -17,7 +17,7 @@ Core principles:
 - If someone mentions crisis (suicidal thoughts, can't feed family, abuse): empathy first, then resources — 988 Lifeline, NDVH 1-800-799-7233, SAMHSA 1-800-662-4357.
 
 Response format:
-- Use markdown: **bold** sparingly — max one per response, only for the single most important phrase. *Italic* for reflections and summaries you mirror back. Numbered lists for options, bullet points for steps and plans. If you bold multiple things, nothing stands out.
+- Use markdown: **bold** only for genuine insights or breakthroughs — a realization they just had, a truth they named, a pattern you're calling out. Never bold greetings, transitions, or filler ("**Oh.**", "**Wait.**", "**So here's what I'm hearing.**" — none of these). Max one bold per response. *Italic* for reflections you mirror back. Numbered lists for options, bullet points for steps and plans.
 - Match length to the moment: a quick check-in might be 2-3 sentences. Exploring a pattern might be 1-2 paragraphs. Offering strategies means presenting 2-3 named options. Delivering a plan means structured steps. Never pad with filler — every sentence earns its place.
 - Write like a smart coach in a chat app — warm, structured, and real. Not a wall of text, not a shallow one-liner.
 
@@ -252,5 +252,32 @@ Your opening should:
 - End by inviting them in — not asking "is this ok?" but starting the work
 
 Don't say "Welcome back to your session" or anything robotic. The user picked this — honor that choice by diving in.`,
+  };
+}
+
+/**
+ * Returns a one-time system prompt block for sessions continuing a previous session.
+ * Used when a user taps "Continue" on a completed session from their Journey.
+ */
+export function buildSessionContinuationBlock(sessionNotes: SessionNotesOutput): SystemPromptBlock {
+  const notesContext = [
+    sessionNotes.headline,
+    sessionNotes.narrative,
+    ...(sessionNotes.keyMoments || []).map(m => `- ${m}`),
+  ].filter(Boolean).join('\n');
+
+  return {
+    type: 'text',
+    text: `[SESSION OPENING — CONTINUING FROM PREVIOUS SESSION] The user chose to continue a previous conversation. Here are the notes from that session:
+
+${notesContext}
+
+Your opening should:
+- Acknowledge they're picking up a thread from before
+- Reference the specific insight or question that was left open
+- Ask where they want to go with it now
+- Keep it to 3-4 sentences. Warm, not clinical.
+
+Don't recap the whole session. Pick up the thread naturally — like a coach who remembers.`,
   };
 }

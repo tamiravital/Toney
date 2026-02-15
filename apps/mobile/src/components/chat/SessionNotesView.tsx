@@ -22,9 +22,10 @@ const categoryColors: Record<string, string> = {
 interface SessionNotesViewProps {
   notes: SessionNotesOutput;
   onDismiss: () => void;
+  onContinue?: () => void;
 }
 
-export default function SessionNotesView({ notes, onDismiss }: SessionNotesViewProps) {
+export default function SessionNotesView({ notes, onDismiss, onContinue }: SessionNotesViewProps) {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -100,11 +101,23 @@ export default function SessionNotesView({ notes, onDismiss }: SessionNotesViewP
           )}
         </div>
 
-        {/* Done button */}
-        <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* Action buttons */}
+        <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-2">
+          {onContinue && (
+            <button
+              onClick={onContinue}
+              className="w-full bg-indigo-600 text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-indigo-700 transition-all active:scale-[0.98]"
+            >
+              Continue this conversation
+            </button>
+          )}
           <button
             onClick={onDismiss}
-            className="w-full bg-indigo-600 text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-indigo-700 transition-all active:scale-[0.98]"
+            className={`w-full py-3.5 rounded-2xl font-semibold text-sm transition-all active:scale-[0.98] ${
+              onContinue
+                ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
           >
             Done
           </button>

@@ -59,8 +59,8 @@ export async function POST(request: NextRequest) {
         .from(ctx.table('messages'))
         .select('role, content')
         .eq('session_id', sessionId)
-        .order('created_at', { ascending: true })
-        .limit(50),
+        .order('created_at', { ascending: false })
+        .limit(100),
     ]);
 
     const profile = profileResult.data as Profile | null;
@@ -98,10 +98,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Build message history for Claude with incremental caching
-    const rawHistory: { role: 'user' | 'assistant'; content: string }[] = (historyRows || []).map((m: { role: string; content: string }) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }));
+    // DB returned newest-first (descending), reverse for chronological order
+    const rawHistory: { role: 'user' | 'assistant'; content: string }[] = (historyRows || [])
+      .reverse()
+      .map((m: { role: string; content: string }) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }));
 
     // Add current message
     rawHistory.push({ role: 'user', content: message });
