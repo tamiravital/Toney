@@ -2,12 +2,14 @@
 
 import { useState, useRef, useCallback } from 'react';
 import type { CategorizedInsight } from './rewireConstants';
+import { cardStyles } from './rewireConstants';
 import FlashCard from './FlashCard';
 
 const SWIPE_THRESHOLD = 50;  // px to confirm a swipe
 const LOCK_ANGLE = 30;        // degrees from vertical to ignore horizontal swipe
-const SWIPE_OUT_PX = 300;     // how far the card flies off-screen
+const SWIPE_OUT_PX = 300;     // how far the card slides off-screen
 const TRANSITION_MS = 200;    // animation duration
+const PEEK_WIDTH = 32;        // px visible of neighbor cards on each side
 
 // ── Dot Indicators ──
 
@@ -62,6 +64,12 @@ function DotIndicators({
   );
 }
 
+// ── Wrap index for infinite loop ──
+
+function wrapIndex(index: number, length: number): number {
+  return ((index % length) + length) % length;
+}
+
 // ── Card Deck ──
 
 interface CardDeckProps {
@@ -91,13 +99,13 @@ export default function CardDeck({
 
   const animateSwipeOut = useCallback((direction: number) => {
     setIsAnimating(true);
-    // Slide current card fully off-screen
+    // Slide current card off-screen
     setSwipeOffset(direction > 0 ? -SWIPE_OUT_PX : SWIPE_OUT_PX);
 
     setTimeout(() => {
-      const nextIndex = currentIndex + direction;
-      const clampedIndex = Math.max(0, Math.min(nextIndex, cards.length - 1));
-      onIndexChange(clampedIndex);
+      // Wrap around for infinite loop
+      const nextIndex = wrapIndex(currentIndex + direction, cards.length);
+      onIndexChange(nextIndex);
       // Reset instantly (no transition) — new card appears in place
       setIsAnimating(false);
       setSwipeOffset(0);
@@ -138,13 +146,9 @@ export default function CardDeck({
 
     if (isDragging.current) {
       e.preventDefault();
-      // Edge resistance at boundaries
-      let clampedDx = dx;
-      if (dx > 0 && currentIndex === 0) clampedDx = dx / 3;
-      if (dx < 0 && currentIndex === cards.length - 1) clampedDx = dx / 3;
-      setSwipeOffset(clampedDx);
+      setSwipeOffset(dx);
     }
-  }, [isAnimating, currentIndex, cards.length]);
+  }, [isAnimating]);
 
   const onTouchEnd = useCallback(() => {
     if (!isDragging.current) return;
@@ -153,24 +157,25 @@ export default function CardDeck({
     if (Math.abs(swipeOffset) > SWIPE_THRESHOLD) {
       // Commit swipe: swipe left (negative offset) = go to next card
       const direction = swipeOffset < 0 ? 1 : -1;
-      // Don't go past boundaries
-      const nextIndex = currentIndex + direction;
-      if (nextIndex < 0 || nextIndex >= cards.length) {
-        animateSnapBack();
-      } else {
-        animateSwipeOut(direction);
-      }
+      animateSwipeOut(direction);
     } else {
       animateSnapBack();
     }
 
     // Clear swipe guard after a short delay
     setTimeout(() => { didSwipeRef.current = false; }, 100);
-  }, [swipeOffset, currentIndex, cards.length, animateSwipeOut, animateSnapBack]);
+  }, [swipeOffset, animateSwipeOut, animateSnapBack]);
 
   const tapGuard = useCallback(() => didSwipeRef.current, []);
 
+  // Get prev/current/next cards (wrapping for infinite loop)
+  const hasMultiple = cards.length > 1;
   const currentCard = cards[currentIndex];
+  const prevCard = hasMultiple ? cards[wrapIndex(currentIndex - 1, cards.length)] : null;
+  const nextCard = hasMultiple ? cards[wrapIndex(currentIndex + 1, cards.length)] : null;
+
+  // The main card is inset by PEEK_WIDTH on each side to leave room for hints
+  const mainInset = hasMultiple ? PEEK_WIDTH : 0;
 
   return (
     <div className="flex-1 flex flex-col items-center min-h-0">
@@ -182,20 +187,61 @@ export default function CardDeck({
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {currentCard && (
-          <FlashCard
-            key={currentCard.id}
-            insight={currentCard}
-            isTop={true}
+        {/* Previous card hint (left) */}
+        {prevCard && (
+          <div
+            className="absolute top-2 bottom-2 opacity-40 pointer-events-none"
             style={{
+              left: 0,
+              width: `${PEEK_WIDTH - 4}px`,
+              transform: `translateX(${Math.min(swipeOffset * 0.3, 0)}px)`,
+              transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
+            }}
+          >
+            <div className={`w-full h-full rounded-2xl ${
+              cardStyles[prevCard.category].shell
+            } shadow-sm scale-[0.92]`} />
+          </div>
+        )}
+
+        {/* Current card — inset to leave room for peek hints */}
+        {currentCard && (
+          <div
+            className="absolute top-0 bottom-0"
+            style={{
+              left: `${mainInset}px`,
+              right: `${mainInset}px`,
               transform: `translateX(${swipeOffset}px)`,
               transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
             }}
-            onTapGuard={tapGuard}
-            onEdit={() => onEdit(currentCard)}
-            onDelete={() => onDelete(currentCard.id)}
-            onRevisit={() => onRevisit(currentCard)}
-          />
+          >
+            <FlashCard
+              key={currentCard.id}
+              insight={currentCard}
+              isTop={true}
+              onTapGuard={tapGuard}
+              onEdit={() => onEdit(currentCard)}
+              onDelete={() => onDelete(currentCard.id)}
+              onRevisit={() => onRevisit(currentCard)}
+            />
+          </div>
+        )}
+
+        {/* Next card hint (right) */}
+        {nextCard && (
+          <div
+            className="absolute top-2 bottom-2 opacity-40 pointer-events-none"
+            style={{
+              right: 0,
+              width: `${PEEK_WIDTH - 4}px`,
+              transform: `translateX(${Math.max(swipeOffset * 0.3, 0)}px)`,
+              transition: isAnimating ? `transform ${TRANSITION_MS}ms ease-out` : 'none',
+            }}
+          >
+            <div className={`w-full h-full rounded-2xl ${
+              cardStyles[nextCard.category].shell
+            } shadow-sm scale-[0.92]`} />
+          </div>
         )}
       </div>
 
