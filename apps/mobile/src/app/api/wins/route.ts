@@ -48,11 +48,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing text' }, { status: 400 });
     }
 
+    const trimmedText = text.trim();
+
+    // Dedup: if same text already exists for this user+session, return existing
+    if (sessionId) {
+      const { data: existing } = await ctx.supabase
+        .from(ctx.table('wins'))
+        .select('*')
+        .eq('user_id', ctx.userId)
+        .eq('session_id', sessionId)
+        .eq('text', trimmedText)
+        .limit(1)
+        .single();
+
+      if (existing) {
+        return NextResponse.json(existing as Win);
+      }
+    }
+
     const { data, error } = await ctx.supabase
       .from(ctx.table('wins'))
       .insert({
         user_id: ctx.userId,
-        text: text.trim(),
+        text: trimmedText,
         tension_type: tensionType || null,
         session_id: sessionId || null,
         source: source || 'manual',

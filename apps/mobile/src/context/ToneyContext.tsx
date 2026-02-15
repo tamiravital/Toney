@@ -1363,10 +1363,17 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     } catch { /* non-critical — local state has the win */ }
   }, [identifiedTensionState, buildApiUrl]);
 
+  const savedWinTextsRef = useRef<Set<string>>(new Set());
+
   const handleAutoWin = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    // Client-side dedup: skip if already saved in this session
+    if (savedWinTextsRef.current.has(trimmed)) return;
+    savedWinTextsRef.current.add(trimmed);
+
     const tempId = `win-${Date.now()}`;
     setWins(prev => [
-      { id: tempId, text, date: new Date(), tension_type: identifiedTensionState?.primary, session_id: sessionIdRef.current, source: 'coach' },
+      { id: tempId, text: trimmed, date: new Date(), tension_type: identifiedTensionState?.primary, session_id: sessionIdRef.current, source: 'coach' },
       ...prev,
     ]);
     setStreak(prev => prev + 1);
@@ -1376,7 +1383,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: text.trim(),
+          text: trimmed,
           tensionType: identifiedTensionState?.primary || null,
           sessionId: sessionIdRef.current,
           source: 'coach',
