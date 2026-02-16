@@ -1361,7 +1361,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.id) {
-        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id } : w));
+        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id, created_at: data.created_at } : w));
       }
     } catch { /* non-critical — local state has the win */ }
   }, [identifiedTensionState, buildApiUrl]);
@@ -1395,7 +1395,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.id) {
-        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id, focus_area_id: data.focus_area_id || null } : w));
+        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id, created_at: data.created_at, focus_area_id: data.focus_area_id || null } : w));
       }
     } catch { /* non-critical — local state has the win */ }
   }, [identifiedTensionState, buildApiUrl]);

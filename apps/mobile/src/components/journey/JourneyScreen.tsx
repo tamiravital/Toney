@@ -17,16 +17,15 @@ interface PathNode {
   notes?: SessionNotesOutput;
 }
 
-// Snake path positions (% of container width) — creates the Duolingo S-curve
-const SNAKE_X = [50, 78, 50, 22, 50];
-const NODE_SPACING = 110; // px between nodes vertically
-const NODE_TOP_PAD = 32;  // top padding before first node
-const NODE_SIZE = 48;      // px — circle diameter
+// Snake path: nodes alternate center → right → center → left → center
+const SNAKE_X = [50, 75, 50, 25, 50];
+const NODE_SPACING = 140; // px between nodes vertically (room for label below)
+const NODE_TOP_PAD = 32;
 
 const NODE_EMOJI: Record<PathNode['type'], string> = {
-  milestone: '\u2B50',     // star
-  win: '\uD83C\uDFC6',    // trophy
-  first_session: '\uD83C\uDF31', // seedling
+  milestone: '\u2B50',
+  win: '\uD83C\uDFC6',
+  first_session: '\uD83C\uDF31',
 };
 
 const NODE_BG: Record<PathNode['type'], string> = {
@@ -50,13 +49,6 @@ function getNodePos(index: number, containerWidth: number) {
   const x = (SNAKE_X[index % SNAKE_X.length] / 100) * containerWidth;
   const y = NODE_TOP_PAD + index * NODE_SPACING;
   return { x, y };
-}
-
-function getTextSide(index: number): 'left' | 'right' {
-  const pos = index % SNAKE_X.length;
-  if (pos === 1) return 'left';   // node is on right → text goes left
-  if (pos === 3) return 'right';  // node is on left → text goes right
-  return 'right';                 // center → text goes right
 }
 
 function buildCurvePath(positions: { x: number; y: number }[]): string {
@@ -83,7 +75,6 @@ export default function JourneyScreen() {
   const [showWinInput, setShowWinInput] = useState(false);
   const [newWin, setNewWin] = useState('');
 
-  // Measure container width for snake position calculation
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(340);
 
@@ -98,7 +89,6 @@ export default function JourneyScreen() {
     return () => observer.disconnect();
   }, []);
 
-  // Build focus area ID → text map
   const focusAreaMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const fa of focusAreas) {
@@ -107,7 +97,6 @@ export default function JourneyScreen() {
     return map;
   }, [focusAreas]);
 
-  // Build path nodes: milestones + wins, interleaved by date (newest first)
   const pathNodes = useMemo(() => {
     const nodes: PathNode[] = [];
 
@@ -155,12 +144,11 @@ export default function JourneyScreen() {
     return nodes;
   }, [milestones, wins, days, focusAreaMap]);
 
-  // Calculate positions + SVG path
   const { positions, curvePath, containerHeight } = useMemo(() => {
     const pos = pathNodes.map((_, i) => getNodePos(i, containerWidth));
     const path = buildCurvePath(pos);
     const height = pathNodes.length > 0
-      ? NODE_TOP_PAD + (pathNodes.length - 1) * NODE_SPACING + NODE_TOP_PAD
+      ? NODE_TOP_PAD + (pathNodes.length - 1) * NODE_SPACING + 80
       : 0;
     return { positions: pos, curvePath: path, containerHeight: height };
   }, [pathNodes, containerWidth]);
@@ -216,7 +204,6 @@ export default function JourneyScreen() {
               style={{ overflow: 'visible' }}
               aria-hidden="true"
             >
-              {/* Background stroke — wider, lighter */}
               <path
                 d={curvePath}
                 fill="none"
@@ -224,7 +211,6 @@ export default function JourneyScreen() {
                 strokeWidth={6}
                 strokeLinecap="round"
               />
-              {/* Foreground stroke — thinner, bolder */}
               <path
                 d={curvePath}
                 fill="none"
@@ -235,75 +221,66 @@ export default function JourneyScreen() {
             </svg>
           )}
 
-          {/* Nodes */}
+          {/* Nodes — circle centered on path, label below */}
           {pathNodes.map((node, i) => {
             const pos = positions[i];
             if (!pos) return null;
-            const side = getTextSide(i);
             const isNewest = i === 0;
 
-            const circle = (
-              <div
-                className={`w-12 h-12 rounded-full border-4 border-white shadow-md flex items-center justify-center text-xl
-                  ${NODE_BG[node.type]}
-                  ${isNewest ? 'animate-node-pulse' : ''}
-                  ${node.type === 'milestone' ? 'active:scale-95 transition-transform' : ''}
-                `}
-              >
-                {NODE_EMOJI[node.type]}
-              </div>
-            );
-
-            // Available width for the label on the text side
-            const gap = 32; // half circle (24) + spacing (8)
-            const labelMax = side === 'right'
-              ? containerWidth - pos.x - gap
-              : pos.x - gap;
-
-            const label = (
-              <div
-                className={`absolute top-1/2 -translate-y-1/2
-                  ${side === 'right'
-                    ? 'left-[calc(100%+8px)]'
-                    : 'right-[calc(100%+8px)] text-right'
-                  }
-                `}
-                style={{ maxWidth: `${Math.max(labelMax, 80)}px` }}
-              >
-                <p className={`text-sm font-semibold leading-snug line-clamp-3
-                  ${node.type === 'first_session' ? 'text-gray-500' : 'text-gray-900'}
-                `}>
-                  {node.text}
-                </p>
-                {node.focusAreaText && (
-                  <p className="text-xs text-indigo-500 mt-0.5 line-clamp-1">{node.focusAreaText}</p>
-                )}
-                <p className="text-xs text-gray-400 mt-0.5">{formatNodeDate(node.date)}</p>
-              </div>
-            );
+            // Decide label alignment: if node is on the left half, left-align label;
+            // if on the right half, right-align so it doesn't overflow
+            const nodeXPercent = SNAKE_X[i % SNAKE_X.length];
+            const labelAlign = nodeXPercent > 60 ? 'right' : nodeXPercent < 40 ? 'left' : 'center';
 
             return (
               <div
                 key={node.id}
-                className="absolute"
+                className="absolute flex flex-col items-center"
                 style={{
                   left: `${pos.x}px`,
                   top: `${pos.y}px`,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                <div className="relative">
-                  {node.type === 'milestone' ? (
-                    <button
-                      onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
-                      aria-label={node.text}
-                    >
-                      {circle}
-                    </button>
-                  ) : (
-                    circle
+                {/* Emoji circle */}
+                {node.type === 'milestone' ? (
+                  <button
+                    onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
+                    aria-label={node.text}
+                    className={`w-14 h-14 rounded-full border-4 border-white shadow-md flex items-center justify-center text-2xl
+                      ${NODE_BG[node.type]}
+                      ${isNewest ? 'animate-node-pulse' : ''}
+                      active:scale-95 transition-transform
+                    `}
+                  >
+                    {NODE_EMOJI[node.type]}
+                  </button>
+                ) : (
+                  <div
+                    className={`w-14 h-14 rounded-full border-4 border-white shadow-md flex items-center justify-center text-2xl
+                      ${NODE_BG[node.type]}
+                      ${isNewest ? 'animate-node-pulse' : ''}
+                    `}
+                  >
+                    {NODE_EMOJI[node.type]}
+                  </div>
+                )}
+
+                {/* Label below the circle */}
+                <div
+                  className={`mt-2 w-[200px]
+                    ${labelAlign === 'right' ? 'text-right' : labelAlign === 'left' ? 'text-left' : 'text-center'}
+                  `}
+                >
+                  <p className={`text-[13px] font-semibold leading-snug
+                    ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}
+                  `}>
+                    {node.text}
+                  </p>
+                  {node.focusAreaText && (
+                    <p className="text-[11px] text-indigo-500 mt-0.5">{node.focusAreaText}</p>
                   )}
-                  {label}
+                  <p className="text-[11px] text-gray-400 mt-0.5">{formatNodeDate(node.date)}</p>
                 </div>
               </div>
             );
