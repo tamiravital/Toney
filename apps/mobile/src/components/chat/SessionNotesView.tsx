@@ -23,10 +23,11 @@ interface SessionNotesViewProps {
   notes: SessionNotesOutput;
   onDismiss: () => void;
   onContinue?: () => void;
+  sessionDate?: Date;
 }
 
-export default function SessionNotesView({ notes, onDismiss, onContinue }: SessionNotesViewProps) {
-  const today = new Date().toLocaleDateString('en-US', {
+export default function SessionNotesView({ notes, onDismiss, onContinue, sessionDate }: SessionNotesViewProps) {
+  const dateLabel = (sessionDate ?? new Date()).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -39,7 +40,7 @@ export default function SessionNotesView({ notes, onDismiss, onContinue }: Sessi
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h3 className="text-lg font-bold text-gray-900">Session Notes</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{today}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{dateLabel}</p>
           </div>
           <button
             onClick={onDismiss}
