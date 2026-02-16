@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import { useToney } from '@/context/ToneyContext';
 import type { SessionNotesOutput, Win } from '@toney/types';
 
 export interface SessionHistoryItem {
@@ -44,11 +45,86 @@ function formatDayLabel(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function buildDayGroups(
+  sessions: { id: string; created_at: string; session_notes: string }[],
+  wins: Win[],
+): DayGroup[] {
+  // Build win counts per session
+  const winsBySession = new Map<string, number>();
+  for (const w of wins) {
+    if (w.session_id) {
+      winsBySession.set(w.session_id, (winsBySession.get(w.session_id) || 0) + 1);
+    }
+  }
+
+  // Build timeline items
+  const items: TimelineItem[] = [];
+
+  for (const s of sessions) {
+    try {
+      const notes = JSON.parse(s.session_notes) as SessionNotesOutput;
+      items.push({
+        type: 'session',
+        id: s.id,
+        date: new Date(s.created_at),
+        headline: notes.headline,
+        narrative: notes.narrative,
+        keyMoments: notes.keyMoments,
+        cardsCreated: notes.cardsCreated,
+        winsCount: winsBySession.get(s.id) || 0,
+      });
+    } catch {
+      // Skip sessions with invalid notes JSON
+    }
+  }
+
+  for (const w of wins) {
+    items.push({
+      type: 'win',
+      id: w.id,
+      date: new Date(w.created_at || Date.now()),
+      text: w.text,
+      source: (w.source as 'manual' | 'coach') || 'manual',
+      sessionId: w.session_id,
+    });
+  }
+
+  // Sort by date descending
+  items.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  // Group by day
+  const dayMap = new Map<string, TimelineItem[]>();
+  for (const item of items) {
+    const key = new Date(item.date.getFullYear(), item.date.getMonth(), item.date.getDate()).toISOString();
+    if (!dayMap.has(key)) dayMap.set(key, []);
+    dayMap.get(key)!.push(item);
+  }
+
+  const grouped: DayGroup[] = [];
+  for (const [key, dayItems] of dayMap) {
+    const date = new Date(key);
+    grouped.push({ label: formatDayLabel(date), date, items: dayItems });
+  }
+
+  // Sort days descending
+  grouped.sort((a, b) => b.date.getTime() - a.date.getTime());
+  return grouped;
+}
+
 export function useSessionHistory() {
+  const { simMode, completedSessions, wins: contextWins } = useToney();
   const [days, setDays] = useState<DayGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchHistory = useCallback(async () => {
+    // Sim mode: build from context data (pre-loaded from hydrate)
+    if (simMode) {
+      const grouped = buildDayGroups(completedSessions, contextWins);
+      setDays(grouped);
+      setLoading(false);
+      return;
+    }
+
     if (!isSupabaseConfigured()) {
       setLoading(false);
       return;
@@ -80,80 +156,17 @@ export function useSessionHistory() {
           .limit(50),
       ]);
 
-      const sessions = sessionsResult.data || [];
+      const sessions = (sessionsResult.data || []) as { id: string; created_at: string; session_notes: string }[];
       const wins = (winsResult.data || []) as Win[];
 
-      // Build win counts per session
-      const winsBySession = new Map<string, number>();
-      for (const w of wins) {
-        if (w.session_id) {
-          winsBySession.set(w.session_id, (winsBySession.get(w.session_id) || 0) + 1);
-        }
-      }
-
-      // Build timeline items
-      const items: TimelineItem[] = [];
-
-      for (const s of sessions) {
-        try {
-          const notes = JSON.parse(s.session_notes) as SessionNotesOutput;
-          items.push({
-            type: 'session',
-            id: s.id,
-            date: new Date(s.created_at),
-            headline: notes.headline,
-            narrative: notes.narrative,
-            keyMoments: notes.keyMoments,
-            cardsCreated: notes.cardsCreated,
-            winsCount: winsBySession.get(s.id) || 0,
-          });
-        } catch {
-          // Skip sessions with invalid notes JSON
-        }
-      }
-
-      for (const w of wins) {
-        items.push({
-          type: 'win',
-          id: w.id,
-          date: new Date(w.created_at || Date.now()),
-          text: w.text,
-          source: (w.source as 'manual' | 'coach') || 'manual',
-          sessionId: w.session_id,
-        });
-      }
-
-      // Sort by date descending
-      items.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-      // Group by day
-      const dayMap = new Map<string, TimelineItem[]>();
-      for (const item of items) {
-        const key = new Date(item.date.getFullYear(), item.date.getMonth(), item.date.getDate()).toISOString();
-        if (!dayMap.has(key)) dayMap.set(key, []);
-        dayMap.get(key)!.push(item);
-      }
-
-      const grouped: DayGroup[] = [];
-      for (const [key, dayItems] of dayMap) {
-        const date = new Date(key);
-        grouped.push({
-          label: formatDayLabel(date),
-          date,
-          items: dayItems,
-        });
-      }
-
-      // Sort days descending
-      grouped.sort((a, b) => b.date.getTime() - a.date.getTime());
-
+      const grouped = buildDayGroups(sessions, wins);
       setDays(grouped);
     } catch {
       // Non-critical
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [simMode, completedSessions, contextWins]);
 
   useEffect(() => {
     fetchHistory();

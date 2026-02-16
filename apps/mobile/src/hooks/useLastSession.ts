@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import { useToney } from '@/context/ToneyContext';
 import type { SessionNotesOutput } from '@toney/types';
 
 interface LastSessionData {
@@ -11,10 +12,24 @@ interface LastSessionData {
 }
 
 export function useLastSession() {
+  const { simMode, completedSessions } = useToney();
   const [session, setSession] = useState<LastSessionData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchLastSession = useCallback(async () => {
+    // Sim mode: read from context (pre-loaded from hydrate)
+    if (simMode) {
+      if (completedSessions.length > 0) {
+        const s = completedSessions[0]; // already sorted desc
+        try {
+          const notes = JSON.parse(s.session_notes) as SessionNotesOutput;
+          setSession({ id: s.id, createdAt: new Date(s.created_at), notes });
+        } catch { /* parse failed */ }
+      }
+      setLoading(false);
+      return;
+    }
+
     if (!isSupabaseConfigured()) {
       setLoading(false);
       return;
@@ -41,21 +56,15 @@ export function useLastSession() {
       if (data?.session_notes) {
         try {
           const notes = JSON.parse(data.session_notes) as SessionNotesOutput;
-          setSession({
-            id: data.id,
-            createdAt: new Date(data.created_at),
-            notes,
-          });
-        } catch {
-          // Parse failed — no valid session notes
-        }
+          setSession({ id: data.id, createdAt: new Date(data.created_at), notes });
+        } catch { /* parse failed */ }
       }
     } catch {
       // No completed sessions yet
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [simMode, completedSessions]);
 
   useEffect(() => {
     fetchLastSession();

@@ -66,6 +66,16 @@ export async function GET(request: NextRequest) {
         .single(),
     ]);
 
+    // Load completed sessions (for home + journey in sim mode)
+    const { data: completedSessions } = await ctx.supabase
+      .from(ctx.table('sessions'))
+      .select('id, created_at, session_notes')
+      .eq('user_id', ctx.userId)
+      .eq('session_status', 'completed')
+      .not('session_notes', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
     // Load messages for most recent session
     let messages: { id: string; role: string; content: string; created_at: string }[] = [];
     let lastMessageTime: string | null = null;
@@ -119,6 +129,11 @@ export async function GET(request: NextRequest) {
         date: w.created_at ? new Date(w.created_at as string) : undefined,
       })),
       suggestions,
+      completedSessions: (completedSessions || []).map((s: Record<string, unknown>) => ({
+        id: s.id,
+        created_at: s.created_at,
+        session_notes: s.session_notes,
+      })),
     });
   } catch (error) {
     console.error('Sim hydrate error:', error);

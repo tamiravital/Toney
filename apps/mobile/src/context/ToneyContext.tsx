@@ -157,6 +157,7 @@ interface ToneyContextValue {
   // Sim mode
   simMode: boolean;
   buildApiUrl: (path: string) => string;
+  completedSessions: { id: string; created_at: string; session_notes: string }[];
 
   // Auth
   signIn: () => void;
@@ -224,6 +225,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
   // Sim mode
   const [simMode, setSimMode] = useState(false);
+  const [completedSessions, setCompletedSessions] = useState<{ id: string; created_at: string; session_notes: string }[]>([]);
   const simProfileIdRef = useRef<string | null>(null);
   const simSecretRef = useRef<string | null>(null);
 
@@ -299,6 +301,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             if (data.focusAreas?.length > 0) setFocusAreas(data.focusAreas);
             if (data.wins?.length > 0) setWins(data.wins);
             if (data.suggestions?.length > 0) setSuggestions(data.suggestions);
+            if (data.completedSessions?.length > 0) setCompletedSessions(data.completedSessions);
             if (data.recentSession) {
               setCurrentSessionId(data.recentSession.id);
               sessionIdRef.current = data.recentSession.id;
@@ -1764,6 +1767,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         handleArchiveFocusArea,
         simMode,
         buildApiUrl,
+        completedSessions,
         signIn,
         signOut,
         finishOnboarding,
