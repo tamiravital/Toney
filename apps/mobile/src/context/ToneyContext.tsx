@@ -205,7 +205,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [loadingChat, setLoadingChat] = useState(false);
+  const [loadingChat, setLoadingChat] = useState(true); // Start true — prevent suggestion picker flash before messages load
   const [sessionHasCard, setSessionHasCard] = useState(false);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('active');
   const [sessionNotes, setSessionNotes] = useState<SessionNotesOutput | null>(null);
@@ -700,6 +700,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (!currentSessionId) {
       setSessionStatus('active');
       setMessages([]);
+      setLoadingChat(false);
       messagesLoadedRef.current = true; // No session = nothing to load
       return;
     }
