@@ -304,46 +304,82 @@ export async function POST(request: NextRequest) {
 
     if (previousSessionId) {
       try {
-        const [oldMessagesResult, oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([
-          ctx.supabase
-            .from(ctx.table('messages'))
-            .select('role, content')
-            .eq('session_id', previousSessionId)
-            .order('created_at', { ascending: true }),
-          ctx.supabase
-            .from(ctx.table('rewire_cards'))
-            .select('title, category')
-            .eq('session_id', previousSessionId),
-          ctx.supabase
-            .from(ctx.table('sessions'))
-            .select('session_number, hypothesis')
-            .eq('id', previousSessionId)
-            .single(),
-          ctx.supabase
-            .from(ctx.table('sessions'))
-            .select('session_notes')
-            .eq('user_id', ctx.userId)
-            .eq('session_status', 'completed')
-            .not('session_notes', 'is', null)
-            .neq('id', previousSessionId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single(),
-          ctx.supabase
-            .from(ctx.table('session_suggestions'))
-            .select('suggestions')
-            .eq('user_id', ctx.userId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single(),
-        ]);
+        // Load messages first to decide close tier
+        const oldMessagesResult = await ctx.supabase
+          .from(ctx.table('messages'))
+          .select('role, content')
+          .eq('session_id', previousSessionId)
+          .order('created_at', { ascending: true });
 
         const oldMessages = (oldMessagesResult.data || []).map((m: { role: string; content: string }) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content,
         }));
 
-        if (oldMessages.length > 0) {
+        const userMessageCount = oldMessages.filter((m: { role: string }) => m.role === 'user').length;
+
+        if (userMessageCount === 0) {
+          // ── 0 user messages: delete the empty session entirely ──
+          // Messages cascade via FK ON DELETE CASCADE. No cards/wins/focus areas
+          // exist for a session with no user interaction.
+          const { error: deleteErr } = await ctx.supabase
+            .from(ctx.table('sessions'))
+            .delete()
+            .eq('id', previousSessionId);
+          if (deleteErr) {
+            console.error('Deferred close: delete empty session failed:', deleteErr);
+          }
+          timing('deferred close: deleted empty session (0 user messages)');
+
+        } else if (userMessageCount <= 2) {
+          // ── 1-2 user messages: mark completed, skip pipeline ──
+          // No session_notes → useSessionHistory naturally excludes it.
+          // evolution_status = 'completed' prevents retry logic from picking it up.
+          const { error: lightCloseErr } = await ctx.supabase
+            .from(ctx.table('sessions'))
+            .update({
+              session_status: 'completed',
+              evolution_status: 'completed',
+              title: 'Brief session',
+            })
+            .eq('id', previousSessionId);
+          if (lightCloseErr) {
+            console.error('Deferred close: light close failed:', lightCloseErr);
+          }
+          timing('deferred close: light close (1-2 user messages)');
+
+        } else {
+          // ── 3+ user messages: full close pipeline ──
+          // Load remaining data only when we need the full pipeline
+          const [oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([
+            ctx.supabase
+              .from(ctx.table('rewire_cards'))
+              .select('title, category')
+              .eq('session_id', previousSessionId),
+            ctx.supabase
+              .from(ctx.table('sessions'))
+              .select('session_number, hypothesis')
+              .eq('id', previousSessionId)
+              .single(),
+            ctx.supabase
+              .from(ctx.table('sessions'))
+              .select('session_notes')
+              .eq('user_id', ctx.userId)
+              .eq('session_status', 'completed')
+              .not('session_notes', 'is', null)
+              .neq('id', previousSessionId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single(),
+            ctx.supabase
+              .from(ctx.table('session_suggestions'))
+              .select('suggestions')
+              .eq('user_id', ctx.userId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single(),
+          ]);
+
           const savedCards = (oldCardsResult.data || []).map((c: { title: string; category: string }) => ({
             title: c.title,
             category: c.category,

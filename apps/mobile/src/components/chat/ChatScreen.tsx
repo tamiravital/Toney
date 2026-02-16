@@ -191,11 +191,9 @@ export default function ChatScreen() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // End Session visibility: card saved OR 20+ messages, never on first session unless card saved
-  const nonDividerCount = messages.filter(m => m.role !== 'divider').length;
-  const showEndSession = sessionStatus === 'active' && (
-    sessionHasCard || (!isFirstSession && nonDividerCount >= 20)
-  );
+  // End Session visibility: always available during an active session.
+  // Short sessions (0-2 user messages) are closed cheaply — no LLM calls.
+  const showEndSession = sessionStatus === 'active' && messages.length > 0;
 
   const handleTogglePrevious = () => {
     setPreviousSessionCollapsed(!previousSessionCollapsed);

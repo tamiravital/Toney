@@ -213,7 +213,7 @@ Toney doesn't celebrate everything positive. Only real victories over your tensi
 
 ## Part 5: Ending a Session — What Happens Behind the Scenes
 
-You can end a session by tapping "End Session" (which appears after you've saved a card or sent 20+ messages). Or, if more than 12 hours pass before your next message, Toney automatically treats it as a new session.
+You can end a session at any time by tapping "End Session" in the top right corner. Or, if more than 12 hours pass before your next message, Toney automatically treats it as a new session. If you end a session early (before much conversation happened), Toney skips the behind-the-scenes processing — no notes, no learning, no suggestions generated. If you never responded at all (only the Coach's opening message), the session is simply deleted as if it never happened.
 
 When a session ends, Toney immediately generates your **session notes** (the summary you see). Behind the scenes, one more thing happens in the background while you're already reading your notes:
 
@@ -263,6 +263,8 @@ These reflections accumulate over time on each focus area, creating a visible gr
 
 Not every session produces reflections for every focus area. Only areas that the session genuinely touched get an observation. This keeps them honest and meaningful.
 
+**Reliability:** Because this background work is important (it's how Toney gets smarter), the system tracks whether it completed successfully. If it didn't — say Toney's servers hiccupped or the AI call timed out — the system automatically retries on your next session open. You might notice a slightly longer wait (~5 seconds) when opening that next session, but the result is the same: your understanding evolves, your suggestions are fresh, and your focus area reflections are up to date. Nothing is lost.
+
 ---
 
 ## Part 6: The Screens
@@ -297,7 +299,7 @@ At the bottom: a text input ("What's on your mind?") that **grows as you type** 
 
 Sometimes Toney offers **quick reply buttons** below a message — tap one to respond instantly without typing.
 
-The **End Session** button appears in the top right after you've saved a card or sent 20+ messages (but never on your very first session unless you save a card). After ending, the suggestion picker appears again for your next session.
+The **End Session** button appears in the top right as soon as the session starts. If you end a session early (1-2 messages), it closes quietly with no notes — you'll see the suggestion picker right away for your next session. After ending a longer session (3+ messages), you'll see session notes summarizing what you discussed.
 
 ### Rewire Screen
 

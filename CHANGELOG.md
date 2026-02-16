@@ -1,5 +1,16 @@
 # Toney — Changelog
 
+## 2026-02-16 — Tiered Session Close
+- **Sessions with no engagement are cleaned up**: If you opened a session but never responded (only the Coach's opening message), the session is deleted entirely — no trace in your history. If you sent 1-2 messages, the session is marked complete but doesn't generate notes, suggestions, or evolution. Sessions with 3+ user messages run the full pipeline as before.
+- **End Session button always available**: "End Session" now appears as soon as the Coach sends its opening message, instead of requiring a saved card or 20+ messages. This lets you bail out of a session and return to the suggestion picker if the topic isn't right.
+- **Migration 032**: DELETE RLS policy on sessions table. Fixed bare FK on `rewire_cards.session_id` (was RESTRICT, now ON DELETE SET NULL).
+
+## 2026-02-16 — Session Close Reliability
+- **12h boundary detection fixed**: Sessions that were open for days (or forever) because the 12h auto-close check was blocked by loaded messages or existing suggestions. Moved the boundary check to run first, before any other guards, so stale sessions always get detected and closed.
+- **Evolution retry on next session open**: If the behind-the-scenes learning that runs after "End Session" fails (LLM error, Vercel timeout), Toney now detects the failure on next session open and retries automatically. New `evolution_status` column tracks whether background work completed ('pending' → 'completed'/'failed').
+- **Migration 031**: `evolution_status` column on `sessions` and `sim_sessions`, backfilled existing completed sessions.
+- **Simulator clone**: `evolution_status` preserved when cloning users to simulator.
+
 ## 2026-02-15 — Journey Timeline Redesign
 - **Journey timeline with emoji markers**: The Journey tab now shows a vertical timeline with emoji circles on a line — ⭐ for breakthrough milestones, 🏆 for wins, 🌱 for your first session. Each node has a colored bubble with the text, focus area label (for milestones), and date.
 - **Different colors per focus area**: Milestones connected to different focus areas get different hues (indigo, pink, sky, purple, orange, yellow, emerald). Wins are green, first session is amber.

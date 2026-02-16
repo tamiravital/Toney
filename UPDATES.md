@@ -4,6 +4,24 @@
 
 ---
 
+## February 16, 2026
+
+### You can end a session at any time now
+- The "End Session" button now appears **as soon as the conversation starts** — you don't have to save a card or send 20+ messages first. If you tapped a suggestion but realized you want to talk about something different, just end the session and pick a new one.
+
+### Short sessions don't create noise
+- If you opened a session but never responded, the session is **deleted entirely** — it won't show up in your Journey or session history.
+- If you only sent a message or two before ending, the session is quietly closed without generating notes, suggestions, or any behind-the-scenes processing. It won't appear in your session history.
+- Full sessions (3+ messages) work exactly the same as before — notes, learning, suggestions, the whole thing.
+
+### Sessions that got stuck open now close properly
+- If you opened Toney and your last session was from days ago, it was supposed to automatically start a new session. But if your old session had suggestions or even a single message loaded, the automatic detection didn't work — the session just stayed "active" forever. This is now fixed. Toney always checks how long it's been since your last message, regardless of other state.
+
+### Toney's learning is more reliable
+- After you end a session, Toney does important behind-the-scenes work: evolving its understanding of you, generating suggestions for next time, and writing growth observations for your focus areas. Previously, if this work failed (server hiccup, timeout), it was simply lost — Toney wouldn't learn from that session. Now, Toney detects when this happened and automatically retries the next time you start a session. You might notice a slightly longer wait (~5 seconds) on that next session, but the result is the same: nothing is lost.
+
+---
+
 ## February 15, 2026
 
 ### Journey timeline redesigned with emoji markers

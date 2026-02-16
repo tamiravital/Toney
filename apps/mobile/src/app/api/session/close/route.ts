@@ -93,6 +93,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No messages in session' }, { status: 400 });
     }
 
+    // ── Tiered close: skip pipeline for sessions with minimal engagement ──
+    const userMessageCount = messages.filter((m: { role: string }) => m.role === 'user').length;
+
+    if (userMessageCount === 0) {
+      // 0 user messages — delete the session entirely (messages cascade via FK)
+      await ctx.supabase
+        .from(ctx.table('sessions'))
+        .delete()
+        .eq('id', sessionId);
+      return NextResponse.json({ sessionNotes: null });
+    }
+
+    if (userMessageCount <= 2) {
+      // 1-2 user messages — mark completed, skip pipeline (no notes, no evolution)
+      await ctx.supabase.from(ctx.table('sessions')).update({
+        session_status: 'completed',
+        evolution_status: 'completed',
+        title: 'Brief session',
+      }).eq('id', sessionId);
+      return NextResponse.json({ sessionNotes: null });
+    }
+
+    // ── 3+ user messages: full close pipeline ──
+
     const savedCards = (cardsResult.data || []).map((c: { title: string; category: string }) => ({
       title: c.title,
       category: c.category,
