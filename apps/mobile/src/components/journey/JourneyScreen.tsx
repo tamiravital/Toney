@@ -17,10 +17,10 @@ interface PathNode {
   notes?: SessionNotesOutput;
 }
 
-// Snake path: nodes alternate center → right → center → left → center
+// Snake path: center → right → center → left → center
 const SNAKE_X = [50, 75, 50, 25, 50];
-const NODE_SPACING = 140; // px between nodes vertically (room for label below)
-const NODE_TOP_PAD = 32;
+const NODE_SPACING = 120;
+const NODE_TOP_PAD = 36;
 
 const NODE_EMOJI: Record<PathNode['type'], string> = {
   milestone: '\u2B50',
@@ -32,6 +32,12 @@ const NODE_BG: Record<PathNode['type'], string> = {
   milestone: 'bg-indigo-100',
   win: 'bg-green-100',
   first_session: 'bg-amber-50',
+};
+
+const BUBBLE_BG: Record<PathNode['type'], string> = {
+  milestone: 'bg-indigo-50 border-indigo-100',
+  win: 'bg-green-50 border-green-100',
+  first_session: 'bg-gray-50 border-gray-100',
 };
 
 function formatNodeDate(date: Date): string {
@@ -49,6 +55,12 @@ function getNodePos(index: number, containerWidth: number) {
   const x = (SNAKE_X[index % SNAKE_X.length] / 100) * containerWidth;
   const y = NODE_TOP_PAD + index * NODE_SPACING;
   return { x, y };
+}
+
+/** Bubble goes to whichever side has more space */
+function getBubbleSide(index: number): 'left' | 'right' {
+  const xPct = SNAKE_X[index % SNAKE_X.length];
+  return xPct >= 50 ? 'left' : 'right';
 }
 
 function buildCurvePath(positions: { x: number; y: number }[]): string {
@@ -148,7 +160,7 @@ export default function JourneyScreen() {
     const pos = pathNodes.map((_, i) => getNodePos(i, containerWidth));
     const path = buildCurvePath(pos);
     const height = pathNodes.length > 0
-      ? NODE_TOP_PAD + (pathNodes.length - 1) * NODE_SPACING + 80
+      ? NODE_TOP_PAD + (pathNodes.length - 1) * NODE_SPACING + 60
       : 0;
     return { positions: pos, curvePath: path, containerHeight: height };
   }, [pathNodes, containerWidth]);
@@ -190,7 +202,7 @@ export default function JourneyScreen() {
         </div>
       )}
 
-      {/* The Path — Duolingo-style S-curve */}
+      {/* The Path */}
       {!loading && hasContent && (
         <div
           ref={containerRef}
@@ -204,83 +216,95 @@ export default function JourneyScreen() {
               style={{ overflow: 'visible' }}
               aria-hidden="true"
             >
-              <path
-                d={curvePath}
-                fill="none"
-                stroke="#c7d2fe"
-                strokeWidth={6}
-                strokeLinecap="round"
-              />
-              <path
-                d={curvePath}
-                fill="none"
-                stroke="#a5b4fc"
-                strokeWidth={3}
-                strokeLinecap="round"
-              />
+              <path d={curvePath} fill="none" stroke="#c7d2fe" strokeWidth={6} strokeLinecap="round" />
+              <path d={curvePath} fill="none" stroke="#a5b4fc" strokeWidth={3} strokeLinecap="round" />
             </svg>
           )}
 
-          {/* Nodes — circle centered on path, label below */}
+          {/* Nodes */}
           {pathNodes.map((node, i) => {
             const pos = positions[i];
             if (!pos) return null;
             const isNewest = i === 0;
+            const bubbleSide = getBubbleSide(i);
 
-            // Decide label alignment: if node is on the left half, left-align label;
-            // if on the right half, right-align so it doesn't overflow
-            const nodeXPercent = SNAKE_X[i % SNAKE_X.length];
-            const labelAlign = nodeXPercent > 60 ? 'right' : nodeXPercent < 40 ? 'left' : 'center';
+            // Calculate bubble width: available space on the bubble side
+            const circleHalf = 28; // half of w-14 (56px)
+            const gap = 10;
+            const bubbleMax = bubbleSide === 'left'
+              ? pos.x - circleHalf - gap
+              : containerWidth - pos.x - circleHalf - gap;
 
             return (
               <div
                 key={node.id}
-                className="absolute flex flex-col items-center"
+                className="absolute"
                 style={{
                   left: `${pos.x}px`,
                   top: `${pos.y}px`,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                {/* Emoji circle */}
-                {node.type === 'milestone' ? (
-                  <button
-                    onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
-                    aria-label={node.text}
-                    className={`w-14 h-14 rounded-full border-4 border-white shadow-md flex items-center justify-center text-2xl
-                      ${NODE_BG[node.type]}
-                      ${isNewest ? 'animate-node-pulse' : ''}
-                      active:scale-95 transition-transform
-                    `}
-                  >
-                    {NODE_EMOJI[node.type]}
-                  </button>
-                ) : (
-                  <div
-                    className={`w-14 h-14 rounded-full border-4 border-white shadow-md flex items-center justify-center text-2xl
-                      ${NODE_BG[node.type]}
-                      ${isNewest ? 'animate-node-pulse' : ''}
-                    `}
-                  >
-                    {NODE_EMOJI[node.type]}
-                  </div>
-                )}
-
-                {/* Label below the circle */}
-                <div
-                  className={`mt-2 w-[200px]
-                    ${labelAlign === 'right' ? 'text-right' : labelAlign === 'left' ? 'text-left' : 'text-center'}
-                  `}
-                >
-                  <p className={`text-[13px] font-semibold leading-snug
-                    ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}
-                  `}>
-                    {node.text}
-                  </p>
-                  {node.focusAreaText && (
-                    <p className="text-[11px] text-indigo-500 mt-0.5">{node.focusAreaText}</p>
+                {/* Row: bubble + circle (or circle + bubble) */}
+                <div className="flex items-center gap-2.5">
+                  {/* Bubble on the left */}
+                  {bubbleSide === 'left' && (
+                    <div className="flex items-center" style={{ maxWidth: `${Math.max(bubbleMax, 100)}px` }}>
+                      {node.type === 'milestone' ? (
+                        <button
+                          onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
+                          className={`rounded-2xl border px-3 py-2 text-left ${BUBBLE_BG[node.type]} active:scale-[0.98] transition-transform`}
+                        >
+                          <p className="text-[13px] font-semibold text-gray-800 leading-snug">{node.text}</p>
+                          {node.focusAreaText && (
+                            <p className="text-[11px] text-indigo-500 mt-0.5">{node.focusAreaText}</p>
+                          )}
+                        </button>
+                      ) : (
+                        <div className={`rounded-2xl border px-3 py-2 ${BUBBLE_BG[node.type]}`}>
+                          <p className={`text-[13px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
+                            {node.text}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <p className="text-[11px] text-gray-400 mt-0.5">{formatNodeDate(node.date)}</p>
+
+                  {/* Circle + date */}
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div
+                      className={`w-14 h-14 rounded-full border-4 border-white shadow-md flex items-center justify-center text-2xl
+                        ${NODE_BG[node.type]}
+                        ${isNewest ? 'animate-node-pulse' : ''}
+                      `}
+                    >
+                      {NODE_EMOJI[node.type]}
+                    </div>
+                    <span className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</span>
+                  </div>
+
+                  {/* Bubble on the right */}
+                  {bubbleSide === 'right' && (
+                    <div className="flex items-center" style={{ maxWidth: `${Math.max(bubbleMax, 100)}px` }}>
+                      {node.type === 'milestone' ? (
+                        <button
+                          onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
+                          className={`rounded-2xl border px-3 py-2 text-left ${BUBBLE_BG[node.type]} active:scale-[0.98] transition-transform`}
+                        >
+                          <p className="text-[13px] font-semibold text-gray-800 leading-snug">{node.text}</p>
+                          {node.focusAreaText && (
+                            <p className="text-[11px] text-indigo-500 mt-0.5">{node.focusAreaText}</p>
+                          )}
+                        </button>
+                      ) : (
+                        <div className={`rounded-2xl border px-3 py-2 ${BUBBLE_BG[node.type]}`}>
+                          <p className={`text-[13px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
+                            {node.text}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
