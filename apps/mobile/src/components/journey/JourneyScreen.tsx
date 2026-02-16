@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { BookOpen, Trophy } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useSessionHistory } from '@/hooks/useSessionHistory';
@@ -24,20 +24,20 @@ const NODE_EMOJI: Record<PathNode['type'], string> = {
   first_session: '\uD83C\uDF31',
 };
 
-// Gradient palettes per focus area (from/to tailwind-ish colors)
-const FOCUS_GRADIENTS = [
-  { from: '#eef2ff', to: '#c7d2fe', border: '#a5b4fc' }, // indigo
-  { from: '#f0fdf4', to: '#bbf7d0', border: '#86efac' }, // green
-  { from: '#fefce8', to: '#fde68a', border: '#fcd34d' }, // amber
-  { from: '#fdf2f8', to: '#fbcfe8', border: '#f9a8d4' }, // pink
-  { from: '#f0f9ff', to: '#bae6fd', border: '#7dd3fc' }, // sky
-  { from: '#faf5ff', to: '#e9d5ff', border: '#d8b4fe' }, // purple
-  { from: '#fff7ed', to: '#fed7aa', border: '#fdba74' }, // orange
+// Flat colors per focus area (rotating hues)
+const FOCUS_HUES = [
+  { bg: '#eef2ff', border: '#c7d2fe', tag: '#818cf8' },  // indigo
+  { bg: '#fdf2f8', border: '#fbcfe8', tag: '#ec4899' },  // pink
+  { bg: '#f0f9ff', border: '#bae6fd', tag: '#38bdf8' },  // sky
+  { bg: '#faf5ff', border: '#e9d5ff', tag: '#a78bfa' },  // purple
+  { bg: '#fff7ed', border: '#fed7aa', tag: '#fb923c' },  // orange
+  { bg: '#fefce8', border: '#fde68a', tag: '#eab308' },  // yellow
+  { bg: '#ecfdf5', border: '#a7f3d0', tag: '#34d399' },  // emerald
 ];
 
-const DEFAULT_BUBBLE = { from: '#f9fafb', to: '#f3f4f6', border: '#e5e7eb' }; // gray
-const WIN_BUBBLE = { from: '#f0fdf4', to: '#dcfce7', border: '#bbf7d0' }; // green for wins
-const FIRST_SESSION_BUBBLE = { from: '#fffbeb', to: '#fef3c7', border: '#fde68a' }; // amber
+const WIN_STYLE = { bg: '#f0fdf4', border: '#bbf7d0', tag: '#22c55e' };
+const FIRST_SESSION_STYLE = { bg: '#fffbeb', border: '#fde68a', tag: '#f59e0b' };
+const DEFAULT_MILESTONE_STYLE = { bg: '#eef2ff', border: '#c7d2fe', tag: '#818cf8' };
 
 function formatNodeDate(date: Date): string {
   const now = new Date();
@@ -48,57 +48,6 @@ function formatNodeDate(date: Date): string {
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-const ROW_HEIGHT = 120;
-const ICON_SIZE = 48;
-const PADDING_X = 16;
-
-/** Build a sine-wave SVG path where nodes sit at the peaks */
-function buildSinePath(
-  count: number,
-  containerWidth: number,
-): { path: string; positions: { x: number; y: number; side: 'left' | 'right' }[] } {
-  if (count === 0) return { path: '', positions: [] };
-
-  const leftX = PADDING_X + ICON_SIZE / 2;
-  const rightX = containerWidth - PADDING_X - ICON_SIZE / 2;
-  const centerX = containerWidth / 2;
-  const amplitude = (rightX - leftX) / 2;
-  const startY = ICON_SIZE / 2 + 8;
-
-  const positions: { x: number; y: number; side: 'left' | 'right' }[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const y = startY + i * ROW_HEIGHT;
-    const side: 'left' | 'right' = i % 2 === 0 ? 'left' : 'right';
-    const x = side === 'left' ? leftX : rightX;
-    positions.push({ x, y, side });
-  }
-
-  if (count === 1) {
-    return { path: '', positions };
-  }
-
-  // Build smooth sine curve through all node positions
-  let d = `M ${positions[0].x} ${positions[0].y}`;
-
-  for (let i = 0; i < positions.length - 1; i++) {
-    const curr = positions[i];
-    const next = positions[i + 1];
-    const midY = (curr.y + next.y) / 2;
-
-    // S-curve: control points at the center X, at mid Y
-    d += ` C ${centerX} ${midY}, ${centerX} ${midY}, ${next.x} ${next.y}`;
-  }
-
-  // Extend line below the last node
-  const last = positions[positions.length - 1];
-  const extendY = last.y + ROW_HEIGHT * 0.5;
-  const nextSide = last.side === 'left' ? rightX : leftX;
-  d += ` C ${centerX} ${last.y + ROW_HEIGHT * 0.25}, ${centerX} ${last.y + ROW_HEIGHT * 0.25}, ${(last.x + nextSide) / 2} ${extendY}`;
-
-  return { path: d, positions };
 }
 
 export default function JourneyScreen() {
@@ -112,23 +61,6 @@ export default function JourneyScreen() {
   const [viewingNotes, setViewingNotes] = useState<{ notes: SessionNotesOutput; date: Date } | null>(null);
   const [showWinInput, setShowWinInput] = useState(false);
   const [newWin, setNewWin] = useState('');
-  const [containerWidth, setContainerWidth] = useState(0);
-  const observerRef = useRef<ResizeObserver | null>(null);
-  const containerRef = useCallback((el: HTMLDivElement | null) => {
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-      observerRef.current = null;
-    }
-    if (el) {
-      const obs = new ResizeObserver(entries => {
-        for (const entry of entries) {
-          setContainerWidth(entry.contentRect.width);
-        }
-      });
-      obs.observe(el);
-      observerRef.current = obs;
-    }
-  }, []);
 
   const focusAreaMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -138,14 +70,13 @@ export default function JourneyScreen() {
     return map;
   }, [focusAreas]);
 
-  // Assign gradient colors to each unique focus area
   const focusAreaColorMap = useMemo(() => {
-    const map = new Map<string, typeof FOCUS_GRADIENTS[0]>();
-    let colorIdx = 0;
+    const map = new Map<string, typeof FOCUS_HUES[0]>();
+    let idx = 0;
     for (const fa of focusAreas) {
       if (!map.has(fa.id)) {
-        map.set(fa.id, FOCUS_GRADIENTS[colorIdx % FOCUS_GRADIENTS.length]);
-        colorIdx++;
+        map.set(fa.id, FOCUS_HUES[idx % FOCUS_HUES.length]);
+        idx++;
       }
     }
     return map;
@@ -200,15 +131,6 @@ export default function JourneyScreen() {
     return nodes;
   }, [milestones, wins, days, focusAreaMap]);
 
-  const { path: sinePath, positions } = useMemo(
-    () => buildSinePath(pathNodes.length, containerWidth),
-    [pathNodes.length, containerWidth],
-  );
-
-  const totalHeight = pathNodes.length > 0
-    ? (pathNodes.length - 1) * ROW_HEIGHT + ICON_SIZE + 16 + ROW_HEIGHT * 0.5
-    : 0;
-
   const hasSessions = days.flatMap(d => d.items.filter(i => i.type === 'session')).length > 0;
   const hasContent = pathNodes.length > 0;
 
@@ -220,14 +142,13 @@ export default function JourneyScreen() {
     }
   }
 
-  function getBubbleStyle(node: PathNode) {
+  function getNodeStyle(node: PathNode) {
+    if (node.type === 'win') return WIN_STYLE;
+    if (node.type === 'first_session') return FIRST_SESSION_STYLE;
     if (node.focusAreaId) {
-      const gradient = focusAreaColorMap.get(node.focusAreaId);
-      if (gradient) return gradient;
+      return focusAreaColorMap.get(node.focusAreaId) || DEFAULT_MILESTONE_STYLE;
     }
-    if (node.type === 'win') return WIN_BUBBLE;
-    if (node.type === 'first_session') return FIRST_SESSION_BUBBLE;
-    return DEFAULT_BUBBLE;
+    return DEFAULT_MILESTONE_STYLE;
   }
 
   return (
@@ -256,102 +177,55 @@ export default function JourneyScreen() {
         </div>
       )}
 
-      {/* The sine-wave path */}
+      {/* Timeline */}
       {!loading && hasContent && (
-        <div ref={containerRef} className="relative mb-8" style={{ height: totalHeight }}>
-          {/* SVG sine curve behind nodes */}
-          {sinePath && containerWidth > 0 && (
-            <svg
-              className="absolute inset-0 pointer-events-none"
-              width={containerWidth}
-              height={totalHeight}
-              style={{ overflow: 'visible' }}
-              aria-hidden="true"
-            >
-              <path d={sinePath} fill="none" stroke="#e0e7ff" strokeWidth={6} strokeLinecap="round" />
-              <path d={sinePath} fill="none" stroke="#c7d2fe" strokeWidth={3} strokeLinecap="round" />
-            </svg>
-          )}
+        <div className="relative pl-8 mb-8">
+          {/* Vertical line */}
+          <div className="absolute left-[23px] top-6 bottom-0 w-[3px] rounded-full bg-indigo-100" />
 
-          {/* Nodes positioned absolutely along the wave */}
-          {containerWidth > 0 && pathNodes.map((node, i) => {
-            if (i >= positions.length) return null;
-            const pos = positions[i];
+          {/* Nodes */}
+          {pathNodes.map((node, i) => {
             const isNewest = i === 0;
-            const bubbleStyle = getBubbleStyle(node);
+            const style = getNodeStyle(node);
 
-            // Bubble always to the right of the icon
-            const maxBubbleWidth = containerWidth - pos.x - ICON_SIZE / 2 - 12;
-
-            const nodeContent = (
-              <>
-                {/* Emoji circle */}
+            return (
+              <div key={node.id} className="relative pb-8 last:pb-0">
+                {/* Emoji circle on the line */}
                 <div
-                  className="absolute"
-                  style={{
-                    left: pos.x - ICON_SIZE / 2,
-                    top: pos.y - ICON_SIZE / 2,
-                    width: ICON_SIZE,
-                    height: ICON_SIZE,
-                    zIndex: 20,
-                  }}
+                  className={`absolute -left-8 w-12 h-12 rounded-full border-4 border-white shadow-md flex items-center justify-center text-xl ${isNewest ? 'animate-node-pulse' : ''}`}
+                  style={{ backgroundColor: style.bg, top: 4 }}
                 >
-                  <div
-                    className={`w-12 h-12 rounded-full border-4 border-white shadow-md flex items-center justify-center text-xl
-                      ${isNewest ? 'animate-node-pulse' : ''}
-                    `}
-                    style={{
-                      background: `linear-gradient(135deg, ${bubbleStyle.from}, ${bubbleStyle.border})`,
-                    }}
-                  >
-                    {NODE_EMOJI[node.type]}
-                  </div>
+                  {NODE_EMOJI[node.type]}
                 </div>
 
                 {/* Bubble */}
-                <div
-                  className="absolute"
-                  style={{
-                    top: pos.y - 20,
-                    left: pos.x + ICON_SIZE / 2 + 8,
-                    maxWidth: maxBubbleWidth,
-                    zIndex: 10,
-                  }}
-                >
+                <div className="ml-8">
                   {node.type === 'milestone' ? (
                     <button
                       onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
-                      className="rounded-2xl px-3 py-2 text-left active:scale-[0.98] transition-transform"
-                      style={{
-                        background: `linear-gradient(135deg, ${bubbleStyle.from}, ${bubbleStyle.to})`,
-                        border: `1px solid ${bubbleStyle.border}`,
-                      }}
+                      className="rounded-2xl px-4 py-3 text-left w-full active:scale-[0.98] transition-transform"
+                      style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}
                     >
-                      <p className="text-[13px] font-semibold text-gray-800 leading-snug">{node.text}</p>
+                      <p className="text-[14px] font-semibold text-gray-800 leading-snug">{node.text}</p>
                       {node.focusAreaText && (
-                        <p className="text-[11px] mt-0.5" style={{ color: bubbleStyle.border }}>{node.focusAreaText}</p>
+                        <p className="text-[11px] mt-1 font-medium" style={{ color: style.tag }}>{node.focusAreaText}</p>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
+                      <p className="text-[11px] text-gray-400 mt-1.5">{formatNodeDate(node.date)}</p>
                     </button>
                   ) : (
                     <div
-                      className="rounded-2xl px-3 py-2"
-                      style={{
-                        background: `linear-gradient(135deg, ${bubbleStyle.from}, ${bubbleStyle.to})`,
-                        border: `1px solid ${bubbleStyle.border}`,
-                      }}
+                      className="rounded-2xl px-4 py-3"
+                      style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}
                     >
-                      <p className={`text-[13px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
+                      <p className={`text-[14px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
                         {node.text}
                       </p>
-                      <p className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
+                      <p className="text-[11px] text-gray-400 mt-1.5">{formatNodeDate(node.date)}</p>
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             );
-
-            return <div key={node.id}>{nodeContent}</div>;
           })}
         </div>
       )}
