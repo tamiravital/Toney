@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { BookOpen, Trophy } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useSessionHistory } from '@/hooks/useSessionHistory';
@@ -14,6 +14,7 @@ interface PathNode {
   date: Date;
   text: string;
   focusAreaText?: string;
+  focusAreaId?: string | null;
   notes?: SessionNotesOutput;
 }
 
@@ -23,17 +24,20 @@ const NODE_EMOJI: Record<PathNode['type'], string> = {
   first_session: '\uD83C\uDF31',
 };
 
-const NODE_BG: Record<PathNode['type'], string> = {
-  milestone: 'bg-indigo-100',
-  win: 'bg-green-100',
-  first_session: 'bg-amber-50',
-};
+// Gradient palettes per focus area (from/to tailwind-ish colors)
+const FOCUS_GRADIENTS = [
+  { from: '#eef2ff', to: '#c7d2fe', border: '#a5b4fc' }, // indigo
+  { from: '#f0fdf4', to: '#bbf7d0', border: '#86efac' }, // green
+  { from: '#fefce8', to: '#fde68a', border: '#fcd34d' }, // amber
+  { from: '#fdf2f8', to: '#fbcfe8', border: '#f9a8d4' }, // pink
+  { from: '#f0f9ff', to: '#bae6fd', border: '#7dd3fc' }, // sky
+  { from: '#faf5ff', to: '#e9d5ff', border: '#d8b4fe' }, // purple
+  { from: '#fff7ed', to: '#fed7aa', border: '#fdba74' }, // orange
+];
 
-const BUBBLE_BG: Record<PathNode['type'], string> = {
-  milestone: 'bg-indigo-50 border-indigo-100',
-  win: 'bg-green-50 border-green-100',
-  first_session: 'bg-gray-50 border-gray-100',
-};
+const DEFAULT_BUBBLE = { from: '#f9fafb', to: '#f3f4f6', border: '#e5e7eb' }; // gray
+const WIN_BUBBLE = { from: '#f0fdf4', to: '#dcfce7', border: '#bbf7d0' }; // green for wins
+const FIRST_SESSION_BUBBLE = { from: '#fffbeb', to: '#fef3c7', border: '#fde68a' }; // amber
 
 function formatNodeDate(date: Date): string {
   const now = new Date();
@@ -46,29 +50,55 @@ function formatNodeDate(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-/** Build a gentle sine-wave SVG path on the left rail */
-function buildWindingPath(count: number, rowHeight: number): string {
-  if (count < 2) return '';
-  const cx = 24; // center x of the left rail
-  const amplitude = 8; // how far the wave wobbles left/right
-  const startY = 28; // center of first emoji
-  const points: { x: number; y: number }[] = [];
+const ROW_HEIGHT = 120;
+const ICON_SIZE = 48;
+const PADDING_X = 16;
+
+/** Build a sine-wave SVG path where nodes sit at the peaks */
+function buildSinePath(
+  count: number,
+  containerWidth: number,
+): { path: string; positions: { x: number; y: number; side: 'left' | 'right' }[] } {
+  if (count === 0) return { path: '', positions: [] };
+
+  const leftX = PADDING_X + ICON_SIZE / 2;
+  const rightX = containerWidth - PADDING_X - ICON_SIZE / 2;
+  const centerX = containerWidth / 2;
+  const amplitude = (rightX - leftX) / 2;
+  const startY = ICON_SIZE / 2 + 8;
+
+  const positions: { x: number; y: number; side: 'left' | 'right' }[] = [];
 
   for (let i = 0; i < count; i++) {
-    const y = startY + i * rowHeight;
-    // Sine wave: alternates left and right of center
-    const x = cx + Math.sin(i * 0.9) * amplitude;
-    points.push({ x, y });
+    const y = startY + i * ROW_HEIGHT;
+    const side: 'left' | 'right' = i % 2 === 0 ? 'left' : 'right';
+    const x = side === 'left' ? leftX : rightX;
+    positions.push({ x, y, side });
   }
 
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const curr = points[i];
-    const next = points[i + 1];
-    const midY = (curr.y + next.y) / 2;
-    d += ` C ${curr.x} ${midY}, ${next.x} ${midY}, ${next.x} ${next.y}`;
+  if (count === 1) {
+    return { path: '', positions };
   }
-  return d;
+
+  // Build smooth sine curve through all node positions
+  let d = `M ${positions[0].x} ${positions[0].y}`;
+
+  for (let i = 0; i < positions.length - 1; i++) {
+    const curr = positions[i];
+    const next = positions[i + 1];
+    const midY = (curr.y + next.y) / 2;
+
+    // S-curve: control points at the center X, at mid Y
+    d += ` C ${centerX} ${midY}, ${centerX} ${midY}, ${next.x} ${next.y}`;
+  }
+
+  // Extend line below the last node
+  const last = positions[positions.length - 1];
+  const extendY = last.y + ROW_HEIGHT * 0.5;
+  const nextSide = last.side === 'left' ? rightX : leftX;
+  d += ` C ${centerX} ${last.y + ROW_HEIGHT * 0.25}, ${centerX} ${last.y + ROW_HEIGHT * 0.25}, ${(last.x + nextSide) / 2} ${extendY}`;
+
+  return { path: d, positions };
 }
 
 export default function JourneyScreen() {
@@ -82,11 +112,38 @@ export default function JourneyScreen() {
   const [viewingNotes, setViewingNotes] = useState<{ notes: SessionNotesOutput; date: Date } | null>(null);
   const [showWinInput, setShowWinInput] = useState(false);
   const [newWin, setNewWin] = useState('');
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const focusAreaMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const fa of focusAreas) {
       map.set(fa.id, fa.text);
+    }
+    return map;
+  }, [focusAreas]);
+
+  // Assign gradient colors to each unique focus area
+  const focusAreaColorMap = useMemo(() => {
+    const map = new Map<string, typeof FOCUS_GRADIENTS[0]>();
+    let colorIdx = 0;
+    for (const fa of focusAreas) {
+      if (!map.has(fa.id)) {
+        map.set(fa.id, FOCUS_GRADIENTS[colorIdx % FOCUS_GRADIENTS.length]);
+        colorIdx++;
+      }
     }
     return map;
   }, [focusAreas]);
@@ -101,6 +158,7 @@ export default function JourneyScreen() {
         date: m.date,
         text: m.milestone!,
         focusAreaText: m.focusAreaId ? focusAreaMap.get(m.focusAreaId) : undefined,
+        focusAreaId: m.focusAreaId,
         notes: {
           headline: m.headline,
           narrative: m.narrative,
@@ -116,6 +174,7 @@ export default function JourneyScreen() {
         id: w.id,
         date: new Date(w.created_at || w.date || Date.now()),
         text: w.text,
+        focusAreaId: w.focus_area_id,
       });
     }
 
@@ -138,11 +197,14 @@ export default function JourneyScreen() {
     return nodes;
   }, [milestones, wins, days, focusAreaMap]);
 
-  const ROW_HEIGHT = 88; // px per row
-  const windingPath = useMemo(
-    () => buildWindingPath(pathNodes.length, ROW_HEIGHT),
-    [pathNodes.length],
+  const { path: sinePath, positions } = useMemo(
+    () => buildSinePath(pathNodes.length, containerWidth),
+    [pathNodes.length, containerWidth],
   );
+
+  const totalHeight = pathNodes.length > 0
+    ? (pathNodes.length - 1) * ROW_HEIGHT + ICON_SIZE + 16 + ROW_HEIGHT * 0.5
+    : 0;
 
   const hasSessions = days.flatMap(d => d.items.filter(i => i.type === 'session')).length > 0;
   const hasContent = pathNodes.length > 0;
@@ -153,6 +215,16 @@ export default function JourneyScreen() {
       setNewWin('');
       setShowWinInput(false);
     }
+  }
+
+  function getBubbleStyle(node: PathNode) {
+    if (node.focusAreaId) {
+      const gradient = focusAreaColorMap.get(node.focusAreaId);
+      if (gradient) return gradient;
+    }
+    if (node.type === 'win') return WIN_BUBBLE;
+    if (node.type === 'first_session') return FIRST_SESSION_BUBBLE;
+    return DEFAULT_BUBBLE;
   }
 
   return (
@@ -181,71 +253,102 @@ export default function JourneyScreen() {
         </div>
       )}
 
-      {/* The Path — winding line on the left, bubbles on the right */}
+      {/* The sine-wave path */}
       {!loading && hasContent && (
-        <div className="relative mb-8">
-          {/* SVG winding line behind the nodes */}
-          {windingPath && (
+        <div ref={containerRef} className="relative mb-8" style={{ height: totalHeight }}>
+          {/* SVG sine curve behind nodes */}
+          {sinePath && containerWidth > 0 && (
             <svg
-              className="absolute left-0 top-0 pointer-events-none z-0"
-              width="48"
-              height={pathNodes.length * ROW_HEIGHT}
+              className="absolute inset-0 pointer-events-none"
+              width={containerWidth}
+              height={totalHeight}
               style={{ overflow: 'visible' }}
               aria-hidden="true"
             >
-              <path d={windingPath} fill="none" stroke="#c7d2fe" strokeWidth={5} strokeLinecap="round" />
-              <path d={windingPath} fill="none" stroke="#a5b4fc" strokeWidth={2.5} strokeLinecap="round" />
+              <path d={sinePath} fill="none" stroke="#e0e7ff" strokeWidth={6} strokeLinecap="round" />
+              <path d={sinePath} fill="none" stroke="#c7d2fe" strokeWidth={3} strokeLinecap="round" />
             </svg>
           )}
 
-          {/* Node rows */}
-          {pathNodes.map((node, i) => {
+          {/* Nodes positioned absolutely along the wave */}
+          {containerWidth > 0 && pathNodes.map((node, i) => {
+            if (i >= positions.length) return null;
+            const pos = positions[i];
             const isNewest = i === 0;
+            const bubbleStyle = getBubbleStyle(node);
 
-            const bubble = node.type === 'milestone' ? (
-              <button
-                onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
-                className={`rounded-2xl border px-3 py-2.5 text-left ${BUBBLE_BG[node.type]} active:scale-[0.98] transition-transform`}
-              >
-                <p className="text-[13px] font-semibold text-gray-800 leading-snug">{node.text}</p>
-                {node.focusAreaText && (
-                  <p className="text-[11px] text-indigo-500 mt-0.5">{node.focusAreaText}</p>
-                )}
-                <p className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
-              </button>
-            ) : (
-              <div className={`rounded-2xl border px-3 py-2.5 ${BUBBLE_BG[node.type]}`}>
-                <p className={`text-[13px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
-                  {node.text}
-                </p>
-                <p className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
-              </div>
-            );
+            // Bubble always to the right of the icon
+            const maxBubbleWidth = containerWidth - pos.x - ICON_SIZE / 2 - 12;
 
-            return (
-              <div
-                key={node.id}
-                className="flex items-center gap-3 relative z-10"
-                style={{ minHeight: `${ROW_HEIGHT}px` }}
-              >
-                {/* Emoji circle — fixed 48px column on the left */}
-                <div className="w-12 flex-shrink-0 flex justify-center">
+            const nodeContent = (
+              <>
+                {/* Emoji circle */}
+                <div
+                  className="absolute"
+                  style={{
+                    left: pos.x - ICON_SIZE / 2,
+                    top: pos.y - ICON_SIZE / 2,
+                    width: ICON_SIZE,
+                    height: ICON_SIZE,
+                    zIndex: 20,
+                  }}
+                >
                   <div
                     className={`w-12 h-12 rounded-full border-4 border-white shadow-md flex items-center justify-center text-xl
-                      ${NODE_BG[node.type]}
                       ${isNewest ? 'animate-node-pulse' : ''}
                     `}
+                    style={{
+                      background: `linear-gradient(135deg, ${bubbleStyle.from}, ${bubbleStyle.border})`,
+                    }}
                   >
                     {NODE_EMOJI[node.type]}
                   </div>
                 </div>
 
-                {/* Bubble to the right */}
-                <div className="flex-1 min-w-0">
-                  {bubble}
+                {/* Bubble */}
+                <div
+                  className="absolute"
+                  style={{
+                    top: pos.y - 20,
+                    left: pos.x + ICON_SIZE / 2 + 8,
+                    maxWidth: maxBubbleWidth,
+                    zIndex: 10,
+                  }}
+                >
+                  {node.type === 'milestone' ? (
+                    <button
+                      onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
+                      className="rounded-2xl px-3 py-2 text-left active:scale-[0.98] transition-transform"
+                      style={{
+                        background: `linear-gradient(135deg, ${bubbleStyle.from}, ${bubbleStyle.to})`,
+                        border: `1px solid ${bubbleStyle.border}`,
+                      }}
+                    >
+                      <p className="text-[13px] font-semibold text-gray-800 leading-snug">{node.text}</p>
+                      {node.focusAreaText && (
+                        <p className="text-[11px] mt-0.5" style={{ color: bubbleStyle.border }}>{node.focusAreaText}</p>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
+                    </button>
+                  ) : (
+                    <div
+                      className="rounded-2xl px-3 py-2"
+                      style={{
+                        background: `linear-gradient(135deg, ${bubbleStyle.from}, ${bubbleStyle.to})`,
+                        border: `1px solid ${bubbleStyle.border}`,
+                      }}
+                    >
+                      <p className={`text-[13px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
+                        {node.text}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
+              </>
             );
+
+            return <div key={node.id}>{nodeContent}</div>;
           })}
         </div>
       )}
