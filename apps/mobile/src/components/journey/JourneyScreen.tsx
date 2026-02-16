@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { BookOpen, Trophy } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useSessionHistory } from '@/hooks/useSessionHistory';
@@ -113,18 +113,21 @@ export default function JourneyScreen() {
   const [showWinInput, setShowWinInput] = useState(false);
   const [newWin, setNewWin] = useState('');
   const [containerWidth, setContainerWidth] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
-      }
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const containerRef = useCallback((el: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+    if (el) {
+      const obs = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      });
+      obs.observe(el);
+      observerRef.current = obs;
+    }
   }, []);
 
   const focusAreaMap = useMemo(() => {
