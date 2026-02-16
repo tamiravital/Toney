@@ -1,15 +1,31 @@
 'use client';
 
-import { useState } from 'react';
-import { Settings } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Settings, Trophy, Flame } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { useLastSession } from '@/hooks/useLastSession';
 import SessionNotesView from '@/components/chat/SessionNotesView';
 
+function computeWinMomentum(wins: { date?: Date | string }[]): string {
+  if (wins.length === 0) return 'Your first win is waiting';
+
+  const now = Date.now();
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const thisWeek = wins.filter(w => {
+    const d = w.date ? new Date(w.date).getTime() : 0;
+    return d >= weekAgo;
+  }).length;
+
+  if (thisWeek >= 3) return `${thisWeek} wins this week`;
+  if (thisWeek === 2) return '2 wins this week';
+  if (thisWeek === 1) return '1 win this week';
+  return `${wins.length} wins total`;
+}
+
 export default function HomeScreen() {
   const {
     displayName, understandingSnippet, focusAreas,
-    savedInsights, wins, setActiveTab, setShowSettings,
+    savedInsights, wins, streak, setActiveTab, setShowSettings,
   } = useToney();
   const { session: lastSession, notes: lastNotes } = useLastSession();
   const [showNotes, setShowNotes] = useState(false);
@@ -32,13 +48,9 @@ export default function HomeScreen() {
   // Most recent rewire card
   const latestCard = savedInsights[0] || null;
 
-  // Most recent win
+  // Win data
   const latestWin = wins[0] || null;
-  const winDate = latestWin?.date ? new Date(latestWin.date) : null;
-  const winDaysAgo = winDate
-    ? Math.floor((Date.now() - winDate.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
-  const winDaysAgoText = winDaysAgo === 0 ? 'Today' : winDaysAgo === 1 ? 'Yesterday' : winDaysAgo != null ? `${winDaysAgo}d ago` : '';
+  const momentumLabel = useMemo(() => computeWinMomentum(wins), [wins]);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col px-5 pt-5 pb-2 overflow-hidden">
@@ -76,6 +88,34 @@ export default function HomeScreen() {
           <p className="text-sm text-gray-400">No sessions yet. Start a conversation.</p>
         </div>
       )}
+
+      {/* Win Momentum Strip — position 2 */}
+      <button
+        onClick={() => setActiveTab('journey')}
+        className="w-full bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100/60 rounded-2xl p-4 text-left mb-3"
+      >
+        <div className="flex items-center gap-3">
+          {/* Left: count + streak */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
+              <Trophy className="w-4 h-4 text-green-600" />
+            </div>
+            {streak > 1 && (
+              <div className="flex items-center gap-0.5 text-orange-500">
+                <Flame className="w-3.5 h-3.5" />
+                <span className="text-xs font-bold">{streak}</span>
+              </div>
+            )}
+          </div>
+          {/* Center: latest win text */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-gray-800 font-medium leading-snug truncate">
+              {latestWin ? latestWin.text : 'Your first win is waiting'}
+            </p>
+            <p className="text-xs text-green-600 font-semibold mt-0.5">{momentumLabel}</p>
+          </div>
+        </div>
+      </button>
 
       {/* Two side-by-side tiles */}
       <div className="flex gap-3 mb-3">
@@ -132,25 +172,6 @@ export default function HomeScreen() {
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Last win */}
-      {latestWin ? (
-        <button
-          onClick={() => setActiveTab('journey')}
-          className="w-full bg-white border border-gray-100 rounded-2xl p-4 text-left"
-        >
-          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Latest Win</p>
-          <p className="text-sm text-gray-800 leading-snug line-clamp-2">{latestWin.text}</p>
-          {winDaysAgoText && (
-            <p className="text-xs text-gray-400 mt-1.5">{winDaysAgoText}</p>
-          )}
-        </button>
-      ) : (
-        <div className="bg-white border border-gray-100 rounded-2xl p-4">
-          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Latest Win</p>
-          <p className="text-sm text-gray-400">Wins show up as you grow.</p>
         </div>
       )}
 

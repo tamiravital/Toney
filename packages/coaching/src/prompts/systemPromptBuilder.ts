@@ -202,12 +202,25 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
 }
 
 /**
+ * Returns milestone observation text if the win count hits a milestone.
+ * Observational tone — "You've built a pattern" not "Congratulations!"
+ */
+function winMilestoneText(totalWinCount?: number): string | null {
+  if (!totalWinCount) return null;
+  if (totalWinCount >= 30) return `They've logged ${totalWinCount} wins now. That's not luck — that's a changed relationship with money. Acknowledge the pattern without making it a ceremony.`;
+  if (totalWinCount >= 15) return `Fifteen wins. They're not just having good moments anymore — they're building a different default. Reference the consistency, not the number.`;
+  if (totalWinCount >= 7) return `Seven wins now. A pattern is forming — they keep doing things differently. Name what you see: this isn't random, it's becoming who they are.`;
+  if (totalWinCount >= 3) return `Three wins logged. They're starting to build evidence that change is real. Mention it naturally — "You've got a few of these now."`;
+  return null;
+}
+
+/**
  * Returns a one-time system prompt block for the start of a new session.
  * Tells the Coach to open with a warm, context-aware agenda.
  * Append to system blocks only for the first message of a session.
  * No cache_control — it's ephemeral and one-time.
  */
-export function buildSessionOpeningBlock(isFirstSession?: boolean): SystemPromptBlock {
+export function buildSessionOpeningBlock(isFirstSession?: boolean, totalWinCount?: number): SystemPromptBlock {
   if (isFirstSession) {
     return {
       type: 'text',
@@ -223,6 +236,9 @@ Do NOT reference previous sessions, previous conversations, "last time we talked
     };
   }
 
+  const milestone = winMilestoneText(totalWinCount);
+  const milestoneBlock = milestone ? `\n\nWin milestone observation: ${milestone}` : '';
+
   return {
     type: 'text',
     text: `[SESSION OPENING] This is the start of a new session. Open the conversation — don't wait for the user to speak first.
@@ -234,7 +250,7 @@ Your opening should:
 - Keep it to 3-4 sentences. Warm, not clinical.
 - End by asking if they're up for it, or if something else is on their mind
 
-Don't say "Welcome back to your session" or anything robotic. Just be a coach who remembers them.`,
+Don't say "Welcome back to your session" or anything robotic. Just be a coach who remembers them.${milestoneBlock}`,
   };
 }
 
@@ -243,7 +259,10 @@ Don't say "Welcome back to your session" or anything robotic. Just be a coach wh
  * Tells the Coach how to open based on the suggestion the user chose.
  * Replaces buildSessionOpeningBlock() when a suggestion is available.
  */
-export function buildSessionOpeningFromSuggestion(suggestion: SessionSuggestion): SystemPromptBlock {
+export function buildSessionOpeningFromSuggestion(suggestion: SessionSuggestion, totalWinCount?: number): SystemPromptBlock {
+  const milestone = winMilestoneText(totalWinCount);
+  const milestoneBlock = milestone ? `\n\nWin milestone observation: ${milestone}` : '';
+
   return {
     type: 'text',
     text: `[SESSION OPENING — SUGGESTION SELECTED] The user chose to explore: "${suggestion.title}"
@@ -258,7 +277,7 @@ Your opening should:
 - Keep it to 3-4 sentences. Warm, not clinical.
 - End by inviting them in — not asking "is this ok?" but starting the work
 
-Don't say "Welcome back to your session" or anything robotic. The user picked this — honor that choice by diving in.`,
+Don't say "Welcome back to your session" or anything robotic. The user picked this — honor that choice by diving in.${milestoneBlock}`,
   };
 }
 

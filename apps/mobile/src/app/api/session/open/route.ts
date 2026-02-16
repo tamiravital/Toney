@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     } catch { /* empty body is fine */ }
 
     // ── Load data in parallel (no coaching_briefings query — dropped) ──
-    const [profileResult, winsResult, cardsResult, notesResult, focusAreasResult, suggestionsResult, completedSessionsResult] = await Promise.all([
+    const [profileResult, winsResult, cardsResult, notesResult, focusAreasResult, suggestionsResult, completedSessionsResult, winCountResult] = await Promise.all([
       ctx.supabase
         .from(ctx.table('profiles'))
         .select('*')
@@ -88,9 +88,14 @@ export async function POST(request: NextRequest) {
         .eq('user_id', ctx.userId)
         .eq('session_status', 'completed')
         .limit(1),
+      // Total win count (for milestone detection)
+      ctx.supabase
+        .from(ctx.table('wins'))
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', ctx.userId),
     ]);
 
-    timing('data loaded (7 parallel queries)');
+    timing('data loaded (8 parallel queries)');
 
     const profile = profileResult.data as Profile | null;
     if (!profile) {
@@ -321,6 +326,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Build system prompt (pure code, always instant) ──
+    const totalWinCount = winCountResult.count ?? 0;
+
     const plan = planSessionStep({
       profile,
       understanding: profile.understanding,
@@ -330,6 +337,7 @@ export async function POST(request: NextRequest) {
       activeFocusAreas,
       selectedSuggestion,
       continuationNotes,
+      totalWinCount,
     });
 
     timing('planSessionStep complete (pure code)');

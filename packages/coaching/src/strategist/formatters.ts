@@ -17,7 +17,32 @@ export function formatToolkit(cards: RewireCard[]): string {
 
 export function formatWins(wins: Win[]): string {
   if (!wins || wins.length === 0) return 'No wins logged yet.';
-  return wins.map(w => `- "${w.text}"`).join('\n');
+
+  const now = Date.now();
+  const lines: string[] = [];
+
+  // Header: count + velocity
+  lines.push(`Total: ${wins.length} wins`);
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const thisWeek = wins.filter(w => {
+    const d = w.created_at ? new Date(w.created_at).getTime() : w.date ? new Date(w.date).getTime() : 0;
+    return d >= weekAgo;
+  }).length;
+  if (thisWeek > 0) lines.push(`This week: ${thisWeek}`);
+
+  // Individual wins with relative dates
+  lines.push('');
+  for (const w of wins) {
+    const d = w.created_at ? new Date(w.created_at) : w.date ? new Date(w.date) : null;
+    let ago = '';
+    if (d) {
+      const days = Math.floor((now - d.getTime()) / (1000 * 60 * 60 * 24));
+      ago = days === 0 ? ' (today)' : days === 1 ? ' (yesterday)' : ` (${days}d ago)`;
+    }
+    lines.push(`- "${w.text}"${ago}`);
+  }
+
+  return lines.join('\n');
 }
 
 export function formatFocusAreas(areas: FocusArea[]): string {

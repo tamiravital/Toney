@@ -219,7 +219,7 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
     sections.push(`## Their Toolkit (for suggestion context)\n${formatToolkit(input.rewireCards)}`);
   }
   if (input.recentWins && input.recentWins.length > 0) {
-    sections.push(`## Recent Wins (for suggestion context)\n${formatWins(input.recentWins)}`);
+    sections.push(`## Wins — Evidence of Real Change\nThese wins represent moments where this person INTERRUPTED their tension pattern. They are the strongest evidence of change.\n\nWhen evolving the understanding:\n- Reference specific wins as proof of growth ("Previously avoided checking accounts; now checks regularly without spiraling")\n- If a win contradicts a resistance pattern in the narrative, UPDATE the narrative\n- Note if wins are accelerating or diversifying\n\n${formatWins(input.recentWins)}`);
   }
   if (input.recentSessionHeadline) {
     sections.push(`## This Session's Headline: "${input.recentSessionHeadline}"\n(Do NOT suggest sessions covering the same ground — suggest what comes NEXT.)`);

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
-        .limit(5),
+        .limit(20),
       ctx.supabase
         .from(ctx.table('focus_areas'))
         .select('*')

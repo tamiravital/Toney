@@ -35,6 +35,8 @@ export interface OpenSessionInput {
   selectedSuggestion?: SessionSuggestion | null;
   /** Notes from a previous session to continue (from Journey "Continue" button) */
   continuationNotes?: SessionNotesOutput | null;
+  /** Total number of wins for this user (for milestone detection) */
+  totalWinCount?: number;
 }
 
 export interface PlanSessionOutput {
@@ -87,9 +89,9 @@ export function planSessionStep(input: OpenSessionInput): PlanSessionOutput {
   if (input.continuationNotes) {
     systemPromptBlocks.push(buildSessionContinuationBlock(input.continuationNotes));
   } else if (suggestion) {
-    systemPromptBlocks.push(buildSessionOpeningFromSuggestion(suggestion));
+    systemPromptBlocks.push(buildSessionOpeningFromSuggestion(suggestion, input.totalWinCount));
   } else {
-    systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession));
+    systemPromptBlocks.push(buildSessionOpeningBlock(isFirstSession, input.totalWinCount));
   }
 
   return {
