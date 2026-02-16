@@ -1095,6 +1095,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }
 
       setSessionStatus('completed');
+      setMessages([]); // Clear messages so suggestion picker can show after notes dismiss
     } catch {
       // If session close fails, revert to active
       setSessionStatus('active');
