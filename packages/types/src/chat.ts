@@ -34,4 +34,6 @@ export interface Session {
   curiosities?: string | null;
   /** Coaching plan: how the Coach should open the session */
   opening_direction?: string | null;
+  /** Whether background evolution (evolveAndSuggest) completed after session close */
+  evolution_status?: 'pending' | 'completed' | 'failed';
 }

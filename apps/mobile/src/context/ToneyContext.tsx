@@ -1297,6 +1297,20 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (sessionOpenedRef.current) return;
     if (sessionStatus !== 'active') return;
 
+    // ── 12h boundary check FIRST — must run before suggestions/messages guards ──
+    // If >12h has passed since last message, always close the old session and open a new one,
+    // regardless of whether suggestions exist or messages are loaded.
+    if (currentSessionId && lastMessageTimestampRef.current) {
+      const lastTime = new Date(lastMessageTimestampRef.current).getTime();
+      const hoursSince = (Date.now() - lastTime) / (1000 * 60 * 60);
+
+      if (hoursSince >= 12) {
+        sessionOpenedRef.current = true;
+        openSession(currentSessionId); // deferred close + new session
+        return;
+      }
+    }
+
     // If suggestions exist, show picker first — don't auto-open unless user tapped a suggestion
     if (suggestions.length > 0 && !userInitiatedSessionRef.current) return;
 
@@ -1305,22 +1319,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
     sessionOpenedRef.current = true;
 
-    // Check if we need boundary detection
-    if (currentSessionId && lastMessageTimestampRef.current) {
-      const lastTime = new Date(lastMessageTimestampRef.current).getTime();
-      const hoursSince = (Date.now() - lastTime) / (1000 * 60 * 60);
-
-      if (hoursSince < 12) {
-        // Within 12h — resume existing session (messages already loaded as empty = empty session, that's fine)
-        return;
-      }
-
-      // >12h gap — close old session and open new one
-      openSession(currentSessionId);
-    } else {
-      // No existing session or no timestamp — open fresh
-      openSession();
+    // No existing session or no timestamp — open fresh
+    if (currentSessionId) {
+      // Existing session within 12h with no messages — resume (nothing to do)
+      return;
     }
+    openSession();
   }, [activeTab, appPhase, loadingChat, seedingInProgress, messages.length, sessionStatus, currentSessionId, openSession, suggestions.length]);
 
   const updateInsight = useCallback((insightId: string, updates: { content?: string; category?: string }) => {

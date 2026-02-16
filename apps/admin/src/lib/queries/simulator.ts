@@ -156,7 +156,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
   try {
     const { data: sessions } = await supabase
       .from('sessions')
-      .select('id, created_at, session_status, session_notes, title, narrative_snapshot, hypothesis, leverage_point, curiosities, opening_direction, milestone, focus_area_id')
+      .select('id, created_at, session_status, session_notes, title, narrative_snapshot, hypothesis, leverage_point, curiosities, opening_direction, milestone, focus_area_id, evolution_status')
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .limit(30);
@@ -174,6 +174,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
           curiosities: s.curiosities,
           opening_direction: s.opening_direction,
           milestone: s.milestone,
+          evolution_status: s.evolution_status || 'completed',
           // focus_area_id remapped in second pass after focus areas are cloned
         }).select('id').single();
         if (inserted) {

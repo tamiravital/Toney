@@ -151,9 +151,11 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Save session: notes + status + title + narrative snapshot + milestone ──
+    // evolution_status starts as 'pending' — set to 'completed' by after() callback
     const { error: sessionUpdateErr } = await ctx.supabase.from(ctx.table('sessions')).update({
       session_notes: JSON.stringify(sessionNotes),
       session_status: 'completed',
+      evolution_status: 'pending',
       title: sessionNotes.headline || 'Session complete',
       narrative_snapshot: currentUnderstanding,
       milestone: sessionNotes.milestone || null,
@@ -232,8 +234,19 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+
+        // Mark evolution as completed
+        await ctx.supabase.from(ctx.table('sessions')).update({
+          evolution_status: 'completed',
+        }).eq('id', sessionId);
       } catch (err) {
         console.error('Background close tasks failed:', err);
+        // Mark evolution as failed so next session open can retry
+        try {
+          await ctx.supabase.from(ctx.table('sessions')).update({
+            evolution_status: 'failed',
+          }).eq('id', sessionId);
+        } catch { /* last resort — status stays 'pending', retry will still catch it */ }
       }
     });
 

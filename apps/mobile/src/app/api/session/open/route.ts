@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
-import { planSessionStep, closeSessionPipeline, seedUnderstanding, seedSuggestions } from '@toney/coaching';
+import { planSessionStep, closeSessionPipeline, seedUnderstanding, seedSuggestions, evolveAndSuggest } from '@toney/coaching';
 import { Profile, RewireCard, Win, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
@@ -157,6 +157,136 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Retry incomplete evolution from a previous session close ──
+    // If the after() callback in the close route failed, the understanding wasn't evolved
+    // and no suggestions were generated. Detect and retry before opening the new session.
+    {
+      const { data: incompleteSession } = await ctx.supabase
+        .from(ctx.table('sessions'))
+        .select('id, hypothesis')
+        .eq('user_id', ctx.userId)
+        .eq('session_status', 'completed')
+        .neq('evolution_status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (incompleteSession) {
+        timing(`retrying incomplete evolution for session ${incompleteSession.id.slice(0, 8)}`);
+        try {
+          // Load messages from the incomplete session
+          const [retryMsgsResult, retryPrevSugResult] = await Promise.all([
+            ctx.supabase
+              .from(ctx.table('messages'))
+              .select('role, content')
+              .eq('session_id', incompleteSession.id)
+              .order('created_at', { ascending: true }),
+            ctx.supabase
+              .from(ctx.table('session_suggestions'))
+              .select('suggestions')
+              .eq('user_id', ctx.userId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single(),
+          ]);
+
+          const retryMessages = (retryMsgsResult.data || []).map((m: { role: string; content: string }) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          }));
+
+          if (retryMessages.length > 0) {
+            const retryFocusAreas = (focusAreasResult.data || []) as FocusArea[];
+            const retryCards = (cardsResult.data || []) as RewireCard[];
+            const retryWins = (winsResult.data || []) as Win[];
+
+            // Extract previous suggestion titles
+            let retryPrevTitles: string[] = [];
+            if (retryPrevSugResult.data?.suggestions) {
+              try {
+                const prev = typeof retryPrevSugResult.data.suggestions === 'string'
+                  ? JSON.parse(retryPrevSugResult.data.suggestions)
+                  : retryPrevSugResult.data.suggestions;
+                if (Array.isArray(prev)) {
+                  retryPrevTitles = prev.map((s: { title?: string }) => s.title || '').filter(Boolean);
+                }
+              } catch { /* ignore */ }
+            }
+
+            const evolved = await evolveAndSuggest({
+              currentUnderstanding: profile.understanding || null,
+              messages: retryMessages,
+              tensionType: profile.tension_type || null,
+              hypothesis: incompleteSession.hypothesis || null,
+              currentStageOfChange: profile.stage_of_change || null,
+              activeFocusAreas: retryFocusAreas,
+              rewireCards: retryCards,
+              recentWins: retryWins,
+              previousSuggestionTitles: retryPrevTitles,
+            });
+
+            // Save evolved understanding to profile
+            await ctx.supabase.from(ctx.table('profiles')).update({
+              understanding: evolved.understanding,
+              understanding_snippet: evolved.snippet || null,
+              ...(evolved.stageOfChange && { stage_of_change: evolved.stageOfChange }),
+            }).eq('id', ctx.userId);
+
+            profile.understanding = evolved.understanding;
+            if (evolved.stageOfChange) {
+              profile.stage_of_change = evolved.stageOfChange;
+            }
+
+            // Save suggestions (idempotency: check if already exists for this session)
+            if (evolved.suggestions.length > 0) {
+              const { data: existingSugs } = await ctx.supabase
+                .from(ctx.table('session_suggestions'))
+                .select('id')
+                .eq('generated_after_session_id', incompleteSession.id)
+                .limit(1);
+              if (!existingSugs || existingSugs.length === 0) {
+                await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+                  user_id: ctx.userId,
+                  suggestions: evolved.suggestions,
+                  generated_after_session_id: incompleteSession.id,
+                });
+              }
+            }
+
+            // Save focus area reflections (idempotency: check sessionId in JSONB)
+            if (evolved.focusAreaReflections && evolved.focusAreaReflections.length > 0) {
+              for (const ref of evolved.focusAreaReflections) {
+                const match = retryFocusAreas.find(a => a.text === ref.focusAreaText);
+                if (!match) continue;
+                const existing = (match as { reflections?: { sessionId?: string }[] }).reflections || [];
+                if (existing.some(r => r.sessionId === incompleteSession.id)) continue;
+                await ctx.supabase
+                  .from(ctx.table('focus_areas'))
+                  .update({
+                    reflections: [...existing, {
+                      date: new Date().toISOString(),
+                      sessionId: incompleteSession.id,
+                      text: ref.reflection,
+                    }],
+                  })
+                  .eq('id', match.id);
+              }
+            }
+
+            // Mark evolution as completed
+            await ctx.supabase.from(ctx.table('sessions')).update({
+              evolution_status: 'completed',
+            }).eq('id', incompleteSession.id);
+
+            timing('evolution retry complete');
+          }
+        } catch (err) {
+          console.error('Evolution retry failed:', err);
+          // Non-fatal — continue opening new session with current understanding
+        }
+      }
+    }
+
     // ── Deferred close of previous session (skip if already completed) ──
     if (previousSessionId) {
       // Check if session is already completed — no need to re-close
@@ -258,10 +388,11 @@ export async function POST(request: NextRequest) {
             previousSuggestionTitles: prevSuggestionTitles,
           });
 
-          // Save close results
+          // Save close results (evolution runs synchronously here, so mark as completed)
           const { error: deferredSessionErr } = await ctx.supabase.from(ctx.table('sessions')).update({
             session_notes: JSON.stringify(closeResult.sessionNotes),
             session_status: 'completed',
+            evolution_status: 'completed',
             title: closeResult.sessionNotes.headline || 'Session complete',
             narrative_snapshot: profile.understanding || null,
           }).eq('id', previousSessionId);
