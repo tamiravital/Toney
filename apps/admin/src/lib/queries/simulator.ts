@@ -150,16 +150,76 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     source_user_id: userId,
   } as Partial<Profile> & { display_name: string; user_prompt: string; source_user_id: string; understanding_snippet?: string });
 
+  // Copy sessions (with notes, coaching plan fields, status)
+  const sessionIdMap = new Map<string, string>(); // real ID → sim ID
+  try {
+    const { data: sessions } = await supabase
+      .from('sessions')
+      .select('id, created_at, session_status, session_notes, title, narrative_snapshot, hypothesis, leverage_point, curiosities, opening_direction')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(30);
+    if (sessions?.length) {
+      for (const s of sessions) {
+        const { data: inserted } = await supabase.from('sim_sessions').insert({
+          user_id: simProfile.id,
+          created_at: s.created_at,
+          session_status: s.session_status || 'completed',
+          session_notes: s.session_notes,
+          title: s.title,
+          narrative_snapshot: s.narrative_snapshot,
+          hypothesis: s.hypothesis,
+          leverage_point: s.leverage_point,
+          curiosities: s.curiosities,
+          opening_direction: s.opening_direction,
+        }).select('id').single();
+        if (inserted) sessionIdMap.set(s.id, inserted.id);
+      }
+    }
+  } catch (e) { console.error('Clone sessions error:', e); }
+
+  // Copy messages (mapped to sim session IDs)
+  try {
+    for (const [realSessionId, simSessionId] of sessionIdMap) {
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('role, content, created_at')
+        .eq('session_id', realSessionId)
+        .order('created_at', { ascending: true })
+        .limit(200);
+      if (msgs?.length) {
+        await supabase.from('sim_messages').insert(
+          msgs.map(m => ({
+            user_id: simProfile.id,
+            session_id: simSessionId,
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          }))
+        );
+      }
+    }
+  } catch (e) { console.error('Clone messages error:', e); }
+
   // Copy cards
   try {
     const { data: cards } = await supabase
       .from('rewire_cards')
-      .select('category, title, content, is_focus, times_completed, auto_generated')
+      .select('category, title, content, is_focus, times_completed, auto_generated, session_id')
       .eq('user_id', userId)
       .limit(30);
     if (cards?.length) {
       await supabase.from('sim_rewire_cards').insert(
-        cards.map(c => ({ user_id: simProfile.id, ...c }))
+        cards.map(c => ({
+          user_id: simProfile.id,
+          category: c.category,
+          title: c.title,
+          content: c.content,
+          is_focus: c.is_focus,
+          times_completed: c.times_completed,
+          auto_generated: c.auto_generated,
+          session_id: c.session_id ? (sessionIdMap.get(c.session_id) ?? null) : null,
+        }))
       );
     }
   } catch { /* no cards */ }
@@ -169,7 +229,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
   try {
     const { data: focusAreas } = await supabase
       .from('focus_areas')
-      .select('id, text, source, reflections, archived_at')
+      .select('id, text, source, reflections, archived_at, session_id')
       .eq('user_id', userId)
       .limit(20);
     if (focusAreas?.length) {
@@ -180,6 +240,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
           source: fa.source,
           reflections: fa.reflections,
           archived_at: fa.archived_at,
+          session_id: fa.session_id ? (sessionIdMap.get(fa.session_id) ?? null) : null,
         }))
       ).select('id');
       // Map real IDs to sim IDs (insertion order matches)
@@ -191,11 +252,11 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     }
   } catch { /* no focus areas */ }
 
-  // Copy wins (with source + focus_area_id mapping)
+  // Copy wins (with source + focus_area_id mapping + session_id mapping)
   try {
     const { data: wins } = await supabase
       .from('wins')
-      .select('text, tension_type, source, focus_area_id')
+      .select('text, tension_type, source, focus_area_id, session_id')
       .eq('user_id', userId)
       .limit(50);
     if (wins?.length) {
@@ -207,10 +268,30 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
           tension_type: w.tension_type,
           source: w.source || 'manual',
           focus_area_id: w.focus_area_id ? (focusAreaIdMap.get(w.focus_area_id) ?? null) : null,
+          session_id: w.session_id ? (sessionIdMap.get(w.session_id) ?? null) : null,
         }))
       );
     }
   } catch { /* no wins */ }
+
+  // Copy session suggestions
+  try {
+    const { data: suggestions } = await supabase
+      .from('session_suggestions')
+      .select('suggestions, generated_after_session_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (suggestions?.length) {
+      await supabase.from('sim_session_suggestions').insert(
+        suggestions.map(s => ({
+          user_id: simProfile.id,
+          suggestions: s.suggestions,
+          generated_after_session_id: s.generated_after_session_id ? (sessionIdMap.get(s.generated_after_session_id) ?? null) : null,
+        }))
+      );
+    }
+  } catch { /* no suggestions */ }
 
   return { simProfileId: simProfile.id };
 }
