@@ -126,7 +126,7 @@ Before each session, a detailed briefing is assembled instantly for the Coach. T
 
 5. **Your Toolkit** — all the Rewire Cards you've saved in previous sessions (reframes, plans, practices, etc.) and how often you've used them. This way the Coach can reference your existing tools instead of creating new ones when something you already have fits.
 
-6. **Recent Wins** — victories you've logged, so the Coach can acknowledge progress.
+6. **Recent Wins** — victories you've logged, with dates, how fast they're accumulating, and which focus areas they connect to. Wins are grouped by focus area when linked, so the Coach can reference specific progress on specific intentions.
 
 7. **What You Shared** — your original quiz answers and goals, so the Coach always remembers where you started.
 
@@ -201,9 +201,13 @@ When coaching reveals something meaningful you want to work toward, Toney sugges
 
 #### Wins
 
-When Toney notices you've made genuine progress — you did something brave with money, you used a technique from a Rewire Card and it worked, you had a real breakthrough insight — it quietly celebrates it as a **Win**. A green card with a trophy icon appears in the chat, already saved. No button to tap — it goes straight to your Journey.
+When Toney notices you've made genuine progress — you did something brave with money, you used a technique from a Rewire Card and it worked, you had a real breakthrough insight — it celebrates it as a **Win**. The win card animates in: a thin green line expands into a warm, glowing card with a gently rotating trophy icon and "Saved to your Journey." It's designed to feel like a moment — not confetti, but a warm acknowledgment that says "this matters."
 
-Toney doesn't celebrate everything positive. Only real victories over your tension pattern. And it doesn't announce "I'm logging a win!" — it drops it naturally into the flow of conversation.
+Before logging a win, Toney reflects your words back to you in italics, places the win marker, then grounds it with a bigger-picture statement: "That's the kind of thing that rewires how your brain responds to money." If the win connects to one of your focus areas, Toney names it: "That's movement on *Feel okay spending on myself*."
+
+Wins can be **linked to focus areas**. When Toney logs a win that relates to something you're working on, it connects them — so when you look at a focus area's growth timeline, you see not just Toney's observations but the actual moments that proved it. These linked wins appear as "Evidence" in your focus area's growth view.
+
+Toney doesn't celebrate everything positive. Only real victories over your tension pattern. And at milestone counts (3, 7, 15, 30 wins), Toney's session opening naturally observes the pattern: "Seven moments now where you did something different. That's not random — it's becoming who you are."
 
 ---
 
@@ -217,7 +221,7 @@ When a session ends, Toney immediately generates your **session notes** (the sum
 
 A summary is generated for you to read (this is what you see immediately):
 - **Headline** — a short title capturing the theme (e.g., "Connecting the dots between childhood and spending")
-- **Narrative** — a paragraph about what happened and what was meaningful
+- **Narrative** — a paragraph about what happened and what was meaningful. If wins were earned this session, they're woven into the narrative as highlights.
 - **Key moments** — (optional) specific turning points in the conversation
 - **Cards created** — which Rewire Cards came out of this session
 
@@ -249,6 +253,16 @@ The suggestions are deeply personalized. They reference your specific words, pat
 
 Each suggestion must feel like something only Toney could say to *you* — not a generic coaching prompt.
 
+**And writes growth reflections for your focus areas.** For each focus area that the session touched — directly or indirectly — the Strategist writes a 1-3 sentence observation about where you are with that intention. These are written directly to you:
+
+- *"You bought yourself coffee and didn't spiral — that's new."*
+- *"You're still calling spending on yourself 'wasteful' — but you're asking why now. The curiosity is new."*
+- *"You rehearsed what you'd say to your partner about the vacation budget. The fear is about his reaction, not the money."*
+
+These reflections accumulate over time on each focus area, creating a visible growth story. When you look at a focus area on the Home screen or Journey tab, you can see not just what you declared you wanted to work on — but how you've actually been evolving.
+
+Not every session produces reflections for every focus area. Only areas that the session genuinely touched get an observation. This keeps them honest and meaningful.
+
 ---
 
 ## Part 6: The Screens
@@ -259,11 +273,11 @@ Where you land when you open the app. It's designed to be **calm** — everythin
 
 - **A personalized greeting** — "Hi [Name]" with a settings gear
 - **Last session card** — the headline and a snippet from your most recent session notes, plus how many days ago it was. Tap to see the full notes.
+- **Win Momentum Strip** — a green card showing your latest win, how many wins this week, and a momentum label ("Most active week yet" / "Your next win is out there"). Tap to see your Journey.
 - **Two side-by-side tiles**:
   - **"What Toney Sees"** — a single evolving sentence capturing what Toney understands about you right now. This changes after every session. It's how you see growth — not through numbers, but through how the language shifts over time.
   - **Your latest Rewire Card** — the most recent card you saved. Tap to go to your full collection.
-- **Focus areas** — horizontal pills showing what you're working on. Tap X to archive one that's no longer relevant.
-- **Last win** — your most recent victory, with when it happened. Tap to see your Journey.
+- **Focus areas** — cards showing what you're working on. Each one displays the latest growth reflection underneath (e.g., "You bought yourself coffee and didn't spiral — that's new"). Tap one to see your full growth story on the Journey tab.
 
 ### Chat Screen
 
@@ -287,28 +301,41 @@ The **End Session** button appears in the top right after you've saved a card or
 
 ### Rewire Screen
 
-Your card collection. At the top, horizontal filter tabs (All, Reframes, Truths, Plans, Practices, Kits) each with a count badge. Tap a category to filter.
+Your card collection, displayed as a **swipeable flashcard deck**. At the top, horizontal filter tabs (All, Reframes, Truths, Plans, Practices, Kits) each with a count badge. Tap a category to filter.
 
-Each card shows:
-- Its category icon and color
-- The card title (bold)
-- The content (with formatting)
-- The date it was saved
-- Options to edit or delete
-- A "Revisit with Toney" link that opens chat with a pre-filled message about that specific card
+Each card has two sides:
+
+**Front** — clean and scannable:
+- A large category icon in the center
+- The category label (e.g., "REFRAME")
+- The card title
+- A "Tap to flip" hint at the bottom
+
+**Back** — the full card:
+- Category icon and label in the header, with the date saved
+- The full content with formatting (bold, lists, etc.)
+- Three action buttons at the bottom: **Revisit** (opens chat with a pre-filled message about this card), **Edit**, and **Delete**
+
+Swipe left or right to browse between cards. The deck loops infinitely — you can keep swiping in either direction and it wraps around. Dot indicators at the bottom show which card you're on. A quick flick is enough to advance; you don't need to drag all the way across.
 
 If a category is empty, you see a helpful explanation of what that card type is for, plus a button to start a conversation.
 
 ### Journey Screen
 
-Your coaching timeline. At the top: your streak (flame icon + number), and a green "Log a Win" button.
+Your growth story, displayed as a **vertical timeline** with emoji markers.
 
-Below that, entries grouped by day ("Today," "Yesterday," or dates):
+A straight line runs down the left side of the screen, with emoji circles sitting on it:
+- ⭐ **Star** — session breakthroughs (moments where something genuinely shifted — not every session, only the ones where a real realization or change happened)
+- 🏆 **Trophy** — wins you've earned (things you did differently with money)
+- 🌱 **Seedling** — your first session
 
-- **Session entries** — white cards with the session headline and counts of cards/wins from that session. Tap to view full session notes.
-- **Win entries** — white cards with a green checkmark, showing what the win was and whether it came from coaching or you logged it yourself. Small X to delete.
+Each node has a colored bubble beside it showing what happened and when. The colors vary by focus area — breakthroughs linked to different focus areas get different hues, so you can see at a glance which areas of your life are seeing the most progress. Wins are always green.
 
-If you've never logged a win, you see **suggested quick-tap wins** related to your tension type (e.g., "Checked my account without spiraling" for the worry tension). One tap to log them.
+A **session history button** (book icon, top right) opens a bottom sheet with all your past sessions if you want to browse them and read session notes.
+
+At the bottom, a **"Log a Win"** button lets you record victories manually — things you did differently with money that you want to remember.
+
+Breakthrough nodes are tappable — tap one to read the full session notes from when that shift happened.
 
 ---
 

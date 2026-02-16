@@ -1,5 +1,51 @@
 # Toney — Changelog
 
+## 2026-02-15 — Journey Timeline Redesign
+- **Journey timeline with emoji markers**: The Journey tab now shows a vertical timeline with emoji circles on a line — ⭐ for breakthrough milestones, 🏆 for wins, 🌱 for your first session. Each node has a colored bubble with the text, focus area label (for milestones), and date.
+- **Different colors per focus area**: Milestones connected to different focus areas get different hues (indigo, pink, sky, purple, orange, yellow, emerald). Wins are green, first session is amber.
+- **Bigger, more readable nodes**: Text is 14px (up from 13px), bubbles have more padding, and nodes are well-spaced on the timeline.
+- **Sim clone win dates fixed**: Cloning a user into the simulator now preserves original win timestamps instead of resetting them all to the clone time.
+
+## 2026-02-15 — Journey Redesign + Intel Rebuild
+- **Journey tab redesigned as a growth dashboard**: Focus areas and narrative growth are the main content. Sessions are accessible via a BookOpen icon in the top-right corner (like Settings on the home screen) — they're not shown inline. A "Where you are" card at the top shows Toney's current understanding + a before/after contrast using your earliest focus area reflection. Focus areas show as tappable cards with win counts and reflection counts. Wins section always visible for logging wins.
+- **Journey works even without focus areas**: If you have sessions but no focus areas (e.g., you started before focus areas were added), the Journey shows your 5 most recent session headlines as tappable cards. Tap one to read its notes.
+- **Full intel rebuild generates all coaching data**: Running "Full Intel" on a user in admin now produces everything the app needs — understanding snippet (for home screen), focus areas (from onboarding goals), focus area reflections (per session), and session suggestions. Previously it only updated the understanding narrative.
+- **Simulator clone copies everything**: Cloning a user into the simulator now deep-copies sessions, messages, focus areas (with reflections), wins (linked to focus areas), session suggestions, and the understanding snippet. Previously only copied profile + cards + wins.
+- **Simulator displays session data correctly**: Hooks that read session history now work in sim mode. Previously the simulator showed "No sessions yet" even for users with many sessions.
+
+## 2026-02-15 — Wins-First Strategy (Phases 1-3)
+- **Animated win card**: DraftWin rewritten with a 1.2s celebration sequence — thin green line expands into a warm glowing card, trophy icon rotates, "Saved to your Journey" fades in. Calm, not confetti.
+- **Coach win delivery pattern**: Coach now reflects the user's words back before the `[WIN]` marker, then grounds it with a bigger-picture statement. Connects to focus areas when relevant. Bold-as-checkpoint rule: every bold phrase triggers the question "does this deserve a marker?"
+- **Wins in session notes**: Haiku now receives session wins and weaves them into the narrative. Wins are the highlights.
+- **Win-referencing suggestions**: At least one suggestion from `evolveAndSuggest()` explicitly builds on a recent win.
+- **Win Momentum Strip on home screen**: Replaces the old "Latest Win" tile. Shows win count, latest win text, and a momentum label ("3 wins this week" / "Most active week yet"). Position 2 after Last Session hero.
+- **Enriched `formatWins()`**: Now includes dates (relative), total count, session velocity, pattern summary. Groups by focus area when linked. Chat route increased from `limit(5)` to `limit(20)`.
+- **Wins as growth evidence**: Promoted from secondary context to primary evidence in `evolveAndSuggest()`. Instructions to reference wins as proof, track acceleration, update narrative when wins contradict resistance patterns.
+- **Win milestones**: At counts 3, 7, 15, 30, Coach's opening message naturally observes the pattern. Not "Congratulations!" — observational: "Seven moments now where you did something different."
+- **Win–focus area linking (migration 029)**: `focus_area_id` column on wins + sim_wins. Coach uses `[WIN:focus=X]...[/WIN]` syntax. API fuzzy-matches focus area text (exact then substring). Backward compatible — plain `[WIN]...[/WIN]` still works.
+- **Win evidence in Focus Area Growth View**: New "Evidence" section showing linked wins as green cards above the growth reflections timeline.
+- 3 commits: `3e924cc` (Phase 1), `8826733` (Phase 2), `e4c15b5` (Phase 3). Build passes. Deployed.
+
+## 2026-02-15 — Rewire Flashcard Deck
+- **Rewire screen redesigned as a swipeable flashcard deck**: Cards now show only the title and category icon on the front. Tap to flip (3D animation) to see the full content, date, and action buttons on the back.
+- **Horizontal carousel navigation**: Swipe left/right to browse cards. The carousel loops infinitely — no dead ends. Dot indicators at the bottom show your position.
+- **Velocity-aware swiping**: A quick flick commits the swipe even with minimal distance. Slow drags past 25% of the card width also commit. Under 25% snaps back smoothly. The animation decelerates naturally (iOS-style easing) and adapts its speed — cards close to their destination animate faster.
+- **Shadow artifacts fixed**: Removed a visual glitch where card shadows were clipped at the bottom corners of the carousel.
+- **Category filter tabs unchanged**: Same horizontal tabs (All, Reframes, Truths, Plans, Practices, Kits) with count badges.
+- **Code refactored**: Monolithic 438-line file split into 4 focused files — shared constants, flashcard component, carousel component, and a slim orchestrator.
+
+## 2026-02-15 — Wins Dedup Fix
+- **Fixed duplicate wins**: When Toney celebrated a win in chat, it was being saved multiple times (3-10x) to the database. Added deduplication at both the client (prevents redundant API calls during streaming) and server (checks for existing identical wins before inserting). Existing duplicates in the database are unaffected — only future wins are deduplicated.
+
+## 2026-02-14 — Focus Area Growth Reflections
+- **Focus areas now show your evolution**: After each session, Toney writes a 1-3 sentence observation about each focus area the session touched. These accumulate over time, creating a visible growth timeline anchored to your declared intentions.
+- **Home screen focus areas upgraded**: Focus areas are now cards (not flat pills) showing the latest reflection underneath. Before your first session, they say "Reflections appear after your next session."
+- **Journey tab: Focus area growth timeline**: Tapping a focus area (on Home or Journey) opens a bottom-sheet overlay with your full growth story — reverse-chronological reflections with dates, source label, and age. You can archive focus areas from here too.
+- **Coach sees your growth**: The Coach now reads the latest reflection for each focus area, giving it continuity across sessions — it can reference specific progress you've made.
+- **Session notes mention focus areas**: When a session makes progress on a focus area, Toney's session notes now weave that in naturally.
+- **No new AI costs**: Reflections are generated inside the same AI call that already runs at session close (~50-150 extra words).
+- Migration 028: `reflections` column added to focus_areas table.
+
 ## 2026-02-14 — Tone/Depth Scale + Coach Prompt Tuning
 - **Tone and depth scales unified**: Both are now 1-5 sliders (tone was 1-10, depth was text labels). Database migrated, all code updated.
 - **Coach prompt tuned from real session analysis** (6 fixes):

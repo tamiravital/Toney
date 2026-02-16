@@ -4,7 +4,67 @@
 
 ---
 
+## February 15, 2026
+
+### Journey timeline redesigned with emoji markers
+- The Journey tab now shows a **vertical timeline** with emoji circles on a line — ⭐ for sessions where you had a real breakthrough or shift (not every session — only the ones where something genuinely changed), 🏆 for wins (things you did differently with money), and 🌱 for your first session.
+- Each node has a **colored bubble** beside it with the text, date, and (for breakthroughs) which focus area it connects to.
+- **Different focus areas get different colors** — so you can see at a glance which areas of your life are producing the most growth. Wins are always green.
+- Breakthrough nodes are tappable — tap to read the full session notes from that breakthrough.
+
+### Journey tab redesigned
+
+- The Journey tab has been redesigned as a **growth dashboard** instead of a chronological session list.
+- At the top, a **"Where you are" card** shows Toney's current understanding of you in one sentence. If you've been using Toney for a while, it also shows a contrast with an earlier observation — so you can see how far you've come.
+- Your **focus areas** are the main content now. Each one shows the latest growth observation and counts of wins and reflections. Tap to see the full growth story.
+- **Past sessions** are still accessible — just tap the book icon in the top right to browse them and read session notes.
+- If you started using Toney before focus areas existed, the Journey shows your recent session headlines as tappable cards — so the screen is never empty.
+- You can still log wins from the Journey tab.
+
+### Rewire cards are now a swipeable flashcard deck
+
+- Your Rewire Cards screen has been redesigned. Instead of a long scrollable list showing everything at once, cards are now displayed as a **flashcard deck** that you can swipe through.
+- Each card shows just the **title and category icon** on the front — clean and easy to scan. Tap the card to **flip it over** (with a smooth 3D animation) to see the full content, date, and action buttons.
+- **Swipe left or right** to browse between cards. The deck loops around — no dead ends when you reach the last card. You can keep swiping endlessly.
+- Swiping feels natural — a quick flick is enough to advance, and the animation slows down smoothly like scrolling on an iPhone.
+- The category filter tabs at the top (All, Reframes, Truths, Plans, etc.) work the same as before.
+- Fixed a visual glitch where card shadows looked odd at the bottom corners.
+
+### Wins no longer save multiple times
+- When Toney celebrated a win during a session, it was sometimes being saved 3-10 times instead of once. You might have noticed duplicate entries on your Journey timeline. This is now fixed — each win saves exactly once.
+
+### Wins feel like they matter now
+
+- When Toney celebrates a win, it's no longer a flat green card that appears and disappears. The card now **animates in** — a thin green line expands into a warm, glowing card with a rotating trophy icon. It feels like a moment, not a footnote.
+- Toney now **reflects your words back** before logging a win, and connects it to the bigger picture: "That's the kind of thing that rewires how your brain responds to money." If it connects to a focus area, Toney names it.
+- **Session notes now mention your wins.** When you end a session, the summary highlights the victories you earned — they're woven into the narrative.
+- **Session suggestions build on recent wins.** At least one suggestion for your next session explicitly references a recent win, so your progress carries forward.
+
+### Wins are more visible everywhere
+
+- The home screen now shows a **Win Momentum Strip** — a green card right below your last session, showing your latest win, how many you've earned this week, and a momentum label like "Most active week yet" or "3 wins this week."
+- Toney's Coach now knows more about your wins — not just the text, but when they happened, how fast they're accumulating, and what patterns exist. It uses this to reference your progress more naturally.
+- At **milestone win counts** (3, 7, 15, 30), Toney's opening message naturally acknowledges the pattern: "Seven moments now where you did something different. That's not random."
+- When Toney's internal understanding of you evolves after each session, your wins are now treated as **primary evidence of real change** — not a sidebar.
+
+### Wins now connect to your focus areas
+
+- When Toney logs a win that relates to one of your focus areas (like "Feel okay spending on myself"), it **links them together**. The Coach uses a new format — `[WIN:focus=...]` — to specify which focus area a win belongs to.
+- On your **Journey tab**, tapping a focus area now shows a new **"Evidence" section** — all the wins linked to that focus area, displayed as green cards with dates. You can see not just what Toney observed about your growth, but the actual moments that proved it.
+- The Coach now sees your wins **grouped by focus area** in its briefing, so it can reference specific progress on specific intentions.
+
+---
+
 ## February 14, 2026
+
+### Focus areas now show your growth
+
+- Your focus areas (like "Feel okay spending on myself" or "Have the money conversation with my partner") now show how you're evolving — not just what you declared.
+- After each session, Toney writes a brief observation about each focus area the session touched. These accumulate over time, creating a visible growth story.
+- On the **home screen**, focus areas are now cards (instead of flat pills) showing the latest observation underneath. For example: "You bought yourself coffee and didn't spiral — that's new."
+- On the **Journey tab**, you can tap any focus area to see its full growth timeline — every observation, newest first, with dates. You can also archive a focus area from here.
+- Toney's Coach now reads the latest observation for each focus area before every session, so it can reference your specific progress naturally.
+- This doesn't add any extra processing time — the observations are generated inside the same step that already happens after each session.
 
 ### Getting started is faster
 - After finishing the quiz, the "Getting to know you..." wait is about half as long as before. Toney now processes your answers in two parallel steps instead of one big sequential one.
