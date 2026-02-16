@@ -150,12 +150,13 @@ export async function POST(request: NextRequest) {
       sessionWins: sessionWins.length > 0 ? sessionWins : undefined,
     });
 
-    // ── Save session: notes + status + title + narrative snapshot ──
+    // ── Save session: notes + status + title + narrative snapshot + milestone ──
     const { error: sessionUpdateErr } = await ctx.supabase.from(ctx.table('sessions')).update({
       session_notes: JSON.stringify(sessionNotes),
       session_status: 'completed',
       title: sessionNotes.headline || 'Session complete',
       narrative_snapshot: currentUnderstanding,
+      milestone: sessionNotes.milestone || null,
     }).eq('id', sessionId);
 
     if (sessionUpdateErr) {

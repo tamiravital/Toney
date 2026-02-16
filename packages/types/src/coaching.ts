@@ -47,6 +47,8 @@ export interface SessionNotesOutput {
   keyMoments?: string[];
   /** Cards co-created during this session (title + category). Optional — omitted if none. */
   cardsCreated?: { title: string; category: string }[];
+  /** 5-15 word statement of the core shift. Only present if a genuine breakthrough happened. */
+  milestone?: string;
 }
 
 // --- Session Suggestions ---

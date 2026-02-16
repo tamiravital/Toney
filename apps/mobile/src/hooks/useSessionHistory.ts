@@ -14,6 +14,8 @@ export interface SessionHistoryItem {
   keyMoments?: string[];
   cardsCreated?: { title: string; category: string }[];
   winsCount: number;
+  milestone?: string | null;
+  focusAreaId?: string | null;
 }
 
 export interface WinHistoryItem {
@@ -46,7 +48,7 @@ function formatDayLabel(date: Date): string {
 }
 
 function buildDayGroups(
-  sessions: { id: string; created_at: string; session_notes: string }[],
+  sessions: { id: string; created_at: string; session_notes: string; milestone?: string | null; focus_area_id?: string | null }[],
   wins: Win[],
 ): DayGroup[] {
   // Build win counts per session
@@ -72,6 +74,8 @@ function buildDayGroups(
         keyMoments: notes.keyMoments,
         cardsCreated: notes.cardsCreated,
         winsCount: winsBySession.get(s.id) || 0,
+        milestone: s.milestone || null,
+        focusAreaId: s.focus_area_id || null,
       });
     } catch {
       // Skip sessions with invalid notes JSON
@@ -142,7 +146,7 @@ export function useSessionHistory() {
       const [sessionsResult, winsResult] = await Promise.all([
         supabase
           .from('sessions')
-          .select('id, created_at, session_notes')
+          .select('id, created_at, session_notes, milestone, focus_area_id')
           .eq('user_id', user.id)
           .eq('session_status', 'completed')
           .not('session_notes', 'is', null)
@@ -156,7 +160,7 @@ export function useSessionHistory() {
           .limit(50),
       ]);
 
-      const sessions = (sessionsResult.data || []) as { id: string; created_at: string; session_notes: string }[];
+      const sessions = (sessionsResult.data || []) as { id: string; created_at: string; session_notes: string; milestone?: string | null; focus_area_id?: string | null }[];
       const wins = (winsResult.data || []) as Win[];
 
       const grouped = buildDayGroups(sessions, wins);
@@ -172,5 +176,12 @@ export function useSessionHistory() {
     fetchHistory();
   }, [fetchHistory]);
 
-  return { days, loading, refetch: fetchHistory };
+  // Milestones: sessions with non-null milestone, for the Journey path
+  const milestones = days.flatMap(day =>
+    day.items.filter((item): item is SessionHistoryItem =>
+      item.type === 'session' && !!(item as SessionHistoryItem).milestone
+    )
+  );
+
+  return { days, loading, milestones, refetch: fetchHistory };
 }

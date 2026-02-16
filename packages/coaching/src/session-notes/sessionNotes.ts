@@ -38,7 +38,8 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 {
   "headline": "One specific sentence capturing the core of what happened. Not generic ('We talked about spending') but reflective ('You connected your reluctance to spend on yourself to how your mom treated money as scarce').",
   "narrative": "2-3 short paragraphs. Second person, warm. The arc of the conversation — where it started, where it went, what shifted. Like a thoughtful friend summarizing what happened. Use their actual words and situations, not therapy-speak.",
-  "keyMoments": ["Specific things the user said or realized that mattered — the 'oh wow' moments. Close to their actual words. 2-3 items. OMIT this field entirely if nothing stood out."]
+  "keyMoments": ["Specific things the user said or realized that mattered — the 'oh wow' moments. Close to their actual words. 2-3 items. OMIT this field entirely if nothing stood out."],
+  "milestone": "Optional. 5-15 word statement of the core shift or realization — the ONE thing that changed. Not a description of what happened, but a statement of what changed. Examples: 'Money as a canvas for my dreams', 'I am also safe in my being when I am wealthy', 'Named 6000 shekels from the wealthy woman inside'. Only include if there was a genuine shift or breakthrough. OMIT if the session was exploratory or a continuation without a distinct new realization."
 }
 \`\`\`
 
@@ -123,6 +124,9 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
     // Use actually-saved cards from DB, not LLM-extracted
     if (input.savedCards && input.savedCards.length > 0) {
       result.cardsCreated = input.savedCards;
+    }
+    if (typeof parsed.milestone === 'string' && parsed.milestone.trim()) {
+      result.milestone = parsed.milestone.trim();
     }
     return result;
   } catch {
