@@ -202,6 +202,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
       await supabase.from('sim_wins').insert(
         wins.map(w => ({
           user_id: simProfile.id,
+          content: w.text,
           text: w.text,
           tension_type: w.tension_type,
           source: w.source || 'manual',
