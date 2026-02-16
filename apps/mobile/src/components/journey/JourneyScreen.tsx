@@ -131,7 +131,7 @@ export default function JourneyScreen() {
       nodes.push({
         type: 'win',
         id: w.id,
-        date: new Date(w.created_at || Date.now()),
+        date: new Date(w.created_at || w.date || Date.now()),
         text: w.text,
       });
     }
@@ -254,16 +254,23 @@ export default function JourneyScreen() {
               </div>
             );
 
+            // Available width for the label on the text side
+            const gap = 32; // half circle (24) + spacing (8)
+            const labelMax = side === 'right'
+              ? containerWidth - pos.x - gap
+              : pos.x - gap;
+
             const label = (
               <div
-                className={`absolute top-1/2 -translate-y-1/2 max-w-[140px]
+                className={`absolute top-1/2 -translate-y-1/2
                   ${side === 'right'
                     ? 'left-[calc(100%+8px)]'
                     : 'right-[calc(100%+8px)] text-right'
                   }
                 `}
+                style={{ maxWidth: `${Math.max(labelMax, 80)}px` }}
               >
-                <p className={`text-sm font-semibold leading-snug line-clamp-2
+                <p className={`text-sm font-semibold leading-snug line-clamp-3
                   ${node.type === 'first_session' ? 'text-gray-500' : 'text-gray-900'}
                 `}>
                   {node.text}
