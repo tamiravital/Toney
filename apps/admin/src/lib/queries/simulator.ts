@@ -271,7 +271,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
   try {
     const { data: wins } = await supabase
       .from('wins')
-      .select('text, tension_type, source, focus_area_id, session_id')
+      .select('text, tension_type, source, focus_area_id, session_id, created_at')
       .eq('user_id', userId)
       .limit(50);
     if (wins?.length) {
@@ -284,6 +284,7 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
           source: w.source || 'manual',
           focus_area_id: w.focus_area_id ? (focusAreaIdMap.get(w.focus_area_id) ?? null) : null,
           session_id: w.session_id ? (sessionIdMap.get(w.session_id) ?? null) : null,
+          created_at: w.created_at,
         }))
       );
     }
