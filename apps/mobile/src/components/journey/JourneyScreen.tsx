@@ -57,7 +57,7 @@ function buildWindingPath(count: number, rowHeight: number): string {
   for (let i = 0; i < count; i++) {
     const y = startY + i * rowHeight;
     // Sine wave: alternates left and right of center
-    const x = cx + Math.sin(i * Math.PI) * amplitude;
+    const x = cx + Math.sin(i * 0.9) * amplitude;
     points.push({ x, y });
   }
 
@@ -187,7 +187,7 @@ export default function JourneyScreen() {
           {/* SVG winding line behind the nodes */}
           {windingPath && (
             <svg
-              className="absolute left-0 top-0 pointer-events-none"
+              className="absolute left-0 top-0 pointer-events-none z-0"
               width="48"
               height={pathNodes.length * ROW_HEIGHT}
               style={{ overflow: 'visible' }}
@@ -225,8 +225,8 @@ export default function JourneyScreen() {
             return (
               <div
                 key={node.id}
-                className="flex items-center gap-3"
-                style={{ height: `${ROW_HEIGHT}px` }}
+                className="flex items-center gap-3 relative z-10"
+                style={{ minHeight: `${ROW_HEIGHT}px` }}
               >
                 {/* Emoji circle — fixed 48px column on the left */}
                 <div className="w-12 flex-shrink-0 flex justify-center">
