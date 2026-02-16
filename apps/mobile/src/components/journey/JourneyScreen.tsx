@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { BookOpen, Trophy } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { useSessionHistory, SessionHistoryItem } from '@/hooks/useSessionHistory';
+import { useSessionHistory } from '@/hooks/useSessionHistory';
 import SessionNotesView from '@/components/chat/SessionNotesView';
 import SessionHistoryOverlay from '@/components/journey/SessionHistoryOverlay';
 import type { SessionNotesOutput } from '@toney/types';
@@ -14,9 +14,26 @@ interface PathNode {
   date: Date;
   text: string;
   focusAreaText?: string;
-  /** For milestones: session notes to show on tap */
   notes?: SessionNotesOutput;
 }
+
+// Snake path positions (% of container width) — creates the Duolingo S-curve
+const SNAKE_X = [50, 78, 50, 22, 50];
+const NODE_SPACING = 110; // px between nodes vertically
+const NODE_TOP_PAD = 32;  // top padding before first node
+const NODE_SIZE = 48;      // px — circle diameter
+
+const NODE_EMOJI: Record<PathNode['type'], string> = {
+  milestone: '\u2B50',     // star
+  win: '\uD83C\uDFC6',    // trophy
+  first_session: '\uD83C\uDF31', // seedling
+};
+
+const NODE_BG: Record<PathNode['type'], string> = {
+  milestone: 'bg-indigo-100',
+  win: 'bg-green-100',
+  first_session: 'bg-amber-50',
+};
 
 function formatNodeDate(date: Date): string {
   const now = new Date();
@@ -27,6 +44,31 @@ function formatNodeDate(date: Date): string {
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getNodePos(index: number, containerWidth: number) {
+  const x = (SNAKE_X[index % SNAKE_X.length] / 100) * containerWidth;
+  const y = NODE_TOP_PAD + index * NODE_SPACING;
+  return { x, y };
+}
+
+function getTextSide(index: number): 'left' | 'right' {
+  const pos = index % SNAKE_X.length;
+  if (pos === 1) return 'left';   // node is on right → text goes left
+  if (pos === 3) return 'right';  // node is on left → text goes right
+  return 'right';                 // center → text goes right
+}
+
+function buildCurvePath(positions: { x: number; y: number }[]): string {
+  if (positions.length < 2) return '';
+  let d = `M ${positions[0].x} ${positions[0].y}`;
+  for (let i = 0; i < positions.length - 1; i++) {
+    const curr = positions[i];
+    const next = positions[i + 1];
+    const midY = (curr.y + next.y) / 2;
+    d += ` C ${curr.x} ${midY}, ${next.x} ${midY}, ${next.x} ${next.y}`;
+  }
+  return d;
 }
 
 export default function JourneyScreen() {
@@ -41,7 +83,22 @@ export default function JourneyScreen() {
   const [showWinInput, setShowWinInput] = useState(false);
   const [newWin, setNewWin] = useState('');
 
-  // Build focus area ID → text map for labeling milestones
+  // Measure container width for snake position calculation
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(340);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Build focus area ID → text map
   const focusAreaMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const fa of focusAreas) {
@@ -54,7 +111,6 @@ export default function JourneyScreen() {
   const pathNodes = useMemo(() => {
     const nodes: PathNode[] = [];
 
-    // Add milestones
     for (const m of milestones) {
       nodes.push({
         type: 'milestone',
@@ -71,7 +127,6 @@ export default function JourneyScreen() {
       });
     }
 
-    // Add wins
     for (const w of wins) {
       nodes.push({
         type: 'win',
@@ -81,14 +136,11 @@ export default function JourneyScreen() {
       });
     }
 
-    // Sort newest first
     nodes.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-    // Add "First session" node at the bottom if there are any sessions
     const allSessions = days.flatMap(d => d.items.filter(i => i.type === 'session'));
     if (allSessions.length > 0) {
       const oldest = allSessions[allSessions.length - 1];
-      // Only add if not already a milestone
       const hasFirstMilestone = nodes.some(n => n.type === 'milestone' && n.id === oldest.id);
       if (!hasFirstMilestone) {
         nodes.push({
@@ -103,6 +155,16 @@ export default function JourneyScreen() {
     return nodes;
   }, [milestones, wins, days, focusAreaMap]);
 
+  // Calculate positions + SVG path
+  const { positions, curvePath, containerHeight } = useMemo(() => {
+    const pos = pathNodes.map((_, i) => getNodePos(i, containerWidth));
+    const path = buildCurvePath(pos);
+    const height = pathNodes.length > 0
+      ? NODE_TOP_PAD + (pathNodes.length - 1) * NODE_SPACING + NODE_TOP_PAD
+      : 0;
+    return { positions: pos, curvePath: path, containerHeight: height };
+  }, [pathNodes, containerWidth]);
+
   const hasSessions = days.flatMap(d => d.items.filter(i => i.type === 'session')).length > 0;
   const hasContent = pathNodes.length > 0;
 
@@ -115,9 +177,9 @@ export default function JourneyScreen() {
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 pb-2 hide-scrollbar">
+    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-6 pb-2 hide-scrollbar">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 px-2">
         <h1 className="text-2xl font-bold text-gray-900">Journey</h1>
         {hasSessions && (
           <button
@@ -140,74 +202,111 @@ export default function JourneyScreen() {
         </div>
       )}
 
-      {/* The Path */}
+      {/* The Path — Duolingo-style S-curve */}
       {!loading && hasContent && (
-        <div className="relative ml-4 mb-8">
-          {/* Vertical line */}
-          <div className="absolute left-[5px] top-2 bottom-2 w-[2px] bg-indigo-100" />
+        <div
+          ref={containerRef}
+          className="relative w-full mb-8"
+          style={{ height: `${containerHeight}px` }}
+        >
+          {/* SVG curved path */}
+          {curvePath && (
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              style={{ overflow: 'visible' }}
+              aria-hidden="true"
+            >
+              {/* Background stroke — wider, lighter */}
+              <path
+                d={curvePath}
+                fill="none"
+                stroke="#c7d2fe"
+                strokeWidth={6}
+                strokeLinecap="round"
+              />
+              {/* Foreground stroke — thinner, bolder */}
+              <path
+                d={curvePath}
+                fill="none"
+                stroke="#a5b4fc"
+                strokeWidth={3}
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
 
+          {/* Nodes */}
           {pathNodes.map((node, i) => {
-            const isLast = i === pathNodes.length - 1;
+            const pos = positions[i];
+            if (!pos) return null;
+            const side = getTextSide(i);
+            const isNewest = i === 0;
 
-            if (node.type === 'milestone') {
-              return (
-                <button
-                  key={node.id}
-                  onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
-                  className="relative flex items-start gap-4 w-full text-left py-4 group"
-                >
-                  {/* Dot */}
-                  <div className="relative z-10 w-3 h-3 rounded-full bg-indigo-500 mt-1 flex-shrink-0 group-hover:ring-4 group-hover:ring-indigo-100 transition-all" />
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-sm font-semibold text-gray-900 leading-snug">
-                      {node.text}
-                    </p>
-                    {node.focusAreaText && (
-                      <p className="text-xs text-indigo-500 mt-1">{node.focusAreaText}</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
-                  </div>
-                </button>
-              );
-            }
+            const circle = (
+              <div
+                className={`w-12 h-12 rounded-full border-4 border-white shadow-md flex items-center justify-center text-xl
+                  ${NODE_BG[node.type]}
+                  ${isNewest ? 'animate-node-pulse' : ''}
+                  ${node.type === 'milestone' ? 'active:scale-95 transition-transform' : ''}
+                `}
+              >
+                {NODE_EMOJI[node.type]}
+              </div>
+            );
 
-            if (node.type === 'win') {
-              return (
-                <div key={node.id} className="relative flex items-start gap-4 py-2.5 ml-[2px]">
-                  {/* Small green dot */}
-                  <div className="relative z-10 w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-xs text-gray-600 leading-snug">{node.text}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{formatNodeDate(node.date)}</p>
-                  </div>
+            const label = (
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 max-w-[140px]
+                  ${side === 'right'
+                    ? 'left-[calc(100%+8px)]'
+                    : 'right-[calc(100%+8px)] text-right'
+                  }
+                `}
+              >
+                <p className={`text-sm font-semibold leading-snug line-clamp-2
+                  ${node.type === 'first_session' ? 'text-gray-500' : 'text-gray-900'}
+                `}>
+                  {node.text}
+                </p>
+                {node.focusAreaText && (
+                  <p className="text-xs text-indigo-500 mt-0.5 line-clamp-1">{node.focusAreaText}</p>
+                )}
+                <p className="text-xs text-gray-400 mt-0.5">{formatNodeDate(node.date)}</p>
+              </div>
+            );
+
+            return (
+              <div
+                key={node.id}
+                className="absolute"
+                style={{
+                  left: `${pos.x}px`,
+                  top: `${pos.y}px`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                <div className="relative">
+                  {node.type === 'milestone' ? (
+                    <button
+                      onClick={() => node.notes && setViewingNotes({ notes: node.notes, date: node.date })}
+                      aria-label={node.text}
+                    >
+                      {circle}
+                    </button>
+                  ) : (
+                    circle
+                  )}
+                  {label}
                 </div>
-              );
-            }
-
-            if (node.type === 'first_session') {
-              return (
-                <div key={node.id} className="relative flex items-start gap-4 py-4">
-                  {/* Outline dot */}
-                  <div className="relative z-10 w-3 h-3 rounded-full border-2 border-indigo-300 bg-white mt-1 flex-shrink-0" />
-                  {/* Content */}
-                  <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-sm text-gray-500 leading-snug">{node.text}</p>
-                    <p className="text-xs text-gray-400 mt-1">{formatNodeDate(node.date)}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            return null;
+              </div>
+            );
           })}
         </div>
       )}
 
       {/* Log a Win */}
       {hasContent && (
-        <div className="mb-6">
+        <div className="mb-6 px-2">
           {!showWinInput ? (
             <button
               onClick={() => setShowWinInput(true)}
@@ -278,7 +377,6 @@ export default function JourneyScreen() {
           sessionDate={viewingNotes.date}
           onDismiss={() => setViewingNotes(null)}
           onContinue={() => {
-            const { notes } = viewingNotes;
             setViewingNotes(null);
             setActiveTab('chat');
             window.location.hash = '#chat';
