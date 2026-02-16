@@ -71,6 +71,7 @@ export async function createSimProfile(config: Partial<Profile> & {
       onboarding_answers: config.onboarding_answers ?? null,
       onboarding_completed: true,
       understanding: config.understanding ?? null,
+      understanding_snippet: (config as Record<string, unknown>).understanding_snippet ?? null,
       user_prompt: config.user_prompt ?? null,
       source_user_id: config.source_user_id ?? null,
     })
@@ -108,7 +109,9 @@ export async function deleteSimProfile(id: string): Promise<void> {
   await supabase.from('sim_sessions').delete().eq('user_id', id);
   await supabase.from('sim_rewire_cards').delete().eq('user_id', id);
   await supabase.from('sim_wins').delete().eq('user_id', id);
-  try { await supabase.from('sim_user_knowledge').delete().eq('user_id', id); } catch { /* table may not exist yet */ }
+  try { await supabase.from('sim_focus_areas').delete().eq('user_id', id); } catch { /* */ }
+  try { await supabase.from('sim_session_suggestions').delete().eq('user_id', id); } catch { /* */ }
+  try { await supabase.from('sim_user_knowledge').delete().eq('user_id', id); } catch { /* */ }
 
   const { error } = await supabase.from('sim_profiles').delete().eq('id', id);
   if (error) throw new Error(`Failed to delete sim profile: ${error.message}`);
@@ -142,11 +145,12 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     emotional_why: profile.emotional_why,
     onboarding_answers: profile.onboarding_answers,
     understanding: profile.understanding,
+    understanding_snippet: profile.understanding_snippet,
     user_prompt: userPrompt,
     source_user_id: userId,
-  });
+  } as Partial<Profile> & { display_name: string; user_prompt: string; source_user_id: string; understanding_snippet?: string });
 
-  // Copy cards and wins (no briefing copy — coaching plan fields are on session rows now)
+  // Copy cards
   try {
     const { data: cards } = await supabase
       .from('rewire_cards')
@@ -160,15 +164,49 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     }
   } catch { /* no cards */ }
 
+  // Copy focus areas (with reflections)
+  const focusAreaIdMap = new Map<string, string>(); // real ID → sim ID
+  try {
+    const { data: focusAreas } = await supabase
+      .from('focus_areas')
+      .select('id, text, source, reflections, archived_at')
+      .eq('user_id', userId)
+      .limit(20);
+    if (focusAreas?.length) {
+      const { data: inserted } = await supabase.from('sim_focus_areas').insert(
+        focusAreas.map(fa => ({
+          user_id: simProfile.id,
+          text: fa.text,
+          source: fa.source,
+          reflections: fa.reflections,
+          archived_at: fa.archived_at,
+        }))
+      ).select('id');
+      // Map real IDs to sim IDs (insertion order matches)
+      if (inserted) {
+        focusAreas.forEach((fa, i) => {
+          if (inserted[i]) focusAreaIdMap.set(fa.id, inserted[i].id);
+        });
+      }
+    }
+  } catch { /* no focus areas */ }
+
+  // Copy wins (with source + focus_area_id mapping)
   try {
     const { data: wins } = await supabase
       .from('wins')
-      .select('content, text, tension_type')
+      .select('text, tension_type, source, focus_area_id')
       .eq('user_id', userId)
-      .limit(20);
+      .limit(50);
     if (wins?.length) {
       await supabase.from('sim_wins').insert(
-        wins.map(w => ({ user_id: simProfile.id, content: w.content || w.text, text: w.text, tension_type: w.tension_type }))
+        wins.map(w => ({
+          user_id: simProfile.id,
+          text: w.text,
+          tension_type: w.tension_type,
+          source: w.source || 'manual',
+          focus_area_id: w.focus_area_id ? (focusAreaIdMap.get(w.focus_area_id) ?? null) : null,
+        }))
       );
     }
   } catch { /* no wins */ }
