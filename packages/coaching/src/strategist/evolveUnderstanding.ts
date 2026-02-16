@@ -129,6 +129,7 @@ Generate personalized session suggestions across four length categories. Each su
 5. Don't suggest what was JUST covered in this session
 6. Standing suggestions should reference their specific tension pattern
 7. Write all user-facing text (title, teaser) in second person — "you," not "they"
+8. At least one suggestion should BUILD ON a recent win — deepen or extend what's already working. If they won by checking their balance, suggest exploring what changed. Wins are proof of momentum — suggest sessions that ride it.
 
 ---
 

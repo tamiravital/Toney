@@ -67,10 +67,10 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('user_id', ctx.userId)
         .is('archived_at', null),
-      // Recent wins (for suggestion context)
+      // Recent wins (for suggestion context + session notes)
       ctx.supabase
         .from(ctx.table('wins'))
-        .select('id, text, tension_type')
+        .select('id, text, tension_type, session_id')
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(10),
@@ -130,6 +130,11 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore */ }
     }
 
+    // Wins earned in this specific session (for notes)
+    const sessionWins = recentWins
+      .filter((w) => w.session_id === sessionId)
+      .map((w) => ({ text: w.text }));
+
     // ── Immediate: Generate session notes (Haiku, ~3-5s) ──
     // Uses current understanding (pre-evolution) — perfectly valid for notes
     const sessionNotes = await generateSessionNotes({
@@ -142,6 +147,7 @@ export async function POST(request: NextRequest) {
       stageOfChange: currentStageOfChange,
       previousHeadline,
       activeFocusAreas,
+      sessionWins: sessionWins.length > 0 ? sessionWins : undefined,
     });
 
     // ── Save session: notes + status + title + narrative snapshot ──

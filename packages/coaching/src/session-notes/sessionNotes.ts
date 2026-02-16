@@ -24,6 +24,8 @@ export interface SessionNotesInput {
   previousHeadline?: string | null;
   /** Active focus areas for context */
   activeFocusAreas?: { text: string }[] | null;
+  /** Wins earned in this session (from DB, not LLM-guessed) */
+  sessionWins?: { text: string }[] | null;
 }
 
 const SESSION_NOTES_PROMPT = `You are writing session notes for Toney, an AI money coaching app. The user just finished a coaching session and will read these as their personal recap.
@@ -49,7 +51,8 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 - Keep it concise — quality over length
 - If you have context about who this person is (below), connect this session to their larger journey — reference known patterns, note progress. Keep it natural, not clinical.
 - If you know the previous session headline, show movement or contrast — don't repeat it.
-- If the session made progress on any of their focus areas, weave that into the narrative naturally. Name the focus area. Help them see their intentions becoming real.`;
+- If the session made progress on any of their focus areas, weave that into the narrative naturally. Name the focus area. Help them see their intentions becoming real.
+- If wins were earned this session, they're the highlights — weave them into the narrative. These are moments where they interrupted their pattern. Don't just list them; help the user feel what they accomplished.`;
 
 export async function generateSessionNotes(input: SessionNotesInput): Promise<SessionNotesOutput> {
   const anthropic = new Anthropic({
@@ -78,6 +81,9 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
   }
   if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
     contextLines.push(`Focus areas they're working on: ${input.activeFocusAreas.map(a => `"${a.text}"`).join(', ')}`);
+  }
+  if (input.sessionWins && input.sessionWins.length > 0) {
+    contextLines.push(`Wins earned this session: ${input.sessionWins.map(w => `"${w.text}"`).join(', ')}`);
   }
 
   const contextSection = contextLines.length > 0
