@@ -150,12 +150,13 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
     source_user_id: userId,
   } as Partial<Profile> & { display_name: string; user_prompt: string; source_user_id: string; understanding_snippet?: string });
 
-  // Copy sessions (with notes, coaching plan fields, status)
+  // Copy sessions (with notes, coaching plan fields, status, milestones)
   const sessionIdMap = new Map<string, string>(); // real ID → sim ID
+  const sessionFocusAreaMap = new Map<string, string>(); // sim session ID → real focus_area_id (remapped after focus areas cloned)
   try {
     const { data: sessions } = await supabase
       .from('sessions')
-      .select('id, created_at, session_status, session_notes, title, narrative_snapshot, hypothesis, leverage_point, curiosities, opening_direction')
+      .select('id, created_at, session_status, session_notes, title, narrative_snapshot, hypothesis, leverage_point, curiosities, opening_direction, milestone, focus_area_id')
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .limit(30);
@@ -172,8 +173,14 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
           leverage_point: s.leverage_point,
           curiosities: s.curiosities,
           opening_direction: s.opening_direction,
+          milestone: s.milestone,
+          // focus_area_id remapped in second pass after focus areas are cloned
         }).select('id').single();
-        if (inserted) sessionIdMap.set(s.id, inserted.id);
+        if (inserted) {
+          sessionIdMap.set(s.id, inserted.id);
+          // Track sessions that need focus_area_id remapping
+          if (s.focus_area_id) sessionFocusAreaMap.set(inserted.id, s.focus_area_id);
+        }
       }
     }
   } catch (e) { console.error('Clone sessions error:', e); }
@@ -251,6 +258,14 @@ export async function cloneUserToSim(userId: string, name: string): Promise<{ si
       }
     }
   } catch { /* no focus areas */ }
+
+  // Second pass: remap focus_area_id on sim_sessions now that focusAreaIdMap exists
+  for (const [simSessionId, realFocusAreaId] of sessionFocusAreaMap) {
+    const simFocusAreaId = focusAreaIdMap.get(realFocusAreaId);
+    if (simFocusAreaId) {
+      await supabase.from('sim_sessions').update({ focus_area_id: simFocusAreaId }).eq('id', simSessionId);
+    }
+  }
 
   // Copy wins (with source + focus_area_id mapping + session_id mapping)
   try {

@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     // Load completed sessions (for home + journey in sim mode)
     const { data: completedSessions } = await ctx.supabase
       .from(ctx.table('sessions'))
-      .select('id, created_at, session_notes')
+      .select('id, created_at, session_notes, milestone, focus_area_id')
       .eq('user_id', ctx.userId)
       .eq('session_status', 'completed')
       .not('session_notes', 'is', null)
@@ -133,6 +133,8 @@ export async function GET(request: NextRequest) {
         id: s.id,
         created_at: s.created_at,
         session_notes: s.session_notes,
+        milestone: s.milestone || null,
+        focus_area_id: s.focus_area_id || null,
       })),
     });
   } catch (error) {
