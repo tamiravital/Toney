@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { text, tensionType, sessionId, source } = await request.json();
+    const { text, tensionType, sessionId, source, focusAreaText } = await request.json();
     if (!text?.trim()) {
       return NextResponse.json({ error: 'Missing text' }, { status: 400 });
     }
@@ -66,6 +66,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fuzzy-match focus area text against active focus areas
+    let focusAreaId: string | null = null;
+    if (focusAreaText) {
+      const { data: focusAreas } = await ctx.supabase
+        .from(ctx.table('focus_areas'))
+        .select('id, text')
+        .eq('user_id', ctx.userId)
+        .is('archived_at', null);
+
+      if (focusAreas && focusAreas.length > 0) {
+        const needle = focusAreaText.toLowerCase().trim();
+        // Exact match first, then substring match
+        const exact = focusAreas.find((fa: { id: string; text: string }) => fa.text.toLowerCase().trim() === needle);
+        if (exact) {
+          focusAreaId = exact.id;
+        } else {
+          const partial = focusAreas.find((fa: { id: string; text: string }) =>
+            fa.text.toLowerCase().includes(needle) || needle.includes(fa.text.toLowerCase())
+          );
+          if (partial) focusAreaId = partial.id;
+        }
+      }
+    }
+
     const { data, error } = await ctx.supabase
       .from(ctx.table('wins'))
       .insert({
@@ -74,6 +98,7 @@ export async function POST(request: NextRequest) {
         tension_type: tensionType || null,
         session_id: sessionId || null,
         source: source || 'manual',
+        ...(focusAreaId && { focus_area_id: focusAreaId }),
       })
       .select('*')
       .single();

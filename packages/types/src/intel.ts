@@ -37,6 +37,7 @@ export interface Win {
   text: string;
   tension_type?: string | null;
   session_id?: string | null;
+  focus_area_id?: string | null;
   source?: WinSource;
   date?: Date;
   created_at?: string;

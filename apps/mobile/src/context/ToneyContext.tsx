@@ -146,7 +146,7 @@ interface ToneyContextValue {
   wins: Win[];
   streak: number;
   handleLogWin: (text: string) => void;
-  handleAutoWin: (text: string) => void;
+  handleAutoWin: (text: string, focusAreaText?: string) => void;
   deleteWin: (winId: string) => void;
 
   // Focus Areas
@@ -1365,7 +1365,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
   const savedWinTextsRef = useRef<Set<string>>(new Set());
 
-  const handleAutoWin = useCallback(async (text: string) => {
+  const handleAutoWin = useCallback(async (text: string, focusAreaText?: string) => {
     const trimmed = text.trim();
     // Client-side dedup: skip if already saved in this session
     if (savedWinTextsRef.current.has(trimmed)) return;
@@ -1387,11 +1387,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           tensionType: identifiedTensionState?.primary || null,
           sessionId: sessionIdRef.current,
           source: 'coach',
+          ...(focusAreaText && { focusAreaText }),
         }),
       });
       const data = await res.json();
       if (data.id) {
-        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id } : w));
+        setWins(prev => prev.map(w => w.id === tempId ? { ...w, id: data.id, focus_area_id: data.focus_area_id || null } : w));
       }
     } catch { /* non-critical — local state has the win */ }
   }, [identifiedTensionState, buildApiUrl]);

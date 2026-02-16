@@ -44,6 +44,7 @@ interface FocusAreaSegment {
 interface WinSegment {
   type: 'win';
   text: string;
+  focusAreaText?: string;
 }
 
 type MessageSegment = TextSegment | CardSegment | FocusAreaSegment | WinSegment;
@@ -67,8 +68,8 @@ function extractTitleAndBody(body: string): { title: string; rest: string } {
 
 function parseMessageContent(raw: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
-  // Combined regex: find the next [CARD:...] or [FOCUS] marker
-  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]|\[WIN\]([\s\S]*?)\[\/WIN\]/g;
+  // Combined regex: find the next [CARD:...], [FOCUS], or [WIN]/[WIN:focus=X] marker
+  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]|\[WIN(?::focus=([^\]]*))?\]([\s\S]*?)\[\/WIN\]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -89,9 +90,9 @@ function parseMessageContent(raw: string): MessageSegment[] {
       // Focus area match: match[3] = body
       const { title, rest } = extractTitleAndBody(match[3].trim());
       segments.push({ type: 'focus_area', title, description: rest });
-    } else if (match[4] !== undefined) {
-      // Win match: match[4] = win text
-      segments.push({ type: 'win', text: match[4].trim() });
+    } else if (match[5] !== undefined) {
+      // Win match: match[4] = optional focus area text, match[5] = win text
+      segments.push({ type: 'win', text: match[5].trim(), focusAreaText: match[4]?.trim() || undefined });
     }
 
     lastIndex = match.index + match[0].length;
@@ -368,7 +369,7 @@ export default function ChatScreen() {
                         ) : (
                           <div className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md">
                             <ReactMarkdown components={markdownComponents}>
-                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN\]([\s\S]*?)\[\/WIN\]/g, '$1')}
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1')}
                             </ReactMarkdown>
                           </div>
                         )}
@@ -445,7 +446,7 @@ export default function ChatScreen() {
                               <DraftWin
                                 key={`${msg.id}-win-${i}`}
                                 text={segment.text}
-                                onAutoSave={(text) => handleAutoWin(text)}
+                                onAutoSave={(text) => handleAutoWin(text, segment.focusAreaText)}
                               />
                             );
                           }

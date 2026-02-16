@@ -15,7 +15,7 @@ export function formatToolkit(cards: RewireCard[]): string {
   }).join('\n');
 }
 
-export function formatWins(wins: Win[]): string {
+export function formatWins(wins: Win[], focusAreas?: FocusArea[]): string {
   if (!wins || wins.length === 0) return 'No wins logged yet.';
 
   const now = Date.now();
@@ -30,16 +30,53 @@ export function formatWins(wins: Win[]): string {
   }).length;
   if (thisWeek > 0) lines.push(`This week: ${thisWeek}`);
 
-  // Individual wins with relative dates
-  lines.push('');
-  for (const w of wins) {
+  // Helper: format a single win with relative date
+  function formatSingleWin(w: Win): string {
     const d = w.created_at ? new Date(w.created_at) : w.date ? new Date(w.date) : null;
     let ago = '';
     if (d) {
       const days = Math.floor((now - d.getTime()) / (1000 * 60 * 60 * 24));
       ago = days === 0 ? ' (today)' : days === 1 ? ' (yesterday)' : ` (${days}d ago)`;
     }
-    lines.push(`- "${w.text}"${ago}`);
+    return `- "${w.text}"${ago}`;
+  }
+
+  // Group by focus area if any wins have focus_area_id
+  const linked = wins.filter(w => w.focus_area_id);
+  const unlinked = wins.filter(w => !w.focus_area_id);
+
+  if (linked.length > 0 && focusAreas && focusAreas.length > 0) {
+    // Build focus area lookup
+    const faMap = new Map(focusAreas.map(fa => [fa.id, fa.text]));
+    const groups = new Map<string, Win[]>();
+
+    for (const w of linked) {
+      const faId = w.focus_area_id!;
+      if (!groups.has(faId)) groups.set(faId, []);
+      groups.get(faId)!.push(w);
+    }
+
+    lines.push('');
+    for (const [faId, groupWins] of groups) {
+      const faText = faMap.get(faId) || 'Unknown focus area';
+      lines.push(`Focus area: "${faText}"`);
+      for (const w of groupWins) {
+        lines.push(`  ${formatSingleWin(w)}`);
+      }
+    }
+
+    if (unlinked.length > 0) {
+      lines.push('Unlinked:');
+      for (const w of unlinked) {
+        lines.push(formatSingleWin(w));
+      }
+    }
+  } else {
+    // No grouping — flat list
+    lines.push('');
+    for (const w of wins) {
+      lines.push(formatSingleWin(w));
+    }
   }
 
   return lines.join('\n');

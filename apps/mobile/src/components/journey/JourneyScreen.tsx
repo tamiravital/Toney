@@ -218,6 +218,7 @@ export default function JourneyScreen() {
       {viewingFocusArea && (
         <FocusAreaGrowthView
           focusArea={viewingFocusArea}
+          wins={wins}
           onDismiss={() => setViewingFocusArea(null)}
           onArchive={() => handleArchiveFocusArea(viewingFocusArea.id)}
         />

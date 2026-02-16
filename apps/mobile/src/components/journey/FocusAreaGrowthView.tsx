@@ -1,16 +1,18 @@
 'use client';
 
-import { X, TrendingUp } from 'lucide-react';
-import type { FocusArea } from '@toney/types';
+import { X, TrendingUp, Trophy } from 'lucide-react';
+import type { FocusArea, Win } from '@toney/types';
 
 interface FocusAreaGrowthViewProps {
   focusArea: FocusArea;
+  wins?: Win[];
   onDismiss: () => void;
   onArchive: () => void;
 }
 
-export default function FocusAreaGrowthView({ focusArea, onDismiss, onArchive }: FocusAreaGrowthViewProps) {
+export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArchive }: FocusAreaGrowthViewProps) {
   const reflections = focusArea.reflections || [];
+  const linkedWins = (wins || []).filter(w => w.focus_area_id === focusArea.id);
 
   // Source label
   const sourceLabel = focusArea.source === 'onboarding'
@@ -57,8 +59,42 @@ export default function FocusAreaGrowthView({ focusArea, onDismiss, onArchive }:
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 hide-scrollbar">
+          {/* Win evidence section */}
+          {linkedWins.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Trophy className="w-3.5 h-3.5 text-green-600" />
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-green-600">
+                  Evidence ({linkedWins.length} win{linkedWins.length !== 1 ? 's' : ''})
+                </h4>
+              </div>
+              <div className="space-y-2">
+                {linkedWins.map((w, i) => {
+                  const d = w.created_at ? new Date(w.created_at) : w.date ? new Date(w.date) : null;
+                  const dateLabel = d ? formatDate(d.toISOString()) : '';
+                  return (
+                    <div key={w.id || i} className="flex items-start gap-2.5 bg-green-50 rounded-xl px-3 py-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 leading-relaxed">{w.text}</p>
+                        {dateLabel && <p className="text-xs text-gray-400 mt-0.5">{dateLabel}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Growth reflections timeline */}
           {reflections.length > 0 ? (
             <div className="space-y-4">
+              {linkedWins.length > 0 && (
+                <div className="flex items-center gap-1.5 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-indigo-500">Growth observations</h4>
+                </div>
+              )}
               {/* Reverse chronological — newest first */}
               {[...reflections].reverse().map((ref, i) => (
                 <div key={i} className="flex gap-3">
@@ -77,7 +113,7 @@ export default function FocusAreaGrowthView({ focusArea, onDismiss, onArchive }:
                 </div>
               ))}
             </div>
-          ) : (
+          ) : linkedWins.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3">
                 <TrendingUp className="w-6 h-6 text-indigo-400" />
@@ -86,7 +122,7 @@ export default function FocusAreaGrowthView({ focusArea, onDismiss, onArchive }:
                 Your growth story will appear here after your next session.
               </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Footer */}

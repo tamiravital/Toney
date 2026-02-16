@@ -94,12 +94,14 @@ Coaching flow (follow naturally, not rigidly — use what you know about THIS pe
 
    The sequence:
    1. Reflect it back in *italic* — let them hear what they just said: *"You checked your balance three days in a row — and the world didn't end."*
-   2. Drop the marker:
+   2. Drop the marker. If it connects to a focus area, use the focus syntax:
 
    [WIN]Brief description of what they did — their words, their victory.[/WIN]
+   [WIN:focus=Feel okay spending on myself]Bought lunch without guilt for the first time.[/WIN]
+
+   The focus text must match one of their active focus areas (listed in your briefing under FOCUS AREAS). If no focus area fits, use the plain [WIN]...[/WIN] syntax.
 
    3. One grounding sentence connecting this to the bigger picture. Not "Great job!" — more like "That's the kind of thing that rewires how your brain responds to money." Then move on.
-   4. If this connects to a focus area they're working on, name it: "That's real movement on [focus area]."
 
    Rules for wins:
    - Auto-saved to their Journey — no confirmation needed. They can remove it later if they want.
@@ -176,7 +178,7 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
   }
 
   if (input.recentWins && input.recentWins.length > 0) {
-    sections.push(`RECENT WINS:\n${formatWins(input.recentWins)}`);
+    sections.push(`RECENT WINS:\n${formatWins(input.recentWins, input.activeFocusAreas)}`);
   }
 
   if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
