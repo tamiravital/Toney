@@ -1,5 +1,13 @@
 # Toney — Changelog
 
+## 2026-02-17 — Supabase Edge Function + Instant Session Open
+- **Close pipeline moved to Supabase Edge Function**: The evolution pipeline (understanding narrative update + suggestion generation + focus area reflections) now runs in a Supabase Edge Function with 150s timeout, replacing Next.js `after()` which was always killed by Vercel Hobby's 10s hard timeout. The function receives session data via fire-and-forget from Vercel routes and handles all DB saves, idempotency guards, and sim mode. Prompts are inline copies (Deno can't resolve workspace packages).
+- **Vercel close route simplified**: 329 → 183 lines. Removed entire `after()` block. Still generates Haiku notes immediately (returned to client), then fires to Edge Function for background evolution. `evolution_status` starts as 'pending' — Edge Function sets 'completed'/'failed'.
+- **Vercel open route simplified**: 590 → 220 lines. Removed entire `after()` block (legacy seed, evolution retry, deferred close). Deferred close (12h auto-close) fires to Edge Function. Evolution retry removed — Edge Function's 150s timeout makes failures rare.
+- **Pre-generated opening messages**: Each `SessionSuggestion` now includes an `openingMessage` field — a 3-4 sentence Coach greeting written by Sonnet at suggestion generation time. Both `evolveAndSuggest()` and `seedSuggestions()` prompts updated. When a suggestion has `openingMessage`, session open skips the Sonnet stream entirely and returns JSON instantly (<2s). Free chat and old suggestions without `openingMessage` fall back to live Sonnet streaming.
+- **Fire-and-forget helper**: `apps/mobile/src/lib/edgeFunction.ts` — `fireCloseSessionPipeline()` sends POST to Edge Function without awaiting response. Auth via `CLOSE_PIPELINE_SECRET` Bearer token.
+- **Deployed**: Edge Function deployed to Supabase, secrets configured, Vercel env set, committed and pushed to main.
+
 ## 2026-02-16 — Home Screen Reimagined
 - **Home screen reordered around focus areas**: Focus areas are now the visual centerpiece of the home screen — promoted from the bottom to position 2, right below a new coaching prompt. The last session tile has been compressed into a side-by-side layout with the "What Toney Sees" snippet. Latest card is now a compact tile at the bottom.
 - **Coaching prompt**: A new contextual card sits at the top of the home screen, inviting you to start or continue coaching. It says different things depending on your situation: "Start your first session" for new users, "Continue your coaching" when you have focus areas, or "Welcome back" when you've been away for a few days. Tapping it takes you to the Chat tab.

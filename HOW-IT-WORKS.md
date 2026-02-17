@@ -134,7 +134,7 @@ Before each session, a detailed briefing is assembled instantly for the Coach. T
 
 9. **Coaching Style Preferences** — your preferred tone (gentle to direct, on a 1–5 scale), depth level (1–5), and learning style. These directly shape how the Coach talks to you.
 
-If you tap a **session suggestion** from the home screen (more on these below), the briefing also includes the specific angle for that suggestion — what to explore, how to open, what the hypothesis is for that particular thread.
+If you tap a **session suggestion** from the home screen (more on these below), the briefing also includes the specific angle for that suggestion — what to explore, how to open, what the hypothesis is for that particular thread. Most suggestions also come with a **pre-written opening message** — the actual first thing the Coach will say to you, already written at suggestion generation time. This means the session opens instantly (under 2 seconds) instead of waiting for the AI to think of an opening.
 
 The briefing is always assembled instantly — no waiting. It's built from pure code using data that already exists: your understanding narrative, the coaching plan from your selected suggestion, your saved cards, wins, and focus areas. Because it's rebuilt fresh before every message (not just at the start of a session), it always reflects the latest state — if you save a card mid-conversation, the Coach's very next response knows about it.
 
@@ -265,7 +265,7 @@ These reflections accumulate over time on each focus area, creating a visible gr
 
 Not every session produces reflections for every focus area. Only areas that the session genuinely touched get an observation. This keeps them honest and meaningful.
 
-**Reliability:** Because this background work is important (it's how Toney gets smarter), the system tracks whether it completed successfully. If it didn't — say Toney's servers hiccupped or the AI call timed out — the system automatically retries on your next session open. You might notice a slightly longer wait (~5 seconds) when opening that next session, but the result is the same: your understanding evolves, your suggestions are fresh, and your focus area reflections are up to date. Nothing is lost.
+**Reliability:** Because this background work is important (it's how Toney gets smarter), it runs on a dedicated server with a long timeout (150 seconds) — separate from the main app server that handles your chat messages. This means the learning process has plenty of time to complete, even when the AI needs to think carefully about how your understanding has evolved. The system tracks whether the work completed successfully via an `evolution_status` marker on each session.
 
 ---
 

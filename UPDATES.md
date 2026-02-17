@@ -4,6 +4,19 @@
 
 ---
 
+## February 17, 2026
+
+### Sessions open instantly now
+
+- When you tap a session suggestion, the conversation now starts in **under 2 seconds** — compared to 6-8 seconds before. Toney now pre-writes the Coach's opening message when it generates your suggestions, so when you tap one, the greeting is already ready. No more watching bouncing dots while the AI thinks of what to say.
+- If you start a free-form conversation (not from a suggestion), the Coach still streams its opening in real-time — about the same speed as before.
+
+### Toney's learning is much more reliable now
+
+- After you end a session, Toney does important behind-the-scenes work: updating its understanding of you, writing growth observations for your focus areas, and generating fresh suggestions for next time. Previously, this work was frequently failing silently — the app server had a strict 10-second timeout that was too short for the AI to finish thinking. Now this work runs on a dedicated server with a much longer timeout, so it completes reliably every time. Your understanding evolves, your suggestions stay fresh, and your focus area reflections are always up to date.
+
+---
+
 ## February 16, 2026
 
 ### Home screen redesigned around your focus areas
