@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { planSessionStep, closeSessionPipeline, seedUnderstanding, seedSuggestions, evolveAndSuggest } from '@toney/coaching';
 import { Profile, RewireCard, Win, FocusArea, SessionSuggestion } from '@toney/types';
 import { formatAnswersReadable } from '@toney/constants';
 
-// Deferred close + stream opening: can take 30s+
+// Stream opening message: should complete in ~15s even with legacy seed
 export const maxDuration = 60;
 
 const anthropic = new Anthropic({
@@ -158,8 +158,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Retry incomplete evolution from a previous session close ──
-    // If the after() callback in the close route failed, the understanding wasn't evolved
-    // and no suggestions were generated. Detect and retry before opening the new session.
+    // If after() failed, understanding wasn't evolved. Run retry in background
+    // via after() — the new session opens with current (slightly stale) understanding.
     {
       const { data: incompleteSession } = await ctx.supabase
         .from(ctx.table('sessions'))
@@ -172,35 +172,38 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (incompleteSession) {
-        timing(`retrying incomplete evolution for session ${incompleteSession.id.slice(0, 8)}`);
-        try {
-          // Load messages from the incomplete session
-          const [retryMsgsResult, retryPrevSugResult] = await Promise.all([
-            ctx.supabase
-              .from(ctx.table('messages'))
-              .select('role, content')
-              .eq('session_id', incompleteSession.id)
-              .order('created_at', { ascending: true }),
-            ctx.supabase
-              .from(ctx.table('session_suggestions'))
-              .select('suggestions')
-              .eq('user_id', ctx.userId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single(),
-          ]);
+        timing(`scheduling evolution retry for session ${incompleteSession.id.slice(0, 8)}`);
+        const retrySessionId = incompleteSession.id;
+        const retryHypothesis = incompleteSession.hypothesis;
+        const retryProfile = { ...profile };
+        const retryFocusAreas = (focusAreasResult.data || []) as FocusArea[];
+        const retryCards = (cardsResult.data || []) as RewireCard[];
+        const retryWins = (winsResult.data || []) as Win[];
 
-          const retryMessages = (retryMsgsResult.data || []).map((m: { role: string; content: string }) => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content,
-          }));
+        after(async () => {
+          try {
+            const [retryMsgsResult, retryPrevSugResult] = await Promise.all([
+              ctx.supabase
+                .from(ctx.table('messages'))
+                .select('role, content')
+                .eq('session_id', retrySessionId)
+                .order('created_at', { ascending: true }),
+              ctx.supabase
+                .from(ctx.table('session_suggestions'))
+                .select('suggestions')
+                .eq('user_id', ctx.userId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+            ]);
 
-          if (retryMessages.length > 0) {
-            const retryFocusAreas = (focusAreasResult.data || []) as FocusArea[];
-            const retryCards = (cardsResult.data || []) as RewireCard[];
-            const retryWins = (winsResult.data || []) as Win[];
+            const retryMessages = (retryMsgsResult.data || []).map((m: { role: string; content: string }) => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            }));
 
-            // Extract previous suggestion titles
+            if (retryMessages.length === 0) return;
+
             let retryPrevTitles: string[] = [];
             if (retryPrevSugResult.data?.suggestions) {
               try {
@@ -214,58 +217,50 @@ export async function POST(request: NextRequest) {
             }
 
             const evolved = await evolveAndSuggest({
-              currentUnderstanding: profile.understanding || null,
+              currentUnderstanding: retryProfile.understanding || null,
               messages: retryMessages,
-              tensionType: profile.tension_type || null,
-              hypothesis: incompleteSession.hypothesis || null,
-              currentStageOfChange: profile.stage_of_change || null,
+              tensionType: retryProfile.tension_type || null,
+              hypothesis: retryHypothesis || null,
+              currentStageOfChange: retryProfile.stage_of_change || null,
               activeFocusAreas: retryFocusAreas,
               rewireCards: retryCards,
               recentWins: retryWins,
               previousSuggestionTitles: retryPrevTitles,
             });
 
-            // Save evolved understanding to profile
             await ctx.supabase.from(ctx.table('profiles')).update({
               understanding: evolved.understanding,
               understanding_snippet: evolved.snippet || null,
               ...(evolved.stageOfChange && { stage_of_change: evolved.stageOfChange }),
             }).eq('id', ctx.userId);
 
-            profile.understanding = evolved.understanding;
-            if (evolved.stageOfChange) {
-              profile.stage_of_change = evolved.stageOfChange;
-            }
-
-            // Save suggestions (idempotency: check if already exists for this session)
             if (evolved.suggestions.length > 0) {
               const { data: existingSugs } = await ctx.supabase
                 .from(ctx.table('session_suggestions'))
                 .select('id')
-                .eq('generated_after_session_id', incompleteSession.id)
+                .eq('generated_after_session_id', retrySessionId)
                 .limit(1);
               if (!existingSugs || existingSugs.length === 0) {
                 await ctx.supabase.from(ctx.table('session_suggestions')).insert({
                   user_id: ctx.userId,
                   suggestions: evolved.suggestions,
-                  generated_after_session_id: incompleteSession.id,
+                  generated_after_session_id: retrySessionId,
                 });
               }
             }
 
-            // Save focus area reflections (idempotency: check sessionId in JSONB)
-            if (evolved.focusAreaReflections && evolved.focusAreaReflections.length > 0) {
+            if (evolved.focusAreaReflections?.length) {
               for (const ref of evolved.focusAreaReflections) {
                 const match = retryFocusAreas.find(a => a.text === ref.focusAreaText);
                 if (!match) continue;
                 const existing = (match as { reflections?: { sessionId?: string }[] }).reflections || [];
-                if (existing.some(r => r.sessionId === incompleteSession.id)) continue;
+                if (existing.some(r => r.sessionId === retrySessionId)) continue;
                 await ctx.supabase
                   .from(ctx.table('focus_areas'))
                   .update({
                     reflections: [...existing, {
                       date: new Date().toISOString(),
-                      sessionId: incompleteSession.id,
+                      sessionId: retrySessionId,
                       text: ref.reflection,
                     }],
                   })
@@ -273,38 +268,38 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            // Mark evolution as completed
             await ctx.supabase.from(ctx.table('sessions')).update({
               evolution_status: 'completed',
-            }).eq('id', incompleteSession.id);
+            }).eq('id', retrySessionId);
 
-            timing('evolution retry complete');
+            console.log(`[session/open] evolution retry complete for ${retrySessionId.slice(0, 8)}`);
+          } catch (err) {
+            console.error('Evolution retry failed:', err);
           }
-        } catch (err) {
-          console.error('Evolution retry failed:', err);
-          // Non-fatal — continue opening new session with current understanding
-        }
+        });
       }
     }
 
-    // ── Deferred close of previous session (skip if already completed) ──
+    // ── Deferred close of previous session ──
+    // Tier 0-2 are instant (DB only). Tier 3+ marks completed immediately and
+    // runs the full pipeline (Haiku notes + Sonnet evolution) in after().
+    // The new session opens with current understanding — slightly stale for one
+    // session, but the evolution retry catches up on the NEXT open if after() fails.
     if (previousSessionId) {
-      // Check if session is already completed — no need to re-close
       const { data: prevSessionCheck } = await ctx.supabase
         .from(ctx.table('sessions'))
-        .select('session_status, hypothesis')
+        .select('session_status')
         .eq('id', previousSessionId)
-        .single();
+        .maybeSingle();
 
       if (prevSessionCheck?.session_status === 'completed') {
-        previousSessionId = null; // Already closed — skip deferred close
+        previousSessionId = null;
         timing('previous session already completed, skipping deferred close');
       }
     }
 
     if (previousSessionId) {
       try {
-        // Load messages first to decide close tier
         const oldMessagesResult = await ctx.supabase
           .from(ctx.table('messages'))
           .select('role, content')
@@ -319,153 +314,195 @@ export async function POST(request: NextRequest) {
         const userMessageCount = oldMessages.filter((m: { role: string }) => m.role === 'user').length;
 
         if (userMessageCount === 0) {
-          // ── 0 user messages: delete the empty session entirely ──
-          // Messages cascade via FK ON DELETE CASCADE. No cards/wins/focus areas
-          // exist for a session with no user interaction.
           const { error: deleteErr } = await ctx.supabase
             .from(ctx.table('sessions'))
             .delete()
             .eq('id', previousSessionId);
-          if (deleteErr) {
-            console.error('Deferred close: delete empty session failed:', deleteErr);
-          }
+          if (deleteErr) console.error('Deferred close: delete empty session failed:', deleteErr);
           timing('deferred close: deleted empty session (0 user messages)');
 
         } else if (userMessageCount <= 2) {
-          // ── 1-2 user messages: mark completed, skip pipeline ──
-          // No session_notes → useSessionHistory naturally excludes it.
-          // evolution_status = 'completed' prevents retry logic from picking it up.
           const { error: lightCloseErr } = await ctx.supabase
             .from(ctx.table('sessions'))
-            .update({
-              session_status: 'completed',
-              evolution_status: 'completed',
-              title: 'Brief session',
-            })
+            .update({ session_status: 'completed', evolution_status: 'completed', title: 'Brief session' })
             .eq('id', previousSessionId);
-          if (lightCloseErr) {
-            console.error('Deferred close: light close failed:', lightCloseErr);
-          }
+          if (lightCloseErr) console.error('Deferred close: light close failed:', lightCloseErr);
           timing('deferred close: light close (1-2 user messages)');
 
         } else {
-          // ── 3+ user messages: full close pipeline ──
-          // Load remaining data only when we need the full pipeline
-          const [oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([
-            ctx.supabase
-              .from(ctx.table('rewire_cards'))
-              .select('title, category')
-              .eq('session_id', previousSessionId),
-            ctx.supabase
-              .from(ctx.table('sessions'))
-              .select('hypothesis')
-              .eq('id', previousSessionId)
-              .maybeSingle(),
-            ctx.supabase
-              .from(ctx.table('sessions'))
-              .select('session_notes')
-              .eq('user_id', ctx.userId)
-              .eq('session_status', 'completed')
-              .not('session_notes', 'is', null)
-              .neq('id', previousSessionId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle(),
-            ctx.supabase
-              .from(ctx.table('session_suggestions'))
-              .select('suggestions')
-              .eq('user_id', ctx.userId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle(),
-          ]);
-
-          const savedCards = (oldCardsResult.data || []).map((c: { title: string; category: string }) => ({
-            title: c.title,
-            category: c.category,
-          }));
-
-          const oldSessionHypothesis = oldSessionResult.data?.hypothesis || null;
-          let oldPreviousHeadline: string | null = null;
-          if (oldPrevNotesResult.data?.session_notes) {
-            try {
-              const parsed = JSON.parse(oldPrevNotesResult.data.session_notes);
-              oldPreviousHeadline = parsed.headline || null;
-            } catch { /* ignore */ }
-          }
-
-          // Extract previous suggestion titles
-          let prevSuggestionTitles: string[] = [];
-          if (oldPrevSuggestionsResult.data?.suggestions) {
-            try {
-              const prevSuggs = typeof oldPrevSuggestionsResult.data.suggestions === 'string'
-                ? JSON.parse(oldPrevSuggestionsResult.data.suggestions)
-                : oldPrevSuggestionsResult.data.suggestions;
-              if (Array.isArray(prevSuggs)) {
-                prevSuggestionTitles = prevSuggs.map((s: { title?: string }) => s.title || '').filter(Boolean);
-              }
-            } catch { /* ignore */ }
-          }
-
-          const closeResult = await closeSessionPipeline({
-            sessionId: previousSessionId,
-            messages: oldMessages,
-            tensionType: profile.tension_type || null,
-            hypothesis: oldSessionHypothesis,
-            currentStageOfChange: profile.stage_of_change || null,
-            currentUnderstanding: profile.understanding || null,
-            savedCards,
-            sessionNumber: null,
-            previousHeadline: oldPreviousHeadline,
-            activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
-            rewireCards: (cardsResult.data || []) as RewireCard[],
-            recentWins: (winsResult.data || []) as Win[],
-            previousSuggestionTitles: prevSuggestionTitles,
-          });
-
-          // Save close results (evolution runs synchronously here, so mark as completed)
-          const { error: deferredSessionErr } = await ctx.supabase.from(ctx.table('sessions')).update({
-            session_notes: JSON.stringify(closeResult.sessionNotes),
+          // ── 3+ user messages: mark completed now, full pipeline in background ──
+          // Mark session completed + pending evolution immediately so:
+          // 1. It won't be picked up as a deferred close again
+          // 2. evolution_status='pending' triggers retry if after() fails
+          await ctx.supabase.from(ctx.table('sessions')).update({
             session_status: 'completed',
-            evolution_status: 'completed',
-            title: closeResult.sessionNotes.headline || 'Session complete',
+            evolution_status: 'pending',
             narrative_snapshot: profile.understanding || null,
           }).eq('id', previousSessionId);
+          timing('deferred close: marked completed, full pipeline deferred to after()');
 
-          if (deferredSessionErr) {
-            console.error('Deferred session update failed:', deferredSessionErr);
-          }
+          // Capture values needed by after() before they go out of scope
+          const deferredSessionId = previousSessionId;
+          const deferredProfile = { ...profile };
+          const deferredFocusAreas = (focusAreasResult.data || []) as FocusArea[];
+          const deferredCards = (cardsResult.data || []) as RewireCard[];
+          const deferredWins = (winsResult.data || []) as Win[];
 
-          const { error: deferredProfileErr } = await ctx.supabase.from(ctx.table('profiles')).update({
-            understanding: closeResult.understanding.understanding,
-            understanding_snippet: closeResult.understanding.snippet || null,
-            ...(closeResult.understanding.stageOfChange && {
-              stage_of_change: closeResult.understanding.stageOfChange,
-            }),
-          }).eq('id', ctx.userId);
+          after(async () => {
+            try {
+              // Load remaining data for full pipeline
+              const [oldCardsResult, oldSessionResult, oldPrevNotesResult, oldPrevSuggestionsResult] = await Promise.all([
+                ctx.supabase
+                  .from(ctx.table('rewire_cards'))
+                  .select('title, category')
+                  .eq('session_id', deferredSessionId),
+                ctx.supabase
+                  .from(ctx.table('sessions'))
+                  .select('hypothesis')
+                  .eq('id', deferredSessionId)
+                  .maybeSingle(),
+                ctx.supabase
+                  .from(ctx.table('sessions'))
+                  .select('session_notes')
+                  .eq('user_id', ctx.userId)
+                  .eq('session_status', 'completed')
+                  .not('session_notes', 'is', null)
+                  .neq('id', deferredSessionId)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle(),
+                ctx.supabase
+                  .from(ctx.table('session_suggestions'))
+                  .select('suggestions')
+                  .eq('user_id', ctx.userId)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle(),
+              ]);
 
-          if (deferredProfileErr) {
-            console.error('Deferred profile update failed:', deferredProfileErr);
-          }
+              const savedCards = (oldCardsResult.data || []).map((c: { title: string; category: string }) => ({
+                title: c.title,
+                category: c.category,
+              }));
 
-          // Save suggestions from deferred close
-          if (closeResult.suggestions.length > 0) {
-            const { error: deferredSuggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
-              user_id: ctx.userId,
-              suggestions: closeResult.suggestions,
-              generated_after_session_id: previousSessionId,
-            });
-            if (deferredSuggestionsErr) {
-              console.error('Deferred suggestions save failed:', deferredSuggestionsErr);
+              const oldSessionHypothesis = oldSessionResult.data?.hypothesis || null;
+              let oldPreviousHeadline: string | null = null;
+              if (oldPrevNotesResult.data?.session_notes) {
+                try {
+                  const parsed = JSON.parse(oldPrevNotesResult.data.session_notes);
+                  oldPreviousHeadline = parsed.headline || null;
+                } catch { /* ignore */ }
+              }
+
+              let prevSuggestionTitles: string[] = [];
+              if (oldPrevSuggestionsResult.data?.suggestions) {
+                try {
+                  const prevSuggs = typeof oldPrevSuggestionsResult.data.suggestions === 'string'
+                    ? JSON.parse(oldPrevSuggestionsResult.data.suggestions)
+                    : oldPrevSuggestionsResult.data.suggestions;
+                  if (Array.isArray(prevSuggs)) {
+                    prevSuggestionTitles = prevSuggs.map((s: { title?: string }) => s.title || '').filter(Boolean);
+                  }
+                } catch { /* ignore */ }
+              }
+
+              const closeResult = await closeSessionPipeline({
+                sessionId: deferredSessionId,
+                messages: oldMessages,
+                tensionType: deferredProfile.tension_type || null,
+                hypothesis: oldSessionHypothesis,
+                currentStageOfChange: deferredProfile.stage_of_change || null,
+                currentUnderstanding: deferredProfile.understanding || null,
+                savedCards,
+                sessionNumber: null,
+                previousHeadline: oldPreviousHeadline,
+                activeFocusAreas: deferredFocusAreas,
+                rewireCards: deferredCards,
+                recentWins: deferredWins,
+                previousSuggestionTitles: prevSuggestionTitles,
+              });
+
+              // Save all close results
+              await ctx.supabase.from(ctx.table('sessions')).update({
+                session_notes: JSON.stringify(closeResult.sessionNotes),
+                evolution_status: 'completed',
+                title: closeResult.sessionNotes.headline || 'Session complete',
+              }).eq('id', deferredSessionId);
+
+              await ctx.supabase.from(ctx.table('profiles')).update({
+                understanding: closeResult.understanding.understanding,
+                understanding_snippet: closeResult.understanding.snippet || null,
+                ...(closeResult.understanding.stageOfChange && {
+                  stage_of_change: closeResult.understanding.stageOfChange,
+                }),
+              }).eq('id', ctx.userId);
+
+              if (closeResult.suggestions.length > 0) {
+                await ctx.supabase.from(ctx.table('session_suggestions')).insert({
+                  user_id: ctx.userId,
+                  suggestions: closeResult.suggestions,
+                  generated_after_session_id: deferredSessionId,
+                });
+              }
+
+              // Save focus area reflections
+              if (closeResult.understanding.focusAreaReflections?.length) {
+                for (const ref of closeResult.understanding.focusAreaReflections) {
+                  const match = deferredFocusAreas.find(a => a.text === ref.focusAreaText);
+                  if (!match) continue;
+                  const existing = (match as { reflections?: { sessionId?: string }[] }).reflections || [];
+                  if (existing.some(r => r.sessionId === deferredSessionId)) continue;
+                  await ctx.supabase
+                    .from(ctx.table('focus_areas'))
+                    .update({
+                      reflections: [...existing, {
+                        date: new Date().toISOString(),
+                        sessionId: deferredSessionId,
+                        text: ref.reflection,
+                      }],
+                    })
+                    .eq('id', match.id);
+                }
+              }
+
+              // Apply focus area actions
+              if (closeResult.understanding.focusAreaActions?.length) {
+                for (const action of closeResult.understanding.focusAreaActions) {
+                  const match = deferredFocusAreas.find(a => a.text === action.focusAreaText);
+                  if (!match) continue;
+                  if (action.action === 'archive') {
+                    await ctx.supabase
+                      .from(ctx.table('focus_areas'))
+                      .update({ archived_at: new Date().toISOString() })
+                      .eq('id', match.id);
+                  } else if (action.action === 'update_text' && action.newText) {
+                    await ctx.supabase
+                      .from(ctx.table('focus_areas'))
+                      .update({ archived_at: new Date().toISOString() })
+                      .eq('id', match.id);
+                    await ctx.supabase
+                      .from(ctx.table('focus_areas'))
+                      .insert({
+                        user_id: ctx.userId,
+                        text: action.newText,
+                        source: 'coach',
+                        session_id: deferredSessionId,
+                        reflections: (match as { reflections?: unknown[] }).reflections || [],
+                      });
+                  }
+                }
+              }
+
+              console.log(`[session/open] deferred close complete for ${deferredSessionId.slice(0, 8)}`);
+            } catch (err) {
+              console.error('Deferred close background failed:', err);
+              try {
+                await ctx.supabase.from(ctx.table('sessions')).update({
+                  evolution_status: 'failed',
+                }).eq('id', deferredSessionId);
+              } catch { /* status stays 'pending', retry will catch it */ }
             }
-          }
-          timing('deferred close complete');
-
-          // Update local profile reference with evolved understanding
-          profile.understanding = closeResult.understanding.understanding;
-          if (closeResult.understanding.stageOfChange) {
-            profile.stage_of_change = closeResult.understanding.stageOfChange;
-          }
+          });
         }
       } catch (err) {
         console.error('Deferred session close failed:', err);
