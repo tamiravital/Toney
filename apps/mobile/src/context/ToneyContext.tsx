@@ -1229,7 +1229,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         }
         setLoadingChat(false);
       } else {
-        // JSON fallback (error responses)
+        // JSON response — instant opening (pre-generated message) or error fallback
         const data = await res.json();
         if (data.sessionId) {
           setCurrentSessionId(data.sessionId);

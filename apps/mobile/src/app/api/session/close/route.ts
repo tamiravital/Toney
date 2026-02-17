@@ -1,17 +1,18 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { resolveContext } from '@/lib/supabase/sim';
-import { generateSessionNotes, evolveAndSuggest } from '@toney/coaching';
-import type { FocusArea, RewireCard, Win } from '@toney/types';
+import { generateSessionNotes } from '@toney/coaching';
+import { fireCloseSessionPipeline } from '@/lib/edgeFunction';
+import type { FocusArea, Win } from '@toney/types';
 
-// Notes return in ~3-5s. Background work (evolve + suggest) runs via after().
+// Notes return in ~3-5s via Haiku. Evolution runs in Edge Function (150s timeout).
 export const maxDuration = 60;
 
 /**
  * POST /api/session/close
  *
  * Returns session notes immediately (~3-5s via Haiku).
- * Understanding evolution + suggestion generation run in the background via after()
- * as a SINGLE Sonnet call (evolveAndSuggest).
+ * Understanding evolution + suggestion generation fire-and-forget
+ * to Supabase Edge Function (150s timeout, reliable).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -25,8 +26,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 });
     }
 
-    // ── Load data in parallel (no coaching_briefings query — dropped) ──
-    const [messagesResult, profileResult, cardsResult, allCardsResult, sessionResult, prevNotesResult, focusAreasResult, winsResult, prevSuggestionsResult] = await Promise.all([
+    // ── Load data in parallel ──
+    const [messagesResult, profileResult, cardsResult, sessionResult, prevNotesResult, focusAreasResult, winsResult] = await Promise.all([
       ctx.supabase
         .from(ctx.table('messages'))
         .select('role, content')
@@ -42,12 +43,7 @@ export async function POST(request: NextRequest) {
         .from(ctx.table('rewire_cards'))
         .select('title, category')
         .eq('session_id', sessionId),
-      // All user's cards (for suggestion context)
-      ctx.supabase
-        .from(ctx.table('rewire_cards'))
-        .select('id, title, category, times_completed')
-        .eq('user_id', ctx.userId),
-      // Read hypothesis from session row (not briefing)
+      // Read hypothesis from session row
       ctx.supabase
         .from(ctx.table('sessions'))
         .select('hypothesis')
@@ -67,21 +63,13 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('user_id', ctx.userId)
         .is('archived_at', null),
-      // Recent wins (for suggestion context + session notes)
+      // Recent wins (for session notes context)
       ctx.supabase
         .from(ctx.table('wins'))
         .select('id, text, tension_type, session_id')
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(10),
-      // Previous suggestion titles (to avoid repetition)
-      ctx.supabase
-        .from(ctx.table('session_suggestions'))
-        .select('suggestions')
-        .eq('user_id', ctx.userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
     ]);
 
     const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -122,7 +110,6 @@ export async function POST(request: NextRequest) {
       category: c.category,
     }));
 
-    const allCards = (allCardsResult.data || []) as RewireCard[];
     const recentWins = (winsResult.data || []) as Win[];
 
     const tensionType = profileResult.data?.tension_type || null;
@@ -130,7 +117,6 @@ export async function POST(request: NextRequest) {
     const currentStageOfChange = profileResult.data?.stage_of_change || null;
     const currentUnderstanding = profileResult.data?.understanding || null;
 
-    const sessionNumber = null; // session_number column was dropped in migration 016
     let previousHeadline: string | null = null;
     if (prevNotesResult.data?.session_notes) {
       try {
@@ -141,32 +127,18 @@ export async function POST(request: NextRequest) {
 
     const activeFocusAreas = (focusAreasResult.data || []) as FocusArea[];
 
-    // Extract previous suggestion titles (to avoid repetition)
-    let previousSuggestionTitles: string[] = [];
-    if (prevSuggestionsResult.data?.suggestions) {
-      try {
-        const prevSuggestions = typeof prevSuggestionsResult.data.suggestions === 'string'
-          ? JSON.parse(prevSuggestionsResult.data.suggestions)
-          : prevSuggestionsResult.data.suggestions;
-        if (Array.isArray(prevSuggestions)) {
-          previousSuggestionTitles = prevSuggestions.map((s: { title?: string }) => s.title || '').filter(Boolean);
-        }
-      } catch { /* ignore */ }
-    }
-
     // Wins earned in this specific session (for notes)
     const sessionWins = recentWins
       .filter((w) => w.session_id === sessionId)
       .map((w) => ({ text: w.text }));
 
     // ── Immediate: Generate session notes (Haiku, ~3-5s) ──
-    // Uses current understanding (pre-evolution) — perfectly valid for notes
     const sessionNotes = await generateSessionNotes({
       messages,
       tensionType,
       hypothesis,
       savedCards,
-      sessionNumber,
+      sessionNumber: null,
       understanding: currentUnderstanding,
       stageOfChange: currentStageOfChange,
       previousHeadline,
@@ -175,7 +147,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Save session: notes + status + title + narrative snapshot + milestone ──
-    // evolution_status starts as 'pending' — set to 'completed' by after() callback
+    // evolution_status starts as 'pending' — Edge Function sets it to 'completed'
     const { error: sessionUpdateErr } = await ctx.supabase.from(ctx.table('sessions')).update({
       session_notes: JSON.stringify(sessionNotes),
       session_status: 'completed',
@@ -190,133 +162,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save session' }, { status: 500 });
     }
 
-    // ── Background: evolve understanding + generate suggestions (ONE Sonnet call) ──
-    // Runs after response is sent. Vercel waits for completion within maxDuration.
-    after(async () => {
-      try {
-        // Single Sonnet call: evolve understanding AND generate suggestions
-        const evolved = await evolveAndSuggest({
-          currentUnderstanding,
-          messages,
-          tensionType,
-          hypothesis,
-          currentStageOfChange,
-          activeFocusAreas,
-          rewireCards: allCards,
-          recentWins,
-          recentSessionHeadline: sessionNotes.headline,
-          recentKeyMoments: sessionNotes.keyMoments,
-          previousSuggestionTitles,
-        });
-
-        // Save evolved understanding to profile
-        const { error: profileUpdateErr } = await ctx.supabase.from(ctx.table('profiles')).update({
-          understanding: evolved.understanding,
-          understanding_snippet: evolved.snippet || null,
-          ...(evolved.stageOfChange && {
-            stage_of_change: evolved.stageOfChange,
-          }),
-        }).eq('id', ctx.userId);
-
-        if (profileUpdateErr) {
-          console.error('Background: Profile update failed:', profileUpdateErr);
-        }
-
-        // Resolve focusAreaText → focusAreaId on suggestions before saving
-        if (evolved.suggestions.length > 0 && activeFocusAreas.length > 0) {
-          for (const sug of evolved.suggestions) {
-            if (sug.focusAreaText) {
-              const match = activeFocusAreas.find(a => a.text === sug.focusAreaText);
-              if (match) sug.focusAreaId = match.id;
-            }
-          }
-        }
-
-        // Save suggestions (from the same Sonnet call)
-        if (evolved.suggestions.length > 0) {
-          const { error: suggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
-            user_id: ctx.userId,
-            suggestions: evolved.suggestions,
-            generated_after_session_id: sessionId,
-          });
-          if (suggestionsErr) {
-            console.error('Background: Suggestions save failed:', suggestionsErr);
-          }
-        }
-
-        // Save per-focus-area growth reflections
-        if (evolved.focusAreaReflections && evolved.focusAreaReflections.length > 0) {
-          for (const ref of evolved.focusAreaReflections) {
-            const match = activeFocusAreas.find(a => a.text === ref.focusAreaText);
-            if (!match) {
-              console.warn('Background: Focus area reflection text mismatch:', ref.focusAreaText);
-              continue;
-            }
-            const existing = (match as { reflections?: unknown[] }).reflections || [];
-            const { error: refErr } = await ctx.supabase
-              .from(ctx.table('focus_areas'))
-              .update({
-                reflections: [...existing, {
-                  date: new Date().toISOString(),
-                  sessionId,
-                  text: ref.reflection,
-                }],
-              })
-              .eq('id', match.id);
-            if (refErr) {
-              console.error('Background: Focus area reflection save failed:', refErr);
-            }
-          }
-        }
-
-        // Apply focus area actions (from check-in sessions — archive or reframe)
-        if (evolved.focusAreaActions && evolved.focusAreaActions.length > 0) {
-          for (const action of evolved.focusAreaActions) {
-            const match = activeFocusAreas.find(a => a.text === action.focusAreaText);
-            if (!match) {
-              console.warn('Background: Focus area action text mismatch:', action.focusAreaText);
-              continue;
-            }
-
-            if (action.action === 'archive') {
-              const { error: archiveErr } = await ctx.supabase
-                .from(ctx.table('focus_areas'))
-                .update({ archived_at: new Date().toISOString() })
-                .eq('id', match.id);
-              if (archiveErr) console.error('Background: Focus area archive failed:', archiveErr);
-            } else if (action.action === 'update_text' && action.newText) {
-              // Archive old, create new with reframed text + carry over reflections
-              await ctx.supabase
-                .from(ctx.table('focus_areas'))
-                .update({ archived_at: new Date().toISOString() })
-                .eq('id', match.id);
-              const { error: createErr } = await ctx.supabase
-                .from(ctx.table('focus_areas'))
-                .insert({
-                  user_id: ctx.userId,
-                  text: action.newText,
-                  source: 'coach',
-                  session_id: sessionId,
-                  reflections: (match as { reflections?: unknown[] }).reflections || [],
-                });
-              if (createErr) console.error('Background: Focus area reframe create failed:', createErr);
-            }
-          }
-        }
-
-        // Mark evolution as completed
-        await ctx.supabase.from(ctx.table('sessions')).update({
-          evolution_status: 'completed',
-        }).eq('id', sessionId);
-      } catch (err) {
-        console.error('Background close tasks failed:', err);
-        // Mark evolution as failed so next session open can retry
-        try {
-          await ctx.supabase.from(ctx.table('sessions')).update({
-            evolution_status: 'failed',
-          }).eq('id', sessionId);
-        } catch { /* last resort — status stays 'pending', retry will still catch it */ }
-      }
+    // ── Fire-and-forget: evolve understanding + generate suggestions in Edge Function ──
+    fireCloseSessionPipeline({
+      sessionId,
+      userId: ctx.userId,
+      isSimMode: ctx.isSimMode,
+      sessionNotes: {
+        headline: sessionNotes.headline,
+        keyMoments: sessionNotes.keyMoments,
+      },
     });
 
     // ── Response (immediate) ──

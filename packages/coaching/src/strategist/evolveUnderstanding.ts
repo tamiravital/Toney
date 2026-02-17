@@ -143,6 +143,7 @@ Generate personalized session suggestions across four length categories. Each su
 8. At least one suggestion should BUILD ON a recent win — deepen or extend what's already working. If they won by checking their balance, suggest exploring what changed. Wins are proof of momentum — suggest sessions that ride it.
 9. At least 1-2 suggestions should target a specific focus area — advancing the work on that named pain, not just referencing it. Include \`focus_area_text\` with the EXACT text of the focus area.
 10. When a focus area is ready for reflection (2+ reflections, or dormant/not touched recently, or showing signs of shift/stuckness), generate 1+ standing "check-in" suggestions. These are about the pain itself: "You named this. Let's look at where you are with it." Standing = always available. Check-in titles should feel curious, not clinical: "Is 'feel in control' still the shape of it?" Check-in openingDirection should: name the focus area, reference its trajectory, ask how the pain feels now — has it shifted? Is it still the same shape? Include \`focus_area_text\`.
+11. For EACH suggestion, write an \`opening_message\` — the actual 3-4 sentence opening the Coach would say to start this session. Second person, warm, specific to this person's story. This IS the Coach speaking directly to the user. Don't reference time-specific events or say "last time" — it should work whenever they pick it.
 
 ---
 
@@ -191,6 +192,7 @@ Rules:
       "leveragePoint": "string (strength + goal + obstacle)",
       "curiosities": "string (what to explore)",
       "openingDirection": "string (how the Coach should open)",
+      "opening_message": "string (3-4 sentences — the Coach's actual opening greeting)",
       "focus_area_text": "exact text of the focus area this targets, or omit if not focus-area-specific"
     }
   ],
@@ -323,6 +325,7 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
         leveragePoint: String(s.leveragePoint || s.leverage_point || ''),
         curiosities: String(s.curiosities || ''),
         openingDirection: String(s.openingDirection || s.opening_direction || ''),
+        openingMessage: s.opening_message ? String(s.opening_message) : undefined,
         focusAreaText: s.focus_area_text ? String(s.focus_area_text) : undefined,
       }));
     }
@@ -548,13 +551,14 @@ Lengths: quick (2-5 min), medium (5-10 min), deep (10-15 min), standing (always 
       "hypothesis": "1 sentence coaching insight",
       "leveragePoint": "1 sentence: strength + goal + obstacle",
       "curiosities": "1 sentence: what to explore",
-      "openingDirection": "1 sentence: how to open"
+      "openingDirection": "1 sentence: how to open",
+      "opening_message": "3-4 sentences — the Coach's actual opening greeting. Second person, warm, specific to this person."
     }
   ]
 }
 \`\`\`
 
-Rules: Exactly 4 suggestions (1 per length). Be specific to THIS person's answers. Keep ALL fields concise — 1 sentence each.`;
+Rules: Exactly 4 suggestions (1 per length). Be specific to THIS person's answers. Keep ALL fields concise — 1 sentence each, except opening_message which is 3-4 sentences.`;
 
 /** Build the user message sections from seed input (shared by both calls). */
 function buildSeedSections(input: SeedUnderstandingInput): string[] {
@@ -650,6 +654,7 @@ export async function seedSuggestions(input: SeedUnderstandingInput): Promise<Se
         leveragePoint: String(s.leveragePoint || s.leverage_point || ''),
         curiosities: String(s.curiosities || ''),
         openingDirection: String(s.openingDirection || s.opening_direction || ''),
+        openingMessage: s.opening_message ? String(s.opening_message) : undefined,
       }));
     }
 
