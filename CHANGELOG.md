@@ -1,5 +1,11 @@
 # Toney — Changelog
 
+## 2026-02-16 — Home Screen Reimagined
+- **Home screen reordered around focus areas**: Focus areas are now the visual centerpiece of the home screen — promoted from the bottom to position 2, right below a new coaching prompt. The last session tile has been compressed into a side-by-side layout with the "What Toney Sees" snippet. Latest card is now a compact tile at the bottom.
+- **Coaching prompt**: A new contextual card sits at the top of the home screen, inviting you to start or continue coaching. It says different things depending on your situation: "Start your first session" for new users, "Continue your coaching" when you have focus areas, or "Welcome back" when you've been away for a few days. Tapping it takes you to the Chat tab.
+- **Richer focus area cards on home**: Each focus area now shows the number of observations Toney has written about it, and how many wins are linked to it. Tapping a focus area opens its full growth story (reflections timeline + linked wins) right from the home screen — no need to navigate to the Journey tab first.
+- **Fixed duplicate focus areas**: If Toney processed your quiz answers more than once, you could end up with duplicate focus areas (the same goal appearing multiple times). This is now prevented — the system checks for existing focus areas before creating new ones.
+
 ## 2026-02-16 — Focus Area Suggestions + Q7 Other
 - **Q7 "Something else..." option**: You can now write your own goal in your own words during the onboarding quiz, instead of being limited to the preset options.
 - **Removed duplicate Q7 option**: "Stop stressing about money" was removed — it overlapped with "Stop letting money run my mood" which is more specific.

@@ -4,6 +4,12 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Home screen reorder: focus areas as spine, not bottom section (2026-02-16)
+Focus areas are the growth signal now — they accumulate reflections, link to wins, and carry the user's declared intentions. But they were at the bottom of the home screen, below the last session hero tile, the win strip, and two side-by-side tiles. Promoted to position 2 (right after the greeting + CTA). Last session compressed from a hero tile to a compact side-by-side with the understanding snippet. The old hero treatment gave too much weight to looking backward. Now: CTA ("Continue your coaching") → focus areas → wins → reference tiles. Tapping a focus area opens FocusAreaGrowthView directly from home (was: navigate to Journey tab), keeping the user in context.
+
+### Seed route needs idempotency on focus area creation (2026-02-16)
+`POST /api/seed` creates focus areas from Q7 goals but had no check for existing rows. If called twice (e.g., client retry, double-tap, or re-onboarding), identical focus areas were inserted — the `focus_areas` table has no unique constraint on `(user_id, text)`. Added an existing-text check: query active focus areas before insert, filter out any with matching text. Chose code-level dedup over a DB unique constraint because archived areas with the same text should be allowed (a user might archive "Feel okay spending on myself" and later re-declare it).
+
 ### Focus areas are where users name the pain, not aspirational goals (2026-02-16)
 Reframed how focus areas are understood in the system. They're not "what they think they want" — they're where they name the pain. "Stop letting money run my mood" is them saying "this is what hurts." The Coach's existing instruction is already good: "These are the surface — your hypothesis should bridge them to what's actually underneath." The check-in system reflects this: it asks "Is this still the right shape?" not "Have you achieved this goal?" Outcomes of a check-in can be confirming, reframing, archiving, or discovering something entirely new.
 

@@ -6,6 +6,15 @@
 
 ## February 16, 2026
 
+### Home screen redesigned around your focus areas
+
+- Your **focus areas** — the things you said you want to work on — are now front and center on the home screen, right at the top. Each one shows Toney's latest observation about your progress, plus how many observations and wins are connected to it. Tap one to see your full growth story without leaving the home screen.
+- A new **coaching prompt** sits at the very top, inviting you to start or continue coaching. It changes based on where you are: "Start your first session" if you're new, "Continue your coaching" when you have focus areas, or "Welcome back" when you've been away for a few days.
+- The home screen is now organized as a **growth mirror**: focus areas first (showing who you're becoming), then wins (evidence), then your last session and Toney's understanding of you (context).
+
+### Duplicate focus areas fixed
+- If you saw the same focus area appearing multiple times on your home screen, this is now fixed. The issue happened when Toney processed your quiz answers more than once, creating duplicate entries. A cleanup is needed for existing duplicates — reach out if you still see them.
+
 ### You can write your own goal during the quiz
 - Question 7 ("What would feel like progress?") now has a **"Something else..."** option. If none of the preset goals feel right, you can write your own in your own words.
 - The duplicate option "Stop stressing about money" was removed — it overlapped with "Stop letting money run my mood."

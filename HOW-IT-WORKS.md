@@ -273,15 +273,14 @@ Not every session produces reflections for every focus area. Only areas that the
 
 ### Home Screen
 
-Where you land when you open the app. It's designed to be **calm** — everything fits on one screen, no scrolling, no streaks, no counts. You see:
+Where you land when you open the app. It's designed to be a **growth mirror + coaching launchpad** — showing who you're becoming while making it easy to start a session. You see:
 
-- **A personalized greeting** — "Hi [Name]" with a settings gear
-- **Last session card** — the headline and a snippet from your most recent session notes, plus how many days ago it was. Tap to see the full notes.
-- **Win Momentum Strip** — a green card showing your latest win, how many wins this week, and a momentum label ("Most active week yet" / "Your next win is out there"). Tap to see your Journey.
-- **Two side-by-side tiles**:
-  - **"What Toney Sees"** — a single evolving sentence capturing what Toney understands about you right now. This changes after every session. It's how you see growth — not through numbers, but through how the language shifts over time.
-  - **Your latest Rewire Card** — the most recent card you saved. Tap to go to your full collection.
-- **Focus areas** — cards showing what you're working on. Each one displays the latest growth reflection underneath (e.g., "You bought yourself coffee and didn't spiral — that's new"). Tap one to see your full growth story on the Journey tab.
+- **A personalized greeting** — "Good evening, Tamir" with a settings gear
+- **A coaching prompt** — a warm, contextual invitation to start or continue coaching. "Start your first session" for new users, "Continue your coaching" when you have focus areas, or "Welcome back" when you've been away. Tapping it takes you to the Chat tab.
+- **Your focus areas** — the centerpiece of the screen, labeled "Where you're growing." Each focus area is a card showing the latest growth observation underneath. If Toney has written multiple observations, you'll see a count ("4 observations"). If wins are linked, you'll see that too ("3 wins"). Tap any focus area to see its full growth timeline — every observation, wins as evidence, and an option to archive it.
+- **Win Momentum Strip** — a green card showing your latest win, how many wins this week, and a momentum label. Tap to see your Journey.
+- **Two side-by-side tiles**: your last session headline (tap for full notes), and "What Toney Sees" — a single evolving sentence capturing what Toney understands about you right now.
+- **Your latest Rewire Card** — the most recent card you saved. Tap to go to your full collection.
 
 ### Chat Screen
 
