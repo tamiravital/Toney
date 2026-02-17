@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
             suggestions: suggestionsResult.suggestions,
           })
         : Promise.resolve({ error: null }),
-      // Focus area rows from Q7 goals
+      // Focus area rows from Q7 goals (idempotent — skip existing)
       (async () => {
         const goalsAnswer = onboardingAnswers?.goals;
         if (!goalsAnswer) return { error: null };
@@ -139,7 +139,16 @@ export async function POST(request: NextRequest) {
               source: 'onboarding' as const,
             };
           });
-        return ctx.supabase.from(ctx.table('focus_areas')).insert(focusAreaRows);
+        // Check what already exists to avoid duplicates on re-seed
+        const { data: existing } = await ctx.supabase
+          .from(ctx.table('focus_areas'))
+          .select('text')
+          .eq('user_id', ctx.userId)
+          .is('archived_at', null);
+        const existingTexts = new Set((existing || []).map((e: { text: string }) => e.text));
+        const newRows = focusAreaRows.filter(r => !existingTexts.has(r.text));
+        if (newRows.length === 0) return { error: null };
+        return ctx.supabase.from(ctx.table('focus_areas')).insert(newRows);
       })(),
     ]);
 
