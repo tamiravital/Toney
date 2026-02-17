@@ -15,12 +15,10 @@ const anthropic = new Anthropic({
 /**
  * POST /api/session/open
  *
- * FAST PATH (~3-4s): auth → 3 queries → plan → create row → stream
+ * FAST PATH (~2s): auth → 1 query (profile) → plan → create row → stream
+ * Client sends: suggestion, focusAreas, isFirstSession (already in state).
+ * Server queries only the profile (for understanding + coaching style).
  * BACKGROUND (after()): deferred close, evolution retry, legacy seed
- *
- * Wins and cards are NOT loaded here — the chat route loads them fresh
- * on every message via buildSystemPrompt. The opening message works
- * fine without them (Coach has understanding + focus areas + suggestion).
  */
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
@@ -33,54 +31,38 @@ export async function POST(request: NextRequest) {
     }
     timing('auth');
 
-    // ── Parse optional body ──
+    // ── Parse body — client sends context it already has ──
     let previousSessionId: string | null = null;
-    let suggestionIndex: number | null = null;
+    let selectedSuggestion: SessionSuggestion | null = null;
     let continuationNotes: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] } | null = null;
+    let clientFocusAreas: FocusArea[] | null = null;
+    let clientIsFirstSession: boolean | null = null;
     try {
       const body = await request.json();
       previousSessionId = body.previousSessionId || null;
-      suggestionIndex = typeof body.suggestionIndex === 'number' ? body.suggestionIndex : null;
+      selectedSuggestion = body.suggestion || null;
       continuationNotes = body.continuationNotes || null;
+      clientFocusAreas = body.focusAreas || null;
+      clientIsFirstSession = typeof body.isFirstSession === 'boolean' ? body.isFirstSession : null;
     } catch { /* empty body is fine */ }
 
-    // ── FAST: Load only what's needed for the opening message (3 queries) ──
-    const [profileResult, focusAreasResult, suggestionsResult, completedSessionsResult] = await Promise.all([
-      ctx.supabase
-        .from(ctx.table('profiles'))
-        .select('*')
-        .eq('id', ctx.userId)
-        .single(),
-      ctx.supabase
-        .from(ctx.table('focus_areas'))
-        .select('*')
-        .eq('user_id', ctx.userId)
-        .is('archived_at', null)
-        .order('created_at', { ascending: true }),
-      ctx.supabase
-        .from(ctx.table('session_suggestions'))
-        .select('suggestions')
-        .eq('user_id', ctx.userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      ctx.supabase
-        .from(ctx.table('sessions'))
-        .select('id')
-        .eq('user_id', ctx.userId)
-        .eq('session_status', 'completed')
-        .limit(1),
-    ]);
+    // ── FAST: Only 1 query — profile (needed for understanding + coaching style) ──
+    // Focus areas, suggestions, isFirstSession come from the client.
+    const { data: profileData } = await ctx.supabase
+      .from(ctx.table('profiles'))
+      .select('*')
+      .eq('id', ctx.userId)
+      .single();
 
-    timing('data loaded');
+    timing('profile loaded');
 
-    const profile = profileResult.data as Profile | null;
+    const profile = profileData as Profile | null;
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const isFirstSession = !(completedSessionsResult.data && completedSessionsResult.data.length > 0);
-    const activeFocusAreas = (focusAreasResult.data || []) as FocusArea[];
+    const isFirstSession = clientIsFirstSession ?? true;
+    const activeFocusAreas = (clientFocusAreas || []) as FocusArea[];
 
     // ── INSTANT deferred close: just mark completed, full pipeline in after() ──
     if (previousSessionId) {
@@ -92,20 +74,6 @@ export async function POST(request: NextRequest) {
         .eq('session_status', 'active'); // Only mark if still active (idempotent)
       if (markErr) console.error('Deferred close mark failed:', markErr);
       timing('deferred close marked');
-    }
-
-    // Resolve selected suggestion
-    let selectedSuggestion: SessionSuggestion | null = null;
-    if (suggestionsResult.data?.suggestions) {
-      try {
-        const allSuggestions = typeof suggestionsResult.data.suggestions === 'string'
-          ? JSON.parse(suggestionsResult.data.suggestions)
-          : suggestionsResult.data.suggestions;
-        if (Array.isArray(allSuggestions) && allSuggestions.length > 0) {
-          const idx = suggestionIndex != null ? suggestionIndex : 0;
-          selectedSuggestion = allSuggestions[idx] || allSuggestions[0];
-        }
-      } catch { /* ignore */ }
     }
 
     // Resolve focusAreaId for check-in suggestions

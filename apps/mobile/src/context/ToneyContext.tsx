@@ -1135,13 +1135,20 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Resolve selected suggestion client-side (server doesn't need to query)
+      const selectedSuggestion = suggestionIndex != null && suggestions[suggestionIndex]
+        ? suggestions[suggestionIndex]
+        : null;
+
       const res = await fetch(buildApiUrl('/api/session/open'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(previousSessionId && { previousSessionId }),
-          ...(suggestionIndex != null && { suggestionIndex }),
+          ...(selectedSuggestion && { suggestion: selectedSuggestion }),
           ...(continuationNotes && { continuationNotes }),
+          focusAreas,
+          isFirstSession,
         }),
       });
 
@@ -1255,7 +1262,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     } finally {
       openSessionInFlightRef.current = false; // Bug 2: Release mutex
     }
-  }, [simMode, buildApiUrl]);
+  }, [simMode, buildApiUrl, suggestions, focusAreas, isFirstSession]);
 
   // ── Auto-open session when user navigates to chat ──
   const sessionOpenedRef = useRef(false);
