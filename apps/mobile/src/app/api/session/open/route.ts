@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
       // Check if any completed sessions exist (for isFirstSession detection)
       ctx.supabase
         .from(ctx.table('sessions'))
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
         .neq('evolution_status', 'completed')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (incompleteSession) {
         timing(`retrying incomplete evolution for session ${incompleteSession.id.slice(0, 8)}`);
@@ -358,9 +358,9 @@ export async function POST(request: NextRequest) {
               .eq('session_id', previousSessionId),
             ctx.supabase
               .from(ctx.table('sessions'))
-              .select('session_number, hypothesis')
+              .select('hypothesis')
               .eq('id', previousSessionId)
-              .single(),
+              .maybeSingle(),
             ctx.supabase
               .from(ctx.table('sessions'))
               .select('session_notes')
@@ -370,14 +370,14 @@ export async function POST(request: NextRequest) {
               .neq('id', previousSessionId)
               .order('created_at', { ascending: false })
               .limit(1)
-              .single(),
+              .maybeSingle(),
             ctx.supabase
               .from(ctx.table('session_suggestions'))
               .select('suggestions')
               .eq('user_id', ctx.userId)
               .order('created_at', { ascending: false })
               .limit(1)
-              .single(),
+              .maybeSingle(),
           ]);
 
           const savedCards = (oldCardsResult.data || []).map((c: { title: string; category: string }) => ({
@@ -385,7 +385,6 @@ export async function POST(request: NextRequest) {
             category: c.category,
           }));
 
-          const oldSessionNumber = oldSessionResult.data?.session_number || null;
           const oldSessionHypothesis = oldSessionResult.data?.hypothesis || null;
           let oldPreviousHeadline: string | null = null;
           if (oldPrevNotesResult.data?.session_notes) {
@@ -416,7 +415,7 @@ export async function POST(request: NextRequest) {
             currentStageOfChange: profile.stage_of_change || null,
             currentUnderstanding: profile.understanding || null,
             savedCards,
-            sessionNumber: oldSessionNumber,
+            sessionNumber: null,
             previousHeadline: oldPreviousHeadline,
             activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
             rewireCards: (cardsResult.data || []) as RewireCard[],

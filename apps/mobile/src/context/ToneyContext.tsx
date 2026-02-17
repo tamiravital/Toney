@@ -1119,9 +1119,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     setSessionStatus('active');
     setSessionNotes(null);
 
+    // Always skip the message loader when we're opening a session inline —
+    // messages are being streamed in, no need to reload from DB.
+    skipMessageLoadRef.current = true;
+
     // When preserving messages, capture current messages as previous session (collapsed)
     if (preserveMessages) {
-      skipMessageLoadRef.current = true;
       const currentNonDividerMessages = messagesRef.current.filter(m => m.role !== 'divider'); // Bug 4: Read from ref, not stale closure
       setPreviousSessionMessages(currentNonDividerMessages);
       setPreviousSessionCollapsed(true);
@@ -1172,8 +1175,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                 setIsFirstSession(false);
               } else if (event.type === 'delta') {
                 if (!sessionIdReceived) continue;
-                // Hide loading state on first text chunk
-                setLoadingChat(false);
                 setMessages(prev => {
                   const existing = prev.find(m => m.id === streamingMsgId);
                   if (existing) {
@@ -1183,6 +1184,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                         : m
                     );
                   } else {
+                    // First chunk — add the message. loadingChat cleared below.
                     return [...prev, {
                       id: streamingMsgId,
                       role: 'assistant' as const,
@@ -1193,6 +1195,9 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                     }];
                   }
                 });
+                // Clear loading AFTER setMessages so messages.length > 0
+                // in the same batch — prevents suggestion picker flash.
+                setLoadingChat(false);
               } else if (event.type === 'done') {
                 setMessages(prev =>
                   prev.map(m =>

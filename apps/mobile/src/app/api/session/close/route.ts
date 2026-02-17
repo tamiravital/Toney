@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
       // Read hypothesis from session row (not briefing)
       ctx.supabase
         .from(ctx.table('sessions'))
-        .select('session_number, hypothesis')
+        .select('hypothesis')
         .eq('id', sessionId)
-        .single(),
+        .maybeSingle(),
       ctx.supabase
         .from(ctx.table('sessions'))
         .select('session_notes')
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         .not('session_notes', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
       ctx.supabase
         .from(ctx.table('focus_areas'))
         .select('*')
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         .eq('user_id', ctx.userId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
     ]);
 
     const messages = (messagesResult.data || []).map((m: { role: string; content: string }) => ({
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     const currentStageOfChange = profileResult.data?.stage_of_change || null;
     const currentUnderstanding = profileResult.data?.understanding || null;
 
-    const sessionNumber = sessionResult.data?.session_number || null;
+    const sessionNumber = null; // session_number column was dropped in migration 016
     let previousHeadline: string | null = null;
     if (prevNotesResult.data?.session_notes) {
       try {
