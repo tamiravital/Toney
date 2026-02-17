@@ -309,3 +309,39 @@ Your opening should:
 Don't recap the whole session. Pick up the thread naturally — like a coach who remembers.`,
   };
 }
+
+/**
+ * Returns a one-time system prompt block for focus area check-in sessions.
+ * Used when the user taps a standing suggestion that's a focus area check-in.
+ * The session is about reflecting on a specific focus area: is it still the right direction?
+ */
+export function buildFocusAreaCheckinBlock(focusArea: FocusArea, totalWinCount?: number): SystemPromptBlock {
+  const milestone = winMilestoneText(totalWinCount);
+  const milestoneBlock = milestone ? `\n\nWin milestone observation: ${milestone}` : '';
+
+  const reflectionContext = focusArea.reflections && focusArea.reflections.length > 0
+    ? `\n\nTrajectory from past reflections:\n${focusArea.reflections.map(r => `- ${r.text}`).join('\n')}`
+    : '';
+
+  return {
+    type: 'text',
+    text: `[SESSION OPENING — FOCUS AREA CHECK-IN] This session is about reflecting on a focus area the user named: "${focusArea.text}"
+${reflectionContext}
+
+This is a check-in — not a teaching moment. They named this pain. Your job is to help them see where they actually are with it, not where you think they should be.
+
+Your opening should:
+- Name the focus area directly: "I want to check in on something — [area]"
+- If there are reflections, reference the trajectory ("When we started, [X]. More recently, [Y]")
+- Ask an open question: "How does this feel right now? Is this still where you want to be pointing?"
+- Keep it to 3-4 sentences. Warm, curious, not clinical.
+
+During the session:
+- Let them lead. They might confirm ("yes, still important"), reframe ("actually, it's more about..."), or be done ("I think I've moved past this").
+- If they want to reframe, help them articulate the new version and suggest it as a new focus area via [FOCUS]...[/FOCUS]
+- If they're done with it, honor that — don't push them to keep working on something they've outgrown
+- If something entirely new emerges, follow it — the check-in was the doorway, not the destination
+
+Don't say "Welcome to your check-in" or make it feel formal. Just be a coach who noticed it's time to look at this.${milestoneBlock}`,
+  };
+}

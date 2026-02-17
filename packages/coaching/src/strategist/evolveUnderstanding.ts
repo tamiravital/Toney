@@ -25,8 +25,8 @@ export interface EvolveUnderstandingInput {
   hypothesis?: string | null;
   /** Current stage of change */
   currentStageOfChange?: string | null;
-  /** Active focus areas for context */
-  activeFocusAreas?: { text: string }[] | null;
+  /** Active focus areas (full objects including reflections for context) */
+  activeFocusAreas?: FocusArea[] | null;
 }
 
 export interface EvolveUnderstandingOutput {
@@ -65,11 +65,22 @@ export interface FocusAreaGrowthReflection {
   reflection: string;
 }
 
+export interface FocusAreaAction {
+  /** The exact text of the focus area being acted on */
+  focusAreaText: string;
+  /** What to do: archive the area, or update its text */
+  action: 'archive' | 'update_text';
+  /** New text (only for update_text action) */
+  newText?: string;
+}
+
 export interface EvolveAndSuggestOutput extends EvolveUnderstandingOutput {
   /** Personalized session suggestions for the home screen (6-10) */
   suggestions: SessionSuggestion[];
   /** Per-focus-area growth observations from this session (only for areas that were relevant) */
   focusAreaReflections?: FocusAreaGrowthReflection[];
+  /** Actions to take on focus areas (archive, reframe) — from check-in sessions */
+  focusAreaActions?: FocusAreaAction[];
 }
 
 const EVOLVE_AND_SUGGEST_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. You maintain an evolving understanding of each person AND generate personalized session suggestions for their home screen.
@@ -130,6 +141,8 @@ Generate personalized session suggestions across four length categories. Each su
 6. Standing suggestions should reference their specific tension pattern
 7. Write all user-facing text (title, teaser) in second person — "you," not "they"
 8. At least one suggestion should BUILD ON a recent win — deepen or extend what's already working. If they won by checking their balance, suggest exploring what changed. Wins are proof of momentum — suggest sessions that ride it.
+9. At least 1-2 suggestions should target a specific focus area — advancing the work on that named pain, not just referencing it. Include \`focus_area_text\` with the EXACT text of the focus area.
+10. When a focus area is ready for reflection (2+ reflections, or dormant/not touched recently, or showing signs of shift/stuckness), generate 1+ standing "check-in" suggestions. These are about the pain itself: "You named this. Let's look at where you are with it." Standing = always available. Check-in titles should feel curious, not clinical: "Is 'feel in control' still the shape of it?" Check-in openingDirection should: name the focus area, reference its trajectory, ask how the pain feels now — has it shifted? Is it still the same shape? Include \`focus_area_text\`.
 
 ---
 
@@ -144,6 +157,21 @@ Rules:
 - Note movement when visible: "You used to [X] — now you're [Y]."
 - Noting stuckness is okay: "You're still navigating [X], even as the desire to change grows."
 - Don't force it — omit areas with nothing to say.
+
+---
+
+## PART 4: FOCUS AREA ACTIONS (only after check-in sessions)
+
+If this session was clearly about checking in on a focus area AND the conversation resulted in a clear resolution, you may signal an action:
+
+- **archive**: The user said this area is done, resolved, or no longer relevant. Only use when there's explicit signal from the user — not when YOU think it's done.
+- **update_text**: The user wants to reframe this area — they articulated a better version. Include the new text exactly as they want it.
+
+Rules:
+- These are RARE. Most sessions, even check-ins, don't result in an action.
+- Never archive a focus area just because the user is doing well at it — "maintenance" is not "done."
+- Only act on explicit user signal, not your inference.
+- Omit \`focus_area_actions\` entirely if no actions are warranted.
 
 ---
 
@@ -162,13 +190,21 @@ Rules:
       "hypothesis": "string (coaching insight driving this suggestion)",
       "leveragePoint": "string (strength + goal + obstacle)",
       "curiosities": "string (what to explore)",
-      "openingDirection": "string (how the Coach should open)"
+      "openingDirection": "string (how the Coach should open)",
+      "focus_area_text": "exact text of the focus area this targets, or omit if not focus-area-specific"
     }
   ],
   "focus_area_reflections": [
     {
       "focus_area_text": "exact text of the focus area",
       "reflection": "1-3 sentences, second person, specific"
+    }
+  ],
+  "focus_area_actions": [
+    {
+      "focus_area_text": "exact text of the focus area",
+      "action": "archive|update_text",
+      "new_text": "only for update_text — the reframed text"
     }
   ]
 }
@@ -204,11 +240,28 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
   if (input.tensionType) contextLines.push(`Money tension: ${input.tensionType}`);
   if (input.hypothesis) contextLines.push(`Hypothesis going into this session: ${input.hypothesis}`);
   if (input.currentStageOfChange) contextLines.push(`Current stage of change: ${input.currentStageOfChange}`);
-  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
-    contextLines.push(`Active focus areas: ${input.activeFocusAreas.map(a => `"${a.text}"`).join(', ')}`);
-  }
   if (contextLines.length > 0) {
     sections.push(`## Context\n${contextLines.join('\n')}`);
+  }
+
+  // Focus areas with reflection history (richer than just text)
+  if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
+    const focusAreaLines = input.activeFocusAreas.map(a => {
+      let line = `- "${a.text}"`;
+      if (a.reflections && a.reflections.length > 0) {
+        line += ` (${a.reflections.length} reflections)`;
+        const recent = a.reflections.slice(-2);
+        for (const r of recent) {
+          line += `\n  - ${r.text}`;
+        }
+      }
+      if (a.created_at) {
+        const daysOld = Math.floor((Date.now() - new Date(a.created_at).getTime()) / (1000 * 60 * 60 * 24));
+        line += `\n  Active for ${daysOld} days`;
+      }
+      return line;
+    });
+    sections.push(`## Active Focus Areas\n${focusAreaLines.join('\n')}`);
   }
 
   // Session transcript
@@ -270,7 +323,19 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
         leveragePoint: String(s.leveragePoint || s.leverage_point || ''),
         curiosities: String(s.curiosities || ''),
         openingDirection: String(s.openingDirection || s.opening_direction || ''),
+        focusAreaText: s.focus_area_text ? String(s.focus_area_text) : undefined,
       }));
+    }
+
+    // Parse focus area actions (from check-in sessions)
+    if (Array.isArray(parsed.focus_area_actions)) {
+      result.focusAreaActions = parsed.focus_area_actions
+        .filter((a: Record<string, unknown>) => a.focus_area_text && a.action)
+        .map((a: Record<string, unknown>) => ({
+          focusAreaText: String(a.focus_area_text),
+          action: (['archive', 'update_text'].includes(String(a.action)) ? String(a.action) : 'archive') as 'archive' | 'update_text',
+          newText: a.new_text ? String(a.new_text) : undefined,
+        }));
     }
 
     if (Array.isArray(parsed.focus_area_reflections)) {

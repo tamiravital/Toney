@@ -26,6 +26,7 @@ export function formatAnswersReadable(answers: Record<string, string>): string {
       // Multi-select: value is comma-separated list of values
       const selectedValues = answerValue.split(',').map(v => v.trim()).filter(Boolean);
       const selectedLabels = selectedValues.map(v => {
+        if (v.startsWith('other:')) return v.slice(6);
         const option = q.options.find(o => o.value === v);
         return option ? option.label : v;
       });
@@ -130,13 +131,13 @@ export const questions: OnboardingQuestion[] = [
     question: 'What would feel like progress?',
     multiSelect: true,
     options: [
-      { value: 'stop_stress', label: 'Stop stressing about money', emoji: '\u{1F9D8}' },
       { value: 'spend_on_self', label: 'Feel okay spending on myself', emoji: '\u{1F381}' },
       { value: 'hard_convos', label: 'Have hard money conversations without fighting', emoji: '\u{1F4AC}' },
       { value: 'ask_worth', label: 'Ask for a raise or charge what I\u2019m worth', emoji: '\u{1F4AA}' },
       { value: 'mood_control', label: 'Stop letting money run my mood', emoji: '\u{1F3AF}' },
       { value: 'feel_in_control', label: 'Feel in control of my finances', emoji: '\u2705' },
       { value: 'feel_enough', label: 'Feel satisfied with what I have', emoji: '\u{1F33F}' },
+      { value: 'other', label: 'Something else...', emoji: '\u270F\uFE0F' },
     ],
   },
 ];

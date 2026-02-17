@@ -6,6 +6,14 @@
 
 ## February 16, 2026
 
+### You can write your own goal during the quiz
+- Question 7 ("What would feel like progress?") now has a **"Something else..."** option. If none of the preset goals feel right, you can write your own in your own words.
+- The duplicate option "Stop stressing about money" was removed — it overlapped with "Stop letting money run my mood."
+
+### Session suggestions now connect to your focus areas
+- After each session, at least some of your new suggestions are now **explicitly about one of your focus areas**. Instead of generic coaching topics, you'll see suggestions like "The 10,000 shekel gap" linked to a specific thing you said you wanted to work on.
+- When Toney thinks a focus area is ready for deeper reflection — maybe you've been working on it for a while, or something seems to be shifting — it generates a **check-in suggestion**. These are invitations to revisit the pain you named: "Is this still the right shape?" You can confirm it, reframe it in new words, or discover that what you actually need has changed entirely.
+
 ### You can end a session at any time now
 - The "End Session" button now appears **as soon as the conversation starts** — you don't have to save a card or send 20+ messages first. If you tapped a suggestion but realized you want to talk about something different, just end the session and pick a new one.
 

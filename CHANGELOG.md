@@ -1,5 +1,14 @@
 # Toney — Changelog
 
+## 2026-02-16 — Focus Area Suggestions + Q7 Other
+- **Q7 "Something else..." option**: You can now write your own goal in your own words during the onboarding quiz, instead of being limited to the preset options.
+- **Removed duplicate Q7 option**: "Stop stressing about money" was removed — it overlapped with "Stop letting money run my mood" which is more specific.
+- **Suggestions now target your focus areas**: After each session, at least 1-2 of the generated suggestions explicitly reference one of your focus areas. The Strategist includes a `focusAreaText` field to structurally link suggestions to focus areas.
+- **Focus area check-in suggestions**: When a focus area is ready for reflection (2+ sessions, dormancy, or signs of shift), the Strategist generates standing check-in suggestions: "You named this pain. Let's look at where you are with it." Check-in sessions open differently — the Coach names the area and its trajectory.
+- **Focus area reframing and archiving**: After check-in sessions, the Strategist can signal that a focus area should be archived (user says it's done) or reframed (text updated, reflections carried over to the new area).
+- **Sessions track their focus area**: New `focus_area_id` column on sessions (migration 033) links sessions to the focus area they're about.
+- **Backfill script**: Fixed Tamir's duplicate focus area. Regenerated Noga's suggestions with the new focus-area fields.
+
 ## 2026-02-16 — Tiered Session Close
 - **Sessions with no engagement are cleaned up**: If you opened a session but never responded (only the Coach's opening message), the session is deleted entirely — no trace in your history. If you sent 1-2 messages, the session is marked complete but doesn't generate notes, suggestions, or evolution. Sessions with 3+ user messages run the full pipeline as before.
 - **End Session button always available**: "End Session" now appears as soon as the Coach sends its opening message, instead of requiring a saved card or 20+ messages. This lets you bail out of a session and return to the suggestion picker if the topic isn't right.

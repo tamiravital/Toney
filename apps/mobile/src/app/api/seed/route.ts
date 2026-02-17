@@ -122,14 +122,23 @@ export async function POST(request: NextRequest) {
         const selectedValues = goalsAnswer.split(',').filter(Boolean);
         const goalsQuestion = questions.find(q => q.id === 'goals');
         if (!goalsQuestion || selectedValues.length === 0) return { error: null };
-        const focusAreaRows = selectedValues.map(v => {
-          const opt = goalsQuestion.options.find(o => o.value === v);
-          return {
-            user_id: ctx.userId,
-            text: opt ? opt.label : v,
-            source: 'onboarding' as const,
-          };
-        });
+        const focusAreaRows = selectedValues
+          .filter(v => v !== 'other') // Skip bare "other" with no text
+          .map(v => {
+            if (v.startsWith('other:')) {
+              return {
+                user_id: ctx.userId,
+                text: v.slice(6),
+                source: 'onboarding' as const,
+              };
+            }
+            const opt = goalsQuestion.options.find(o => o.value === v);
+            return {
+              user_id: ctx.userId,
+              text: opt ? opt.label : v,
+              source: 'onboarding' as const,
+            };
+          });
         return ctx.supabase.from(ctx.table('focus_areas')).insert(focusAreaRows);
       })(),
     ]);

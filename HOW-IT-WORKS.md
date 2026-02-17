@@ -22,7 +22,7 @@ The questions aren't about your income or how much you save. They're about your 
 4. **What would people who know you say?** — "You worry about money way too much," "You need to live a little," "You're too generous for your own good," "You don't deal with the money stuff"?
 5. **How often does money stress actually show up?** — Every single day? A few times a week? Only around specific things? Rarely but hard? A constant low hum?
 6. **What's one thing you're actually good at with money?** — Generous with loved ones? Know how to earn it? Disciplined when you set your mind to it?
-7. **What would feel like progress?** — Here you pick multiple goals: stop stressing about money, feel okay spending on yourself, have hard money conversations without fighting, ask for a raise or charge what you're worth, stop letting money run your mood, feel in control, feel satisfied with what you have. You can also write your own in your own words.
+7. **What would feel like progress?** — Here you pick multiple goals: feel okay spending on yourself, have hard money conversations without fighting, ask for a raise or charge what you're worth, stop letting money run your mood, feel in control, feel satisfied with what you have. You can also write your own goal in your own words using the "Something else..." option.
 
 After you finish the quiz, Toney gets to work behind the scenes.
 
@@ -252,6 +252,8 @@ Before the update, a **snapshot** of the previous narrative is saved so Toney ca
 The suggestions are deeply personalized. They reference your specific words, patterns, breakthroughs, and saved cards. They avoid repeating what was just covered. They include a mix of quick check-ins, medium explorations, and deep dives. There are also "standing" suggestions — recurring entry points tailored to your patterns, like "before a money decision" or "something happened with money."
 
 Each suggestion must feel like something only Toney could say to *you* — not a generic coaching prompt.
+
+Some suggestions explicitly target a specific focus area — advancing the work you've declared matters to you. And when a focus area is ready for deeper reflection (you've been working on it for a while, or it seems to be shifting), the Strategist generates **check-in suggestions** — standing invitations to revisit the pain itself: "You named this. Let's look at where you are with it." A check-in session opens differently — the Coach names your focus area, references your trajectory with it, and asks how the pain feels now. Has it shifted? Is it still the same shape? A check-in can lead to confirming the direction, reframing it in new words, archiving it, or discovering something entirely new.
 
 **And writes growth reflections for your focus areas.** For each focus area that the session touched — directly or indirectly — the Strategist writes a 1-3 sentence observation about where you are with that intention. These are written directly to you:
 

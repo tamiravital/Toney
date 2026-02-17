@@ -492,6 +492,13 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore — fall through to no-suggestion path */ }
     }
 
+    // ── Resolve focusAreaId for check-in suggestions (standing + has focusAreaText) ──
+    let focusAreaId: string | null = null;
+    if (selectedSuggestion?.focusAreaText && selectedSuggestion.length === 'standing' && activeFocusAreas.length > 0) {
+      const match = activeFocusAreas.find(fa => fa.text === selectedSuggestion!.focusAreaText);
+      if (match) focusAreaId = match.id;
+    }
+
     // ── Build system prompt (pure code, always instant) ──
     const totalWinCount = winCountResult.count ?? 0;
 
@@ -505,6 +512,7 @@ export async function POST(request: NextRequest) {
       selectedSuggestion,
       continuationNotes,
       totalWinCount,
+      focusAreaId,
     });
 
     timing('planSessionStep complete (pure code)');
@@ -518,6 +526,7 @@ export async function POST(request: NextRequest) {
         leverage_point: plan.leveragePoint,
         curiosities: plan.curiosities,
         opening_direction: plan.openingDirection,
+        ...(plan.focusAreaId && { focus_area_id: plan.focusAreaId }),
       })
       .select('id')
       .single();

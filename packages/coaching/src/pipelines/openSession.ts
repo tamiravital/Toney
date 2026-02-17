@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Profile, RewireCard, Win, SystemPromptBlock, FocusArea, SessionSuggestion, SessionNotesOutput } from '@toney/types';
-import { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion, buildSessionContinuationBlock } from '../prompts/systemPromptBuilder';
+import { buildSystemPrompt, buildSessionOpeningBlock, buildSessionOpeningFromSuggestion, buildSessionContinuationBlock, buildFocusAreaCheckinBlock } from '../prompts/systemPromptBuilder';
 
 // ────────────────────────────────────────────
 // Open Session Pipeline
@@ -37,6 +37,8 @@ export interface OpenSessionInput {
   continuationNotes?: SessionNotesOutput | null;
   /** Total number of wins for this user (for milestone detection) */
   totalWinCount?: number;
+  /** Focus area ID for check-in sessions (resolved from suggestion.focusAreaText) */
+  focusAreaId?: string | null;
 }
 
 export interface PlanSessionOutput {
@@ -50,6 +52,8 @@ export interface PlanSessionOutput {
   openingDirection: string | null;
   /** System prompt blocks for the Coach (ready to use) */
   systemPromptBlocks: SystemPromptBlock[];
+  /** If this session is a focus area check-in */
+  focusAreaId: string | null;
 }
 
 export interface OpenSessionOutput extends PlanSessionOutput {
@@ -85,9 +89,18 @@ export function planSessionStep(input: OpenSessionInput): PlanSessionOutput {
     activeFocusAreas: (input.activeFocusAreas || undefined) as FocusArea[] | undefined,
   });
 
+  // Resolve focus area check-in: standing suggestion with focusAreaText
+  const focusAreaId = input.focusAreaId || null;
+  const isCheckin = focusAreaId && input.activeFocusAreas;
+  const checkinFocusArea = isCheckin
+    ? input.activeFocusAreas!.find(fa => fa.id === focusAreaId)
+    : null;
+
   // Append opening block
   if (input.continuationNotes) {
     systemPromptBlocks.push(buildSessionContinuationBlock(input.continuationNotes));
+  } else if (checkinFocusArea) {
+    systemPromptBlocks.push(buildFocusAreaCheckinBlock(checkinFocusArea, input.totalWinCount));
   } else if (suggestion) {
     systemPromptBlocks.push(buildSessionOpeningFromSuggestion(suggestion, input.totalWinCount));
   } else {
@@ -99,6 +112,7 @@ export function planSessionStep(input: OpenSessionInput): PlanSessionOutput {
     leveragePoint,
     curiosities,
     openingDirection,
+    focusAreaId,
     systemPromptBlocks,
   };
 }

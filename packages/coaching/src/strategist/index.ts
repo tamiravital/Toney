@@ -5,6 +5,7 @@ export type {
   EvolveAndSuggestInput,
   EvolveAndSuggestOutput,
   FocusAreaGrowthReflection,
+  FocusAreaAction,
   SeedUnderstandingInput,
   SeedUnderstandingOutput,
   SeedSuggestionsOutput,

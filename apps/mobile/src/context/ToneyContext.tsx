@@ -1507,10 +1507,13 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       const goalsQuestion = questions.find(q => q.id === 'goals');
       if (goalsQuestion) {
         const selectedValues = goalsAnswer.split(',').filter(Boolean);
-        const selectedLabels = selectedValues.map(v => {
-          const opt = goalsQuestion.options.find(o => o.value === v);
-          return opt ? opt.label : v;
-        });
+        const selectedLabels = selectedValues
+          .filter(v => v !== 'other')
+          .map(v => {
+            if (v.startsWith('other:')) return v.slice(6);
+            const opt = goalsQuestion.options.find(o => o.value === v);
+            return opt ? opt.label : v;
+          });
         goalsText = selectedLabels.join('; ');
       }
     }

@@ -36,4 +36,6 @@ export interface Session {
   opening_direction?: string | null;
   /** Whether background evolution (evolveAndSuggest) completed after session close */
   evolution_status?: 'pending' | 'completed' | 'failed';
+  /** If this session is a focus area check-in, which focus area */
+  focus_area_id?: string | null;
 }

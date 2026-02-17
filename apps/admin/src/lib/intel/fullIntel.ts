@@ -211,7 +211,7 @@ export async function runFullIntel(
         tensionType: (profile as Profile).tension_type || null,
         hypothesis: session.hypothesis || lastHypothesis || null,
         currentStageOfChange: (profile as Profile).stage_of_change || null,
-        activeFocusAreas: focusAreas.map(a => ({ text: a.text })),
+        activeFocusAreas: focusAreas as FocusArea[],
         rewireCards: (cardsResult.data || []) as RewireCard[],
         recentWins: (winsResult.data || []) as Win[],
         recentSessionHeadline,

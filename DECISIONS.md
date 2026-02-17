@@ -4,6 +4,15 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Focus areas are where users name the pain, not aspirational goals (2026-02-16)
+Reframed how focus areas are understood in the system. They're not "what they think they want" — they're where they name the pain. "Stop letting money run my mood" is them saying "this is what hurts." The Coach's existing instruction is already good: "These are the surface — your hypothesis should bridge them to what's actually underneath." The check-in system reflects this: it asks "Is this still the right shape?" not "Have you achieved this goal?" Outcomes of a check-in can be confirming, reframing, archiving, or discovering something entirely new.
+
+### Q7: keep mood_control, drop stop_stress (2026-02-16)
+Options 1 ("Stop stressing about money") and 5 ("Stop letting money run my mood") were near-duplicates. Kept #5 because "money running my mood" names the mechanism — it points at something specific the Coach can work with. "Stop stressing" is just the symptom. Added "Something else..." with freeform text input so users aren't boxed in by presets.
+
+### Focus area check-in as standing suggestion, not timed interval (2026-02-16)
+Check-in suggestions could be: (1) periodic (every N sessions), (2) calendar-based (every 2 weeks), or (3) Strategist-decided based on signals. Chose (3): the Strategist sees reflection count, dormancy, stuckness, and shift signals — it knows when a check-in matters. Standing suggestions (always available) rather than one-time, because the user might not be ready for the check-in when it first appears. The Strategist generates 1+ standing check-ins when it determines a focus area is ready. No mechanical timer.
+
 ### End Session button always visible, no gating (2026-02-16)
 The old rule was: show End Session after a card is saved OR 20+ messages exchanged (never on first session unless card). This made sense when every close ran the full pipeline (~$0.05 in LLM calls + 15-20s). But with tiered close, short sessions are free — no LLM calls, instant completion. And hiding the button created a trap: user taps a suggestion, sees the Coach's opening, realizes they want something different, but can't end the session or get back to the suggestion picker. They're stuck for 12 hours. New rule: button appears as soon as `messages.length > 0` (i.e., the Coach has sent its opening). Removed `sessionHasCard`, `isFirstSession`, and `nonDividerCount >= 20` conditions entirely.
 

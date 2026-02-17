@@ -70,6 +70,10 @@ export interface SessionSuggestion {
   curiosities: string;
   /** How the Coach should open the session if this suggestion is selected */
   openingDirection: string;
+  /** The focus area this suggestion targets (exact text, for matching to DB) */
+  focusAreaText?: string;
+  /** The focus area ID (resolved from focusAreaText after generation) */
+  focusAreaId?: string;
 }
 
 export interface SessionSuggestionsRow {

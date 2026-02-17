@@ -222,6 +222,16 @@ export async function POST(request: NextRequest) {
           console.error('Background: Profile update failed:', profileUpdateErr);
         }
 
+        // Resolve focusAreaText → focusAreaId on suggestions before saving
+        if (evolved.suggestions.length > 0 && activeFocusAreas.length > 0) {
+          for (const sug of evolved.suggestions) {
+            if (sug.focusAreaText) {
+              const match = activeFocusAreas.find(a => a.text === sug.focusAreaText);
+              if (match) sug.focusAreaId = match.id;
+            }
+          }
+        }
+
         // Save suggestions (from the same Sonnet call)
         if (evolved.suggestions.length > 0) {
           const { error: suggestionsErr } = await ctx.supabase.from(ctx.table('session_suggestions')).insert({
@@ -255,6 +265,41 @@ export async function POST(request: NextRequest) {
               .eq('id', match.id);
             if (refErr) {
               console.error('Background: Focus area reflection save failed:', refErr);
+            }
+          }
+        }
+
+        // Apply focus area actions (from check-in sessions — archive or reframe)
+        if (evolved.focusAreaActions && evolved.focusAreaActions.length > 0) {
+          for (const action of evolved.focusAreaActions) {
+            const match = activeFocusAreas.find(a => a.text === action.focusAreaText);
+            if (!match) {
+              console.warn('Background: Focus area action text mismatch:', action.focusAreaText);
+              continue;
+            }
+
+            if (action.action === 'archive') {
+              const { error: archiveErr } = await ctx.supabase
+                .from(ctx.table('focus_areas'))
+                .update({ archived_at: new Date().toISOString() })
+                .eq('id', match.id);
+              if (archiveErr) console.error('Background: Focus area archive failed:', archiveErr);
+            } else if (action.action === 'update_text' && action.newText) {
+              // Archive old, create new with reframed text + carry over reflections
+              await ctx.supabase
+                .from(ctx.table('focus_areas'))
+                .update({ archived_at: new Date().toISOString() })
+                .eq('id', match.id);
+              const { error: createErr } = await ctx.supabase
+                .from(ctx.table('focus_areas'))
+                .insert({
+                  user_id: ctx.userId,
+                  text: action.newText,
+                  source: 'coach',
+                  session_id: sessionId,
+                  reflections: (match as { reflections?: unknown[] }).reflections || [],
+                });
+              if (createErr) console.error('Background: Focus area reframe create failed:', createErr);
             }
           }
         }
