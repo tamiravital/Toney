@@ -4,6 +4,20 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Two Supabase projects for PROD/DEV, not one project with branching (2026-02-17)
+Needed environment isolation as real users approach. Options considered: (1) Supabase branching (built-in, but limited to Pro plan and doesn't fully isolate Edge Functions/secrets). (2) Single project with prefixed tables (sim_ pattern already used for simulator, but complex and error-prone for a full second environment). (3) Two completely separate Supabase projects — PROD and DEV. Chose (3): complete isolation, independent Edge Function deployments, independent secrets, independent auth users. Cost: must run migrations on both, must deploy Edge Function to both, prompts must be synced manually (already a constraint from Edge Function architecture). The `edgeFunction.ts` helper already reads `NEXT_PUBLIC_SUPABASE_URL` dynamically, so it auto-routes to the correct project's Edge Function without code changes.
+
+### Vercel preview deployments instead of four projects (2026-02-17)
+Could create 4 Vercel projects (mobile-prod, mobile-dev, admin-prod, admin-dev) or use Vercel's built-in preview deployments. Chose preview deployments: push to `main` → Production deployment (PROD env vars), push to any other branch → Preview deployment (Preview env vars). This requires zero extra Vercel projects, uses environment-scoped variables (Production vs Preview), and auto-generates preview URLs. Trade-off: preview URLs are auto-generated (not custom subdomain on Hobby plan), but that's fine for development.
+
+### Email on profiles table for user management (2026-02-17)
+Email lives in `auth.users` (Supabase auth schema), but querying it requires service role access and joining across schemas. With real users approaching (100-200 testers), need email accessible for: admin dashboard user list, outreach, user identification. Added `email TEXT` column to `profiles`, backfilled from `auth.users`, and updated the `handle_new_user()` trigger to populate on signup. Not a PII concern — this is a user management feature, not a public-facing field. Migration 034.
+
+### UUID remapping for cross-environment data copy (2026-02-17)
+Google OAuth creates different UUIDs per Supabase project (the UUID comes from `auth.users`, which is project-scoped). When copying PROD data to DEV, the same person (same Google email) has different UUIDs. Solution: match users by email (`auth.users` in both projects), build a UUID mapping (PROD→DEV), and remap all user_id FKs during copy. This is a one-time operation for initial data seeding, not an ongoing sync.
+
+---
+
 ### Pre-generated opening messages for instant session open (2026-02-17)
 Session open was ~8s because Sonnet needs ~6s for the first token. But the opening message only depends on the suggestion's coaching plan (hypothesis, leverage point, curiosities, opening direction) — all of which are already known at suggestion generation time. By writing the `openingMessage` at close time (when `evolveAndSuggest()` already has full context), session open can serve it instantly from the DB without any LLM call. Trade-off: opening messages are less reactive to changes between sessions (new cards saved, new wins) — but the suggestion text itself is already snapshot-at-generation-time, so the opening matching it is consistent. Free chat (no suggestion) and old suggestions without `openingMessage` fall back to live Sonnet streaming. Win milestones also fall through to live streaming so milestone text integrates naturally.
 

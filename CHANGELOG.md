@@ -1,5 +1,16 @@
 # Toney — Changelog
 
+## 2026-02-17 — PROD/DEV Environment Split
+- **Two Supabase projects**: PROD (`vnuhtgkqkrlsbtukjgwp`) and DEV (`dpunrkhndskfmtdajesi`) for complete environment isolation. All 34 migrations applied to DEV via `supabase db push`. Edge Function deployed to both projects with secrets configured.
+- **Git branching**: `dev` branch created from `main`. Development happens on `dev`, production deploys from `main`. Vercel auto-deploys: push to `main` → Production deployment (PROD Supabase), push to `dev` → Preview deployment (DEV Supabase).
+- **Vercel environment-scoped variables**: PROD Supabase keys on Production scope, DEV keys on Preview scope. `NEXT_PUBLIC_SUPABASE_URL` drives Edge Function routing automatically — no code changes needed.
+- **Full data copy**: All 8 production tables copied to DEV via Supabase JS client script. UUID remapping handled (Google OAuth creates different UUIDs per Supabase project — matched by email). FK constraints handled with deferred columns and correct insertion order.
+- **Google OAuth on DEV**: DEV Supabase callback URL added to Google Cloud Console OAuth credentials. DEV Site URL configured for proper redirects.
+- **Email column on profiles (migration 034)**: `email TEXT` column added to `profiles` table, backfilled from `auth.users`, and `handle_new_user()` trigger updated to populate on signup. Applied to both PROD and DEV.
+- **Deploy skills**: `/deploy-dev` (push dev branch for preview deployment) and `/deploy-prod` (merge dev→main for production deployment). Streamlined workflow for shipping changes.
+- **Admin `.env.local.example`**: New file documenting all required environment variables for the admin app.
+- **Migration 013 corruption fixed**: File had a stray file path appended to the SQL — cleaned up.
+
 ## 2026-02-17 — Supabase Edge Function + Instant Session Open
 - **Close pipeline moved to Supabase Edge Function**: The evolution pipeline (understanding narrative update + suggestion generation + focus area reflections) now runs in a Supabase Edge Function with 150s timeout, replacing Next.js `after()` which was always killed by Vercel Hobby's 10s hard timeout. The function receives session data via fire-and-forget from Vercel routes and handles all DB saves, idempotency guards, and sim mode. Prompts are inline copies (Deno can't resolve workspace packages).
 - **Vercel close route simplified**: 329 → 183 lines. Removed entire `after()` block. Still generates Haiku notes immediately (returned to client), then fires to Edge Function for background evolution. `evolution_status` starts as 'pending' — Edge Function sets 'completed'/'failed'.

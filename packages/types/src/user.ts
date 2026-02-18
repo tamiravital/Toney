@@ -10,6 +10,7 @@ export interface StyleProfile {
 
 export interface Profile {
   id: string;
+  email?: string | null;
   display_name?: string | null;
   avatar_url?: string | null;
   tension_type?: TensionType | null;
