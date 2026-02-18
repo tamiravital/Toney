@@ -80,13 +80,13 @@ body {
   color: var(--foreground);
 }
 
-/* Theme font application */
+/* Theme font application — !important needed to override Tailwind's font-sans */
 .theme-heading {
-  font-family: var(--font-heading);
+  font-family: var(--font-heading) !important;
 }
 
 .theme-body {
-  font-family: var(--font-body);
+  font-family: var(--font-body) !important;
 }
 
 /* Themed surface + card backgrounds */

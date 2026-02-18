@@ -53,14 +53,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${geistSans.variable} ${plusJakarta.variable} ${fraunces.variable} ${lora.variable} ${dmSerif.variable}`} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#4f46e5" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('toney_theme');if(t&&t!=='default')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()` }} />
       </head>
-      <body className={`${geistSans.variable} ${plusJakarta.variable} ${fraunces.variable} ${lora.variable} ${dmSerif.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <ToneyProvider>
           {children}
         </ToneyProvider>
