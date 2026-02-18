@@ -6,6 +6,7 @@ import { useToney } from '@/context/ToneyContext';
 import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
 import { LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import CustomThemeEditor, { restoreCustomTheme } from './CustomThemeEditor';
 
 type ThemeOption = 'default' | 'dark' | 'warm' | 'ocean' | 'forest' | 'sunset' | 'lavender' | 'midnight' | 'sand' | 'rose' | 'custom';
 
@@ -77,9 +78,13 @@ export default function SettingsOverlay() {
   const [emotionalWhy, setEmotionalWhy] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeOption>(getStoredTheme);
+  const [showCustomEditor, setShowCustomEditor] = useState(false);
 
-  // Apply theme on mount (for page refresh)
-  useEffect(() => { applyTheme(activeTheme); }, [activeTheme]);
+  // Apply theme on mount (for page refresh) + restore custom CSS if needed
+  useEffect(() => {
+    applyTheme(activeTheme);
+    restoreCustomTheme();
+  }, [activeTheme]);
 
   // Load About You fields from profile on mount
   useEffect(() => {
@@ -181,7 +186,14 @@ export default function SettingsOverlay() {
               return (
                 <button
                   key={opt.value}
-                  onClick={() => { setActiveTheme(opt.value); applyTheme(opt.value); }}
+                  onClick={() => {
+                    setActiveTheme(opt.value);
+                    applyTheme(opt.value);
+                    if (opt.value === 'custom') {
+                      restoreCustomTheme();
+                      setShowCustomEditor(true);
+                    }
+                  }}
                   className="flex flex-col items-center gap-1.5"
                 >
                   <div
@@ -209,6 +221,14 @@ export default function SettingsOverlay() {
               );
             })}
           </div>
+          {activeTheme === 'custom' && (
+            <button
+              onClick={() => { restoreCustomTheme(); setShowCustomEditor(true); }}
+              className="mt-2 text-xs font-medium text-accent hover:underline"
+            >
+              Edit custom theme...
+            </button>
+          )}
         </div>
 
         {/* Display name */}
@@ -404,6 +424,9 @@ export default function SettingsOverlay() {
           Sign out
         </button>
       </div>
+      {showCustomEditor && (
+        <CustomThemeEditor onClose={() => setShowCustomEditor(false)} />
+      )}
     </div>
   );
 }
