@@ -95,9 +95,9 @@ export async function POST(request: NextRequest) {
     ]);
     timing('both Sonnet calls complete');
 
-    // Save LLM usage (fire-and-forget)
+    // Save LLM usage
     if (understandingResult.usage) {
-      saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+      await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
         userId: ctx.userId,
         callSite: 'seed_understanding',
         model: 'claude-sonnet-4-5-20250929',
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       });
     }
     if (suggestionsResult.usage) {
-      saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+      await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
         userId: ctx.userId,
         callSite: 'seed_suggestions',
         model: 'claude-sonnet-4-5-20250929',

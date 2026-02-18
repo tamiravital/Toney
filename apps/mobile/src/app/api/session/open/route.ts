@@ -207,11 +207,11 @@ export async function POST(request: NextRequest) {
             savedMessageId = savedMsg?.id || null;
           } catch { /* non-critical */ }
 
-          // Save LLM usage (fire-and-forget)
+          // Save LLM usage
           try {
             const finalMessage = await stream.finalMessage();
             if (finalMessage.usage) {
-              saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+              await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
                 userId: ctx.userId,
                 sessionId,
                 callSite: 'session_open',
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
                 },
               });
             }
-          } catch { /* non-critical */ }
+          } catch (e) { console.error('[session_open] Usage save error:', e); }
 
           timing('done');
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));

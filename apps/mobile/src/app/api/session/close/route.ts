@@ -147,8 +147,8 @@ export async function POST(request: NextRequest) {
       sessionWins: sessionWins.length > 0 ? sessionWins : undefined,
     });
 
-    // Save notes LLM usage (fire-and-forget)
-    saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+    // Save notes LLM usage
+    await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
       userId: ctx.userId,
       sessionId,
       callSite: 'session_close_notes',
