@@ -173,6 +173,19 @@ export async function POST(request: NextRequest) {
       ],
     });
 
+    // Track usage from the final message event
+    let capturedUsage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | null = null;
+    stream.on('finalMessage', (msg) => {
+      if (msg.usage) {
+        capturedUsage = {
+          input_tokens: msg.usage.input_tokens,
+          output_tokens: msg.usage.output_tokens,
+          cache_creation_input_tokens: (msg.usage as unknown as Record<string, unknown>).cache_creation_input_tokens as number | undefined,
+          cache_read_input_tokens: (msg.usage as unknown as Record<string, unknown>).cache_read_input_tokens as number | undefined,
+        };
+      }
+    });
+
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
@@ -208,23 +221,15 @@ export async function POST(request: NextRequest) {
           } catch { /* non-critical */ }
 
           // Save LLM usage
-          try {
-            const finalMessage = await stream.finalMessage();
-            if (finalMessage.usage) {
-              await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
-                userId: ctx.userId,
-                sessionId,
-                callSite: 'session_open',
-                model: 'claude-sonnet-4-5-20250929',
-                usage: {
-                  input_tokens: finalMessage.usage.input_tokens,
-                  output_tokens: finalMessage.usage.output_tokens,
-                  cache_creation_input_tokens: (finalMessage.usage as unknown as { cache_creation_input_tokens?: number }).cache_creation_input_tokens,
-                  cache_read_input_tokens: (finalMessage.usage as unknown as { cache_read_input_tokens?: number }).cache_read_input_tokens,
-                },
-              });
-            }
-          } catch (e) { console.error('[session_open] Usage save error:', e); }
+          if (capturedUsage) {
+            await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+              userId: ctx.userId,
+              sessionId,
+              callSite: 'session_open',
+              model: 'claude-sonnet-4-5-20250929',
+              usage: capturedUsage,
+            });
+          }
 
           timing('done');
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
