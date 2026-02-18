@@ -21,19 +21,19 @@ export default function SessionHistoryOverlay({ onDismiss, onSelectSession }: Se
   );
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center">
-      <div className="w-full max-w-[430px] bg-white rounded-t-3xl max-h-[85vh] flex flex-col animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'var(--bg-overlay)' }}>
+      <div className="w-full max-w-[430px] bg-elevated rounded-t-3xl max-h-[85vh] flex flex-col animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-default flex-shrink-0">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Past Sessions</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{sessions.length} session{sessions.length !== 1 ? 's' : ''}</p>
+            <h3 className="text-lg font-bold text-primary">Past Sessions</h3>
+            <p className="text-xs text-muted mt-0.5">{sessions.length} session{sessions.length !== 1 ? 's' : ''}</p>
           </div>
           <button
             onClick={onDismiss}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"
+            className="w-8 h-8 rounded-full bg-input flex items-center justify-center hover:bg-default transition-all"
           >
-            <X className="w-4 h-4 text-gray-500" />
+            <X className="w-4 h-4 text-secondary" />
           </button>
         </div>
 
@@ -42,14 +42,14 @@ export default function SessionHistoryOverlay({ onDismiss, onSelectSession }: Se
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="flex gap-1.5">
-                <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '150ms' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '300ms' }} />
               </div>
             </div>
           ) : sessions.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-sm text-gray-400">No completed sessions yet.</p>
+              <p className="text-sm text-muted">No completed sessions yet.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -70,15 +70,15 @@ export default function SessionHistoryOverlay({ onDismiss, onSelectSession }: Se
                         session.date
                       );
                     }}
-                    className="w-full bg-white border border-gray-100 rounded-2xl p-4 text-left hover:border-indigo-200 transition-all active:scale-[0.99]"
+                    className="w-full bg-card border border-default rounded-2xl p-4 text-left hover:border-accent-subtle transition-all active:scale-[0.99]"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <FileText className="w-4 h-4 text-indigo-600" />
+                      <div className="w-8 h-8 rounded-lg bg-accent-light flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <FileText className="w-4 h-4 text-accent" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 leading-snug mb-1">{session.headline}</p>
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <p className="text-sm font-medium text-primary leading-snug mb-1">{session.headline}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted">
                           <span>{session.dayLabel}</span>
                           {cardsCount > 0 && (
                             <>
@@ -103,10 +103,10 @@ export default function SessionHistoryOverlay({ onDismiss, onSelectSession }: Se
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="px-6 py-4 border-t border-default flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             onClick={onDismiss}
-            className="w-full bg-gray-100 text-gray-600 py-3.5 rounded-2xl font-semibold text-sm hover:bg-gray-200 transition-all active:scale-[0.98]"
+            className="w-full bg-btn-secondary text-btn-secondary-text py-3.5 rounded-2xl font-semibold text-sm hover:bg-btn-secondary-hover transition-all active:scale-[0.98]"
           >
             Done
           </button>

@@ -1,19 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, RotateCcw, LogOut, Palette } from 'lucide-react';
+import { X, RotateCcw, LogOut, Check, Palette } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
 import { LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
-type ThemeOption = 'default' | 'fraunces' | 'lora' | 'dm-serif';
+type ThemeOption = 'default' | 'dark' | 'warm' | 'ocean' | 'forest' | 'sunset' | 'lavender' | 'midnight' | 'sand' | 'rose' | 'custom';
 
-const themeOptions: { value: ThemeOption; label: string; description: string }[] = [
-  { value: 'default', label: 'Current', description: 'Geist Sans' },
-  { value: 'fraunces', label: 'Fraunces', description: 'Warm & quirky' },
-  { value: 'lora', label: 'Lora', description: 'Classic editorial' },
-  { value: 'dm-serif', label: 'DM Serif', description: 'Bold premium' },
+const themeOptions: { value: ThemeOption; label: string; accent: string; surface: string }[] = [
+  { value: 'default', label: 'Light', accent: '#4f46e5', surface: '#f9fafb' },
+  { value: 'dark', label: 'Dark', accent: '#818cf8', surface: '#0f172a' },
+  { value: 'warm', label: 'Warm', accent: '#b45309', surface: '#faf7f2' },
+  { value: 'ocean', label: 'Ocean', accent: '#0891b2', surface: '#f0f9ff' },
+  { value: 'forest', label: 'Forest', accent: '#15803d', surface: '#f0fdf4' },
+  { value: 'sunset', label: 'Sunset', accent: '#ea580c', surface: '#fff7ed' },
+  { value: 'lavender', label: 'Lavender', accent: '#7c3aed', surface: '#faf5ff' },
+  { value: 'midnight', label: 'Midnight', accent: '#eab308', surface: '#0f172a' },
+  { value: 'sand', label: 'Sand', accent: '#a16207', surface: '#fafaf9' },
+  { value: 'rose', label: 'Rose', accent: '#e11d48', surface: '#fff1f2' },
+  { value: 'custom', label: 'Custom', accent: '#888888', surface: '#ffffff' },
 ];
 
 function applyTheme(theme: ThemeOption) {
@@ -23,6 +30,12 @@ function applyTheme(theme: ThemeOption) {
     document.documentElement.setAttribute('data-theme', theme);
   }
   try { localStorage.setItem('toney_theme', theme); } catch { /* */ }
+  // Update meta theme-color
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    const color = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
+    if (color) meta.setAttribute('content', color);
+  }
 }
 
 function getStoredTheme(): ThemeOption {
@@ -140,99 +153,85 @@ export default function SettingsOverlay() {
   const colors = tension ? tensionColor(tension.primary) : null;
 
   return (
-    <div className="absolute inset-0 z-50 overflow-y-auto hide-scrollbar" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="absolute inset-0 z-50 overflow-y-auto hide-scrollbar bg-surface">
       <div className="px-6 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-bold theme-heading" style={{ color: 'var(--text-primary)' }}>Settings</h2>
+          <h2 className="text-2xl font-bold text-primary">Settings</h2>
           <button
             onClick={() => setShowSettings(false)}
-            className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"
+            className="w-10 h-10 rounded-full bg-input flex items-center justify-center hover:bg-default transition-all"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-secondary" />
           </button>
         </div>
 
-        {/* Theme Preview */}
+        {/* Theme */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <Palette className="w-4 h-4 text-indigo-500" />
-            <h3 className="font-semibold text-gray-900 text-sm">Theme</h3>
+            <Palette className="w-4 h-4 text-accent" />
+            <h3 className="font-semibold text-primary text-sm">Theme</h3>
           </div>
 
-          {/* Live preview card */}
-          <div
-            className="rounded-2xl p-5 mb-4 transition-all duration-300"
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderWidth: '1px',
-              borderColor: 'var(--border-subtle)',
-            }}
-          >
-            <p
-              className="text-xl font-bold leading-snug mb-1 transition-all duration-300"
-              style={{ fontFamily: 'var(--font-heading)', color: 'var(--text-primary)' }}
-            >
-              Good morning, {localDisplayName?.split(' ')[0] || 'Sarah'}
-            </p>
-            <p
-              className="text-sm leading-relaxed mb-3 transition-all duration-300"
-              style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)' }}
-            >
-              You noticed something shift this week — the guilt around spending is loosening its grip.
-            </p>
-            <p
-              className="text-xs font-semibold uppercase tracking-wider transition-all duration-300"
-              style={{ fontFamily: 'var(--font-body)', color: 'var(--text-muted)' }}
-            >
-              Where you&apos;re growing
-            </p>
-          </div>
-
-          {/* Theme selector pills */}
-          <div className="grid grid-cols-2 gap-2">
-            {themeOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => { setActiveTheme(opt.value); applyTheme(opt.value); }}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${
-                  activeTheme === opt.value
-                    ? 'border-indigo-600 bg-indigo-50'
-                    : 'border-gray-100 hover:border-gray-200'
-                }`}
-              >
-                <span className={`text-xs font-semibold block ${activeTheme === opt.value ? 'text-indigo-700' : 'text-gray-800'}`}>
-                  {opt.label}
-                </span>
-                <span className={`text-[10px] block mt-0.5 ${activeTheme === opt.value ? 'text-indigo-500' : 'text-gray-400'}`}>
-                  {opt.description}
-                </span>
-              </button>
-            ))}
+          {/* Theme circles grid */}
+          <div className="grid grid-cols-5 gap-3">
+            {themeOptions.map((opt) => {
+              const isActive = activeTheme === opt.value;
+              const isDark = opt.value === 'dark' || opt.value === 'midnight';
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => { setActiveTheme(opt.value); applyTheme(opt.value); }}
+                  className="flex flex-col items-center gap-1.5"
+                >
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                      isActive ? 'ring-2 ring-offset-2' : ''
+                    }`}
+                    style={{
+                      backgroundColor: opt.surface,
+                      border: `2.5px solid ${opt.accent}`,
+                      '--tw-ring-color': opt.accent,
+                    } as React.CSSProperties}
+                  >
+                    {opt.value === 'custom' ? (
+                      <Palette className="w-4 h-4" style={{ color: opt.accent }} />
+                    ) : isActive ? (
+                      <Check className="w-4 h-4" style={{ color: isDark ? '#fff' : opt.accent }} />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full" style={{ backgroundColor: opt.accent }} />
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-medium ${isActive ? 'text-accent-text' : 'text-muted'}`}>
+                    {opt.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Display name */}
         <div className="mb-6">
-          <h3 className="font-semibold text-gray-900 text-sm mb-2">Display Name</h3>
+          <h3 className="font-semibold text-primary text-sm mb-2">Display Name</h3>
           <input
             type="text"
             value={localDisplayName}
             onChange={(e) => setLocalDisplayName(e.target.value)}
             placeholder="Your name"
-            className="w-full p-3 rounded-xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none"
+            className="w-full p-3 rounded-xl border-2 border-default text-sm text-primary placeholder-muted focus:border-accent focus:outline-none bg-card"
           />
         </div>
 
         {/* Tension info */}
         {tension && colors && (
           <div className={`${colors.bg} rounded-2xl p-4 mb-6`}>
-            <div className={`font-semibold text-gray-900 text-sm`}>
+            <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
               You tend to {tension.primary}
             </div>
-            <div className="text-xs text-gray-500">Your money tension</div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Your money tension</div>
             {tension.secondary && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                 Also tends to {tension.secondary}
               </div>
             )}
@@ -241,43 +240,43 @@ export default function SettingsOverlay() {
 
         {/* Tone */}
         <div className="mb-6">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Communication Tone</h3>
+          <h3 className="font-semibold text-primary text-sm mb-3">Communication Tone</h3>
           <input
             type="range"
             min="1"
             max="5"
             value={localStyle.tone}
             onChange={(e) => setLocalStyle(prev => ({ ...prev, tone: parseInt(e.target.value) }))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-accent"
           />
-          <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+          <div className="flex justify-between text-xs text-muted mt-1.5">
             <span>Gentle</span>
-            <span className="font-semibold text-indigo-600">{toneLabel(localStyle.tone)}</span>
+            <span className="font-semibold text-accent">{toneLabel(localStyle.tone)}</span>
             <span>Direct</span>
           </div>
         </div>
 
         {/* Depth */}
         <div className="mb-6">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Coaching Depth</h3>
+          <h3 className="font-semibold text-primary text-sm mb-3">Coaching Depth</h3>
           <input
             type="range"
             min="1"
             max="5"
             value={localStyle.depth}
             onChange={(e) => setLocalStyle(prev => ({ ...prev, depth: parseInt(e.target.value) }))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-accent"
           />
-          <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+          <div className="flex justify-between text-xs text-muted mt-1.5">
             <span>Surface</span>
-            <span className="font-semibold text-indigo-600">{depthLabel(localStyle.depth)}</span>
+            <span className="font-semibold text-accent">{depthLabel(localStyle.depth)}</span>
             <span>Deep</span>
           </div>
         </div>
 
         {/* Learning Styles */}
         <div className="mb-8">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">How You Learn Best</h3>
+          <h3 className="font-semibold text-primary text-sm mb-3">How You Learn Best</h3>
           <div className="grid grid-cols-2 gap-2">
             {learningStyleOptions.map((opt) => {
               const selected = (localStyle.learningStyles || []).includes(opt.value);
@@ -287,8 +286,8 @@ export default function SettingsOverlay() {
                   onClick={() => toggleLearningStyle(opt.value)}
                   className={`p-3 rounded-xl border-2 text-xs font-medium transition-all ${
                     selected
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-100 text-gray-600 hover:border-gray-200'
+                      ? 'bg-pill-selected text-pill-selected-text border-pill-selected-border'
+                      : 'bg-pill-unselected text-pill-unselected-text border-pill-unselected-border hover:border-default'
                   }`}
                 >
                   {opt.emoji} {opt.label}
@@ -299,13 +298,13 @@ export default function SettingsOverlay() {
         </div>
 
         {/* Life Context */}
-        <div className="border-t border-gray-100 pt-6 mb-6">
-          <h3 className="font-semibold text-gray-900 text-base mb-1">About You</h3>
-          <p className="text-xs text-gray-400 mb-4">Helps Toney personalize your coaching</p>
+        <div className="border-t border-default pt-6 mb-6">
+          <h3 className="font-semibold text-primary text-base mb-1">About You</h3>
+          <p className="text-xs text-muted mb-4">Helps Toney personalize your coaching</p>
 
           {/* Life stage */}
           <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Life stage</label>
+            <label className="text-sm font-medium text-secondary mb-2 block">Life stage</label>
             <div className="grid grid-cols-2 gap-2">
               {lifeStageOptions.map((opt) => (
                 <button
@@ -313,8 +312,8 @@ export default function SettingsOverlay() {
                   onClick={() => setLifeStage(lifeStage === opt.value ? '' : opt.value)}
                   className={`p-2.5 rounded-xl border-2 text-xs font-medium transition-all ${
                     lifeStage === opt.value
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-100 text-gray-600 hover:border-gray-200'
+                      ? 'bg-pill-selected text-pill-selected-text border-pill-selected-border'
+                      : 'bg-pill-unselected text-pill-unselected-text border-pill-unselected-border hover:border-default'
                   }`}
                 >
                   {opt.label}
@@ -325,7 +324,7 @@ export default function SettingsOverlay() {
 
           {/* Income type */}
           <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Income type</label>
+            <label className="text-sm font-medium text-secondary mb-2 block">Income type</label>
             <div className="grid grid-cols-2 gap-2">
               {incomeOptions.map((opt) => (
                 <button
@@ -333,8 +332,8 @@ export default function SettingsOverlay() {
                   onClick={() => setIncomeType(incomeType === opt.value ? '' : opt.value)}
                   className={`p-2.5 rounded-xl border-2 text-xs font-medium transition-all ${
                     incomeType === opt.value
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-100 text-gray-600 hover:border-gray-200'
+                      ? 'bg-pill-selected text-pill-selected-text border-pill-selected-border'
+                      : 'bg-pill-unselected text-pill-unselected-text border-pill-unselected-border hover:border-default'
                   }`}
                 >
                   {opt.label}
@@ -345,7 +344,7 @@ export default function SettingsOverlay() {
 
           {/* Relationship */}
           <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Relationship</label>
+            <label className="text-sm font-medium text-secondary mb-2 block">Relationship</label>
             <div className="grid grid-cols-3 gap-2">
               {relationshipOptions.map((opt) => (
                 <button
@@ -353,8 +352,8 @@ export default function SettingsOverlay() {
                   onClick={() => setRelationship(relationship === opt.value ? '' : opt.value)}
                   className={`p-2.5 rounded-xl border-2 text-xs font-medium transition-all ${
                     relationship === opt.value
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-100 text-gray-600 hover:border-gray-200'
+                      ? 'bg-pill-selected text-pill-selected-text border-pill-selected-border'
+                      : 'bg-pill-unselected text-pill-unselected-text border-pill-unselected-border hover:border-default'
                   }`}
                 >
                   {opt.label}
@@ -365,7 +364,7 @@ export default function SettingsOverlay() {
 
           {/* Emotional why */}
           <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
+            <label className="text-sm font-medium text-secondary mb-2 block">
               Why does money matter to you?
             </label>
             <textarea
@@ -373,7 +372,7 @@ export default function SettingsOverlay() {
               onChange={(e) => setEmotionalWhy(e.target.value)}
               placeholder="e.g., Stop feeling anxious every month"
               rows={2}
-              className="w-full p-3 rounded-xl border-2 border-gray-100 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-600 focus:outline-none resize-none"
+              className="w-full p-3 rounded-xl border-2 border-default text-sm text-primary placeholder-muted focus:border-accent focus:outline-none resize-none bg-card"
             />
           </div>
         </div>
@@ -382,7 +381,7 @@ export default function SettingsOverlay() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-semibold text-lg hover:bg-indigo-700 transition-all active:scale-[0.98] disabled:opacity-60"
+          className="w-full bg-btn-primary text-btn-primary-text py-4 rounded-2xl font-semibold text-lg hover:bg-btn-primary-hover transition-all active:scale-[0.98] disabled:opacity-60"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
@@ -390,7 +389,7 @@ export default function SettingsOverlay() {
         {/* Retake quiz */}
         <button
           onClick={retakeQuiz}
-          className="w-full mt-3 flex items-center justify-center gap-2 text-gray-500 text-sm font-medium py-3 hover:text-gray-700 transition-all"
+          className="w-full mt-3 flex items-center justify-center gap-2 text-secondary text-sm font-medium py-3 hover:text-primary transition-all"
         >
           <RotateCcw className="w-4 h-4" />
           Retake tension quiz
@@ -399,7 +398,7 @@ export default function SettingsOverlay() {
         {/* Sign out */}
         <button
           onClick={signOut}
-          className="w-full mt-1 flex items-center justify-center gap-2 text-red-500 text-sm font-medium py-3 hover:text-red-600 transition-all"
+          className="w-full mt-1 flex items-center justify-center gap-2 text-danger text-sm font-medium py-3 hover:opacity-80 transition-all"
         >
           <LogOut className="w-4 h-4" />
           Sign out

@@ -1,73 +1,899 @@
 @import "tailwindcss";
 
 /* ============================================
-   THEME SYSTEM
-   Applied via data-theme attribute on <html>
-   Default = current look (Geist Sans, cool white)
+   TONEY THEME SYSTEM
+
+   All colors flow from CSS variables.
+   Themes override these via [data-theme="X"] on <html>.
+   Tailwind maps them via @theme inline below.
    ============================================ */
 
+/* ── DEFAULT THEME (Light) ── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --bg-surface: #f9fafb;       /* gray-50 — main app bg */
+  /* Surfaces */
+  --bg-surface: #f9fafb;
   --bg-card: #ffffff;
-  --border-subtle: #f3f4f6;    /* gray-100 */
-  --text-primary: #111827;     /* gray-900 */
-  --text-secondary: #6b7280;   /* gray-500 */
-  --text-muted: #9ca3af;       /* gray-400 */
-  --font-heading: var(--font-geist-sans);
-  --font-body: var(--font-geist-sans);
+  --bg-elevated: #ffffff;
+  --bg-input: #f3f4f6;
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+
+  /* Text */
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-inverse: #ffffff;
+
+  /* Borders */
+  --border-default: #e5e7eb;
+  --border-subtle: #f3f4f6;
+  --border-focus: #a5b4fc;
+
+  /* Accent (indigo) */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-light: #eef2ff;
+  --accent-subtle: #e0e7ff;
+  --accent-text: #4338ca;
+
+  /* Success (green — wins) */
+  --success: #16a34a;
+  --success-light: #f0fdf4;
+  --success-medium: #dcfce7;
+  --success-text: #15803d;
+  --success-border: #bbf7d0;
+
+  /* Warning (orange — streaks, caution) */
+  --warning: #ea580c;
+  --warning-light: #fff7ed;
+  --warning-text: #c2410c;
+
+  /* Danger (red — destructive) */
+  --danger: #ef4444;
+  --danger-light: #fef2f2;
+
+  /* Amber (key moments, truth cards) */
+  --amber: #d97706;
+  --amber-light: #fffbeb;
+  --amber-medium: #fef3c7;
+  --amber-text: #92400e;
+  --amber-border: #fde68a;
+
+  /* Nav */
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --nav-active: #4f46e5;
+  --nav-inactive: #9ca3af;
+  --nav-border: #f3f4f6;
+
+  /* Chat bubbles */
+  --chat-user-bg: #4f46e5;
+  --chat-user-text: #ffffff;
+  --chat-coach-bg: #f3f4f6;
+  --chat-coach-text: #111827;
+
+  /* Buttons */
+  --btn-primary-bg: #4f46e5;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #4338ca;
+  --btn-secondary-bg: #f3f4f6;
+  --btn-secondary-text: #4b5563;
+  --btn-secondary-hover: #e5e7eb;
+  --btn-disabled-bg: #e5e7eb;
+  --btn-disabled-text: #9ca3af;
+
+  /* Pills (selectable options) */
+  --pill-selected-bg: #eef2ff;
+  --pill-selected-text: #4338ca;
+  --pill-selected-border: #4f46e5;
+  --pill-unselected-bg: transparent;
+  --pill-unselected-text: #4b5563;
+  --pill-unselected-border: #e5e7eb;
+
+  /* Card categories */
+  --cat-reframe-bg: #faf5ff;
+  --cat-reframe-text: #9333ea;
+  --cat-reframe-border: #e9d5ff;
+  --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb;
+  --cat-truth-text: #d97706;
+  --cat-truth-border: #fde68a;
+  --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff;
+  --cat-plan-text: #2563eb;
+  --cat-plan-border: #bfdbfe;
+  --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4;
+  --cat-practice-text: #16a34a;
+  --cat-practice-border: #bbf7d0;
+  --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa;
+  --cat-kit-text: #0d9488;
+  --cat-kit-border: #99f6e4;
+  --cat-kit-accent: #0d9488;
+
+  /* Journey timeline */
+  --journey-line: #e0e7ff;
+  --journey-win-bg: #f0fdf4;
+  --journey-win-border: #bbf7d0;
+  --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #eef2ff;
+  --journey-milestone-border: #c7d2fe;
+  --journey-milestone-tag: #818cf8;
+  --journey-first-bg: #fffbeb;
+  --journey-first-border: #fde68a;
+  --journey-first-tag: #f59e0b;
+
+  /* Focus area hues (7 rotating) */
+  --focus-0-bg: #eef2ff; --focus-0-border: #c7d2fe; --focus-0-tag: #818cf8;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+
+  /* Suggestion length badges */
+  --length-quick: #16a34a;
+  --length-medium: #2563eb;
+  --length-deep: #9333ea;
+  --length-standing: #d97706;
+
+  /* Featured suggestion gradient */
+  --featured-from: #4f46e5;
+  --featured-to: #7c3aed;
+
+  /* Loading dots */
+  --loading-dot: #9ca3af;
+  --loading-dot-accent: #818cf8;
+
+  /* Quick reply chips */
+  --chip-bg: #ffffff;
+  --chip-text: #4338ca;
+  --chip-border: #c7d2fe;
+  --chip-hover: #eef2ff;
+
+  /* Meta / browser chrome */
+  --theme-color: #f9fafb;
 }
 
-/* Theme A: Fraunces — warm, quirky serif + Plus Jakarta Sans body */
-[data-theme="fraunces"] {
-  --background: #FFFBF7;
-  --foreground: #1C1917;
-  --bg-surface: #FFF8F2;
-  --bg-card: #FFFBF7;
-  --border-subtle: #F5E6D3;
-  --text-primary: #1C1917;
-  --text-secondary: #78716C;
-  --text-muted: #A8A29E;
-  --font-heading: var(--font-fraunces);
-  --font-body: var(--font-plus-jakarta);
+/* ── DARK ── */
+[data-theme="dark"] {
+  --bg-surface: #0f172a;
+  --bg-card: #1e293b;
+  --bg-elevated: #1e293b;
+  --bg-input: #334155;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+  --border-default: #334155;
+  --border-subtle: #1e293b;
+  --border-focus: #818cf8;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-light: #1e1b4b;
+  --accent-subtle: #312e81;
+  --accent-text: #a5b4fc;
+  --success: #4ade80;
+  --success-light: #052e16;
+  --success-medium: #14532d;
+  --success-text: #86efac;
+  --success-border: #166534;
+  --warning: #fb923c;
+  --warning-light: #431407;
+  --warning-text: #fdba74;
+  --danger: #f87171;
+  --danger-light: #450a0a;
+  --amber: #fbbf24;
+  --amber-light: #451a03;
+  --amber-medium: #78350f;
+  --amber-text: #fde68a;
+  --amber-border: #92400e;
+  --nav-bg: rgba(15, 23, 42, 0.9);
+  --nav-active: #818cf8;
+  --nav-inactive: #64748b;
+  --nav-border: #1e293b;
+  --chat-user-bg: #4f46e5;
+  --chat-user-text: #ffffff;
+  --chat-coach-bg: #334155;
+  --chat-coach-text: #f1f5f9;
+  --btn-primary-bg: #6366f1;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #818cf8;
+  --btn-secondary-bg: #334155;
+  --btn-secondary-text: #cbd5e1;
+  --btn-secondary-hover: #475569;
+  --btn-disabled-bg: #334155;
+  --btn-disabled-text: #64748b;
+  --pill-selected-bg: #312e81;
+  --pill-selected-text: #a5b4fc;
+  --pill-selected-border: #6366f1;
+  --pill-unselected-bg: transparent;
+  --pill-unselected-text: #94a3b8;
+  --pill-unselected-border: #334155;
+  --cat-reframe-bg: #2e1065;
+  --cat-reframe-text: #c4b5fd;
+  --cat-reframe-border: #581c87;
+  --cat-reframe-accent: #a78bfa;
+  --cat-truth-bg: #451a03;
+  --cat-truth-text: #fde68a;
+  --cat-truth-border: #78350f;
+  --cat-truth-accent: #fbbf24;
+  --cat-plan-bg: #172554;
+  --cat-plan-text: #93c5fd;
+  --cat-plan-border: #1e3a5f;
+  --cat-plan-accent: #60a5fa;
+  --cat-practice-bg: #052e16;
+  --cat-practice-text: #86efac;
+  --cat-practice-border: #14532d;
+  --cat-practice-accent: #4ade80;
+  --cat-kit-bg: #042f2e;
+  --cat-kit-text: #5eead4;
+  --cat-kit-border: #134e4a;
+  --cat-kit-accent: #2dd4bf;
+  --journey-line: #312e81;
+  --journey-win-bg: #052e16;
+  --journey-win-border: #14532d;
+  --journey-win-tag: #4ade80;
+  --journey-milestone-bg: #1e1b4b;
+  --journey-milestone-border: #312e81;
+  --journey-milestone-tag: #a5b4fc;
+  --journey-first-bg: #451a03;
+  --journey-first-border: #78350f;
+  --journey-first-tag: #fbbf24;
+  --focus-0-bg: #1e1b4b; --focus-0-border: #312e81; --focus-0-tag: #a5b4fc;
+  --focus-1-bg: #500724; --focus-1-border: #831843; --focus-1-tag: #f9a8d4;
+  --focus-2-bg: #0c4a6e; --focus-2-border: #075985; --focus-2-tag: #7dd3fc;
+  --focus-3-bg: #2e1065; --focus-3-border: #581c87; --focus-3-tag: #c4b5fd;
+  --focus-4-bg: #431407; --focus-4-border: #7c2d12; --focus-4-tag: #fdba74;
+  --focus-5-bg: #422006; --focus-5-border: #713f12; --focus-5-tag: #fde047;
+  --focus-6-bg: #022c22; --focus-6-border: #064e3b; --focus-6-tag: #6ee7b7;
+  --length-quick: #4ade80;
+  --length-medium: #60a5fa;
+  --length-deep: #c4b5fd;
+  --length-standing: #fbbf24;
+  --featured-from: #4338ca;
+  --featured-to: #6d28d9;
+  --loading-dot: #64748b;
+  --loading-dot-accent: #818cf8;
+  --chip-bg: #1e293b;
+  --chip-text: #a5b4fc;
+  --chip-border: #312e81;
+  --chip-hover: #312e81;
+  --theme-color: #0f172a;
 }
 
-/* Theme B: Lora — classic editorial serif + Plus Jakarta Sans body */
-[data-theme="lora"] {
-  --background: #FAFAF8;
-  --foreground: #1A1A1A;
-  --bg-surface: #F7F6F3;
-  --bg-card: #FAFAF8;
-  --border-subtle: #E8E5DE;
-  --text-primary: #1A1A1A;
-  --text-secondary: #6B6B6B;
-  --text-muted: #9B9B9B;
-  --font-heading: var(--font-lora);
-  --font-body: var(--font-plus-jakarta);
+/* ── WARM ── */
+[data-theme="warm"] {
+  --bg-surface: #faf7f2;
+  --bg-card: #fffcf7;
+  --bg-elevated: #fffcf7;
+  --bg-input: #f5efe6;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #292524;
+  --text-secondary: #78716c;
+  --text-muted: #a8a29e;
+  --text-inverse: #ffffff;
+  --border-default: #e7e0d5;
+  --border-subtle: #f0ebe3;
+  --border-focus: #d97706;
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-light: #fef3c7;
+  --accent-subtle: #fde68a;
+  --accent-text: #92400e;
+  --success: #16a34a;
+  --success-light: #f0fdf4;
+  --success-medium: #dcfce7;
+  --success-text: #15803d;
+  --success-border: #bbf7d0;
+  --warning: #ea580c;
+  --warning-light: #fff7ed;
+  --warning-text: #c2410c;
+  --danger: #dc2626;
+  --danger-light: #fef2f2;
+  --amber: #d97706;
+  --amber-light: #fffbeb;
+  --amber-medium: #fef3c7;
+  --amber-text: #92400e;
+  --amber-border: #fde68a;
+  --nav-bg: rgba(250, 247, 242, 0.9);
+  --nav-active: #b45309;
+  --nav-inactive: #a8a29e;
+  --nav-border: #f0ebe3;
+  --chat-user-bg: #b45309;
+  --chat-user-text: #ffffff;
+  --chat-coach-bg: #f5efe6;
+  --chat-coach-text: #292524;
+  --btn-primary-bg: #b45309;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #92400e;
+  --btn-secondary-bg: #f5efe6;
+  --btn-secondary-text: #57534e;
+  --btn-secondary-hover: #e7e0d5;
+  --btn-disabled-bg: #e7e0d5;
+  --btn-disabled-text: #a8a29e;
+  --pill-selected-bg: #fef3c7;
+  --pill-selected-text: #92400e;
+  --pill-selected-border: #b45309;
+  --pill-unselected-bg: transparent;
+  --pill-unselected-text: #57534e;
+  --pill-unselected-border: #e7e0d5;
+  --cat-reframe-bg: #faf5ff;
+  --cat-reframe-text: #9333ea;
+  --cat-reframe-border: #e9d5ff;
+  --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb;
+  --cat-truth-text: #d97706;
+  --cat-truth-border: #fde68a;
+  --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff;
+  --cat-plan-text: #2563eb;
+  --cat-plan-border: #bfdbfe;
+  --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4;
+  --cat-practice-text: #16a34a;
+  --cat-practice-border: #bbf7d0;
+  --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa;
+  --cat-kit-text: #0d9488;
+  --cat-kit-border: #99f6e4;
+  --cat-kit-accent: #0d9488;
+  --journey-line: #fde68a;
+  --journey-win-bg: #f0fdf4;
+  --journey-win-border: #bbf7d0;
+  --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #fef3c7;
+  --journey-milestone-border: #fde68a;
+  --journey-milestone-tag: #b45309;
+  --journey-first-bg: #fffbeb;
+  --journey-first-border: #fde68a;
+  --journey-first-tag: #f59e0b;
+  --focus-0-bg: #fef3c7; --focus-0-border: #fde68a; --focus-0-tag: #b45309;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a;
+  --length-medium: #2563eb;
+  --length-deep: #9333ea;
+  --length-standing: #d97706;
+  --featured-from: #b45309;
+  --featured-to: #d97706;
+  --loading-dot: #a8a29e;
+  --loading-dot-accent: #d97706;
+  --chip-bg: #fffcf7;
+  --chip-text: #92400e;
+  --chip-border: #fde68a;
+  --chip-hover: #fef3c7;
+  --theme-color: #faf7f2;
 }
 
-/* Theme C: DM Serif Display — bold premium serif + Plus Jakarta Sans body */
-[data-theme="dm-serif"] {
-  --background: #FAF9F7;
-  --foreground: #18181B;
-  --bg-surface: #F5F4F0;
-  --bg-card: #FAF9F7;
-  --border-subtle: #E4E2DB;
-  --text-primary: #18181B;
-  --text-secondary: #71717A;
-  --text-muted: #A1A1AA;
-  --font-heading: var(--font-dm-serif);
-  --font-body: var(--font-plus-jakarta);
+/* ── OCEAN ── */
+[data-theme="ocean"] {
+  --bg-surface: #f0f9ff;
+  --bg-card: #f8fbff;
+  --bg-elevated: #ffffff;
+  --bg-input: #e0f2fe;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #0c4a6e;
+  --text-secondary: #0369a1;
+  --text-muted: #7dd3fc;
+  --text-inverse: #ffffff;
+  --border-default: #bae6fd;
+  --border-subtle: #e0f2fe;
+  --border-focus: #0ea5e9;
+  --accent: #0891b2;
+  --accent-hover: #0e7490;
+  --accent-light: #ecfeff;
+  --accent-subtle: #cffafe;
+  --accent-text: #0e7490;
+  --success: #16a34a;
+  --success-light: #f0fdf4;
+  --success-medium: #dcfce7;
+  --success-text: #15803d;
+  --success-border: #bbf7d0;
+  --warning: #ea580c;
+  --warning-light: #fff7ed;
+  --warning-text: #c2410c;
+  --danger: #ef4444;
+  --danger-light: #fef2f2;
+  --amber: #d97706;
+  --amber-light: #fffbeb;
+  --amber-medium: #fef3c7;
+  --amber-text: #92400e;
+  --amber-border: #fde68a;
+  --nav-bg: rgba(240, 249, 255, 0.9);
+  --nav-active: #0891b2;
+  --nav-inactive: #7dd3fc;
+  --nav-border: #e0f2fe;
+  --chat-user-bg: #0891b2;
+  --chat-user-text: #ffffff;
+  --chat-coach-bg: #e0f2fe;
+  --chat-coach-text: #0c4a6e;
+  --btn-primary-bg: #0891b2;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #0e7490;
+  --btn-secondary-bg: #e0f2fe;
+  --btn-secondary-text: #0369a1;
+  --btn-secondary-hover: #bae6fd;
+  --btn-disabled-bg: #e0f2fe;
+  --btn-disabled-text: #7dd3fc;
+  --pill-selected-bg: #ecfeff;
+  --pill-selected-text: #0e7490;
+  --pill-selected-border: #0891b2;
+  --pill-unselected-bg: transparent;
+  --pill-unselected-text: #0369a1;
+  --pill-unselected-border: #bae6fd;
+  --cat-reframe-bg: #faf5ff; --cat-reframe-text: #9333ea; --cat-reframe-border: #e9d5ff; --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb; --cat-truth-text: #d97706; --cat-truth-border: #fde68a; --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff; --cat-plan-text: #2563eb; --cat-plan-border: #bfdbfe; --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4; --cat-practice-text: #16a34a; --cat-practice-border: #bbf7d0; --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa; --cat-kit-text: #0d9488; --cat-kit-border: #99f6e4; --cat-kit-accent: #0d9488;
+  --journey-line: #bae6fd;
+  --journey-win-bg: #f0fdf4; --journey-win-border: #bbf7d0; --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #ecfeff; --journey-milestone-border: #a5f3fc; --journey-milestone-tag: #0891b2;
+  --journey-first-bg: #fffbeb; --journey-first-border: #fde68a; --journey-first-tag: #f59e0b;
+  --focus-0-bg: #ecfeff; --focus-0-border: #a5f3fc; --focus-0-tag: #0891b2;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a; --length-medium: #2563eb; --length-deep: #9333ea; --length-standing: #d97706;
+  --featured-from: #0891b2; --featured-to: #0ea5e9;
+  --loading-dot: #7dd3fc; --loading-dot-accent: #0891b2;
+  --chip-bg: #f8fbff; --chip-text: #0e7490; --chip-border: #a5f3fc; --chip-hover: #ecfeff;
+  --theme-color: #f0f9ff;
 }
 
+/* ── FOREST ── */
+[data-theme="forest"] {
+  --bg-surface: #f0fdf4;
+  --bg-card: #f7fdf9;
+  --bg-elevated: #ffffff;
+  --bg-input: #dcfce7;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #14532d;
+  --text-secondary: #166534;
+  --text-muted: #86efac;
+  --text-inverse: #ffffff;
+  --border-default: #bbf7d0;
+  --border-subtle: #dcfce7;
+  --border-focus: #22c55e;
+  --accent: #15803d;
+  --accent-hover: #166534;
+  --accent-light: #f0fdf4;
+  --accent-subtle: #dcfce7;
+  --accent-text: #166534;
+  --success: #16a34a; --success-light: #f0fdf4; --success-medium: #dcfce7; --success-text: #15803d; --success-border: #bbf7d0;
+  --warning: #ea580c; --warning-light: #fff7ed; --warning-text: #c2410c;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --amber: #d97706; --amber-light: #fffbeb; --amber-medium: #fef3c7; --amber-text: #92400e; --amber-border: #fde68a;
+  --nav-bg: rgba(240, 253, 244, 0.9); --nav-active: #15803d; --nav-inactive: #86efac; --nav-border: #dcfce7;
+  --chat-user-bg: #15803d; --chat-user-text: #ffffff; --chat-coach-bg: #dcfce7; --chat-coach-text: #14532d;
+  --btn-primary-bg: #15803d; --btn-primary-text: #ffffff; --btn-primary-hover: #166534;
+  --btn-secondary-bg: #dcfce7; --btn-secondary-text: #166534; --btn-secondary-hover: #bbf7d0;
+  --btn-disabled-bg: #dcfce7; --btn-disabled-text: #86efac;
+  --pill-selected-bg: #dcfce7; --pill-selected-text: #166534; --pill-selected-border: #15803d;
+  --pill-unselected-bg: transparent; --pill-unselected-text: #166534; --pill-unselected-border: #bbf7d0;
+  --cat-reframe-bg: #faf5ff; --cat-reframe-text: #9333ea; --cat-reframe-border: #e9d5ff; --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb; --cat-truth-text: #d97706; --cat-truth-border: #fde68a; --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff; --cat-plan-text: #2563eb; --cat-plan-border: #bfdbfe; --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4; --cat-practice-text: #16a34a; --cat-practice-border: #bbf7d0; --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa; --cat-kit-text: #0d9488; --cat-kit-border: #99f6e4; --cat-kit-accent: #0d9488;
+  --journey-line: #bbf7d0;
+  --journey-win-bg: #dcfce7; --journey-win-border: #86efac; --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #f0fdf4; --journey-milestone-border: #bbf7d0; --journey-milestone-tag: #15803d;
+  --journey-first-bg: #fffbeb; --journey-first-border: #fde68a; --journey-first-tag: #f59e0b;
+  --focus-0-bg: #dcfce7; --focus-0-border: #86efac; --focus-0-tag: #15803d;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a; --length-medium: #2563eb; --length-deep: #9333ea; --length-standing: #d97706;
+  --featured-from: #15803d; --featured-to: #16a34a;
+  --loading-dot: #86efac; --loading-dot-accent: #15803d;
+  --chip-bg: #f7fdf9; --chip-text: #166534; --chip-border: #86efac; --chip-hover: #dcfce7;
+  --theme-color: #f0fdf4;
+}
+
+/* ── SUNSET ── */
+[data-theme="sunset"] {
+  --bg-surface: #fff7ed;
+  --bg-card: #fffaf5;
+  --bg-elevated: #ffffff;
+  --bg-input: #fed7aa;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #431407;
+  --text-secondary: #9a3412;
+  --text-muted: #fdba74;
+  --text-inverse: #ffffff;
+  --border-default: #fed7aa;
+  --border-subtle: #ffedd5;
+  --border-focus: #ea580c;
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
+  --accent-light: #fff7ed;
+  --accent-subtle: #ffedd5;
+  --accent-text: #c2410c;
+  --success: #16a34a; --success-light: #f0fdf4; --success-medium: #dcfce7; --success-text: #15803d; --success-border: #bbf7d0;
+  --warning: #ea580c; --warning-light: #fff7ed; --warning-text: #c2410c;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --amber: #d97706; --amber-light: #fffbeb; --amber-medium: #fef3c7; --amber-text: #92400e; --amber-border: #fde68a;
+  --nav-bg: rgba(255, 247, 237, 0.9); --nav-active: #ea580c; --nav-inactive: #fdba74; --nav-border: #ffedd5;
+  --chat-user-bg: #ea580c; --chat-user-text: #ffffff; --chat-coach-bg: #ffedd5; --chat-coach-text: #431407;
+  --btn-primary-bg: #ea580c; --btn-primary-text: #ffffff; --btn-primary-hover: #c2410c;
+  --btn-secondary-bg: #ffedd5; --btn-secondary-text: #9a3412; --btn-secondary-hover: #fed7aa;
+  --btn-disabled-bg: #ffedd5; --btn-disabled-text: #fdba74;
+  --pill-selected-bg: #ffedd5; --pill-selected-text: #c2410c; --pill-selected-border: #ea580c;
+  --pill-unselected-bg: transparent; --pill-unselected-text: #9a3412; --pill-unselected-border: #fed7aa;
+  --cat-reframe-bg: #faf5ff; --cat-reframe-text: #9333ea; --cat-reframe-border: #e9d5ff; --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb; --cat-truth-text: #d97706; --cat-truth-border: #fde68a; --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff; --cat-plan-text: #2563eb; --cat-plan-border: #bfdbfe; --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4; --cat-practice-text: #16a34a; --cat-practice-border: #bbf7d0; --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa; --cat-kit-text: #0d9488; --cat-kit-border: #99f6e4; --cat-kit-accent: #0d9488;
+  --journey-line: #fed7aa;
+  --journey-win-bg: #f0fdf4; --journey-win-border: #bbf7d0; --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #fff7ed; --journey-milestone-border: #fed7aa; --journey-milestone-tag: #ea580c;
+  --journey-first-bg: #fffbeb; --journey-first-border: #fde68a; --journey-first-tag: #f59e0b;
+  --focus-0-bg: #ffedd5; --focus-0-border: #fed7aa; --focus-0-tag: #ea580c;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a; --length-medium: #2563eb; --length-deep: #9333ea; --length-standing: #d97706;
+  --featured-from: #ea580c; --featured-to: #f97316;
+  --loading-dot: #fdba74; --loading-dot-accent: #ea580c;
+  --chip-bg: #fffaf5; --chip-text: #c2410c; --chip-border: #fed7aa; --chip-hover: #ffedd5;
+  --theme-color: #fff7ed;
+}
+
+/* ── LAVENDER ── */
+[data-theme="lavender"] {
+  --bg-surface: #faf5ff;
+  --bg-card: #fdf8ff;
+  --bg-elevated: #ffffff;
+  --bg-input: #f3e8ff;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #3b0764;
+  --text-secondary: #6b21a8;
+  --text-muted: #c4b5fd;
+  --text-inverse: #ffffff;
+  --border-default: #e9d5ff;
+  --border-subtle: #f3e8ff;
+  --border-focus: #9333ea;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-light: #faf5ff;
+  --accent-subtle: #f3e8ff;
+  --accent-text: #6d28d9;
+  --success: #16a34a; --success-light: #f0fdf4; --success-medium: #dcfce7; --success-text: #15803d; --success-border: #bbf7d0;
+  --warning: #ea580c; --warning-light: #fff7ed; --warning-text: #c2410c;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --amber: #d97706; --amber-light: #fffbeb; --amber-medium: #fef3c7; --amber-text: #92400e; --amber-border: #fde68a;
+  --nav-bg: rgba(250, 245, 255, 0.9); --nav-active: #7c3aed; --nav-inactive: #c4b5fd; --nav-border: #f3e8ff;
+  --chat-user-bg: #7c3aed; --chat-user-text: #ffffff; --chat-coach-bg: #f3e8ff; --chat-coach-text: #3b0764;
+  --btn-primary-bg: #7c3aed; --btn-primary-text: #ffffff; --btn-primary-hover: #6d28d9;
+  --btn-secondary-bg: #f3e8ff; --btn-secondary-text: #6b21a8; --btn-secondary-hover: #e9d5ff;
+  --btn-disabled-bg: #f3e8ff; --btn-disabled-text: #c4b5fd;
+  --pill-selected-bg: #f3e8ff; --pill-selected-text: #6d28d9; --pill-selected-border: #7c3aed;
+  --pill-unselected-bg: transparent; --pill-unselected-text: #6b21a8; --pill-unselected-border: #e9d5ff;
+  --cat-reframe-bg: #faf5ff; --cat-reframe-text: #9333ea; --cat-reframe-border: #e9d5ff; --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb; --cat-truth-text: #d97706; --cat-truth-border: #fde68a; --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff; --cat-plan-text: #2563eb; --cat-plan-border: #bfdbfe; --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4; --cat-practice-text: #16a34a; --cat-practice-border: #bbf7d0; --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa; --cat-kit-text: #0d9488; --cat-kit-border: #99f6e4; --cat-kit-accent: #0d9488;
+  --journey-line: #e9d5ff;
+  --journey-win-bg: #f0fdf4; --journey-win-border: #bbf7d0; --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #faf5ff; --journey-milestone-border: #e9d5ff; --journey-milestone-tag: #7c3aed;
+  --journey-first-bg: #fffbeb; --journey-first-border: #fde68a; --journey-first-tag: #f59e0b;
+  --focus-0-bg: #f3e8ff; --focus-0-border: #e9d5ff; --focus-0-tag: #7c3aed;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a; --length-medium: #2563eb; --length-deep: #9333ea; --length-standing: #d97706;
+  --featured-from: #7c3aed; --featured-to: #9333ea;
+  --loading-dot: #c4b5fd; --loading-dot-accent: #7c3aed;
+  --chip-bg: #fdf8ff; --chip-text: #6d28d9; --chip-border: #e9d5ff; --chip-hover: #f3e8ff;
+  --theme-color: #faf5ff;
+}
+
+/* ── MIDNIGHT ── */
+[data-theme="midnight"] {
+  --bg-surface: #0f172a;
+  --bg-card: #1e293b;
+  --bg-elevated: #1e293b;
+  --bg-input: #334155;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+  --border-default: #334155;
+  --border-subtle: #1e293b;
+  --border-focus: #fbbf24;
+  --accent: #eab308;
+  --accent-hover: #ca8a04;
+  --accent-light: #422006;
+  --accent-subtle: #713f12;
+  --accent-text: #fde047;
+  --success: #4ade80; --success-light: #052e16; --success-medium: #14532d; --success-text: #86efac; --success-border: #166534;
+  --warning: #fb923c; --warning-light: #431407; --warning-text: #fdba74;
+  --danger: #f87171; --danger-light: #450a0a;
+  --amber: #fbbf24; --amber-light: #451a03; --amber-medium: #78350f; --amber-text: #fde68a; --amber-border: #92400e;
+  --nav-bg: rgba(15, 23, 42, 0.95); --nav-active: #fbbf24; --nav-inactive: #64748b; --nav-border: #1e293b;
+  --chat-user-bg: #eab308; --chat-user-text: #0f172a; --chat-coach-bg: #334155; --chat-coach-text: #f1f5f9;
+  --btn-primary-bg: #eab308; --btn-primary-text: #0f172a; --btn-primary-hover: #ca8a04;
+  --btn-secondary-bg: #334155; --btn-secondary-text: #cbd5e1; --btn-secondary-hover: #475569;
+  --btn-disabled-bg: #334155; --btn-disabled-text: #64748b;
+  --pill-selected-bg: #422006; --pill-selected-text: #fde047; --pill-selected-border: #eab308;
+  --pill-unselected-bg: transparent; --pill-unselected-text: #94a3b8; --pill-unselected-border: #334155;
+  --cat-reframe-bg: #2e1065; --cat-reframe-text: #c4b5fd; --cat-reframe-border: #581c87; --cat-reframe-accent: #a78bfa;
+  --cat-truth-bg: #451a03; --cat-truth-text: #fde68a; --cat-truth-border: #78350f; --cat-truth-accent: #fbbf24;
+  --cat-plan-bg: #172554; --cat-plan-text: #93c5fd; --cat-plan-border: #1e3a5f; --cat-plan-accent: #60a5fa;
+  --cat-practice-bg: #052e16; --cat-practice-text: #86efac; --cat-practice-border: #14532d; --cat-practice-accent: #4ade80;
+  --cat-kit-bg: #042f2e; --cat-kit-text: #5eead4; --cat-kit-border: #134e4a; --cat-kit-accent: #2dd4bf;
+  --journey-line: #334155;
+  --journey-win-bg: #052e16; --journey-win-border: #14532d; --journey-win-tag: #4ade80;
+  --journey-milestone-bg: #422006; --journey-milestone-border: #713f12; --journey-milestone-tag: #fbbf24;
+  --journey-first-bg: #451a03; --journey-first-border: #78350f; --journey-first-tag: #fbbf24;
+  --focus-0-bg: #422006; --focus-0-border: #713f12; --focus-0-tag: #fde047;
+  --focus-1-bg: #500724; --focus-1-border: #831843; --focus-1-tag: #f9a8d4;
+  --focus-2-bg: #0c4a6e; --focus-2-border: #075985; --focus-2-tag: #7dd3fc;
+  --focus-3-bg: #2e1065; --focus-3-border: #581c87; --focus-3-tag: #c4b5fd;
+  --focus-4-bg: #431407; --focus-4-border: #7c2d12; --focus-4-tag: #fdba74;
+  --focus-5-bg: #422006; --focus-5-border: #713f12; --focus-5-tag: #fde047;
+  --focus-6-bg: #022c22; --focus-6-border: #064e3b; --focus-6-tag: #6ee7b7;
+  --length-quick: #4ade80; --length-medium: #60a5fa; --length-deep: #c4b5fd; --length-standing: #fbbf24;
+  --featured-from: #eab308; --featured-to: #f59e0b;
+  --loading-dot: #64748b; --loading-dot-accent: #fbbf24;
+  --chip-bg: #1e293b; --chip-text: #fde047; --chip-border: #713f12; --chip-hover: #422006;
+  --theme-color: #0f172a;
+}
+
+/* ── SAND ── */
+[data-theme="sand"] {
+  --bg-surface: #fafaf9;
+  --bg-card: #fefdfb;
+  --bg-elevated: #ffffff;
+  --bg-input: #f5f5f0;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #292524;
+  --text-secondary: #78716c;
+  --text-muted: #a8a29e;
+  --text-inverse: #ffffff;
+  --border-default: #d6d3d1;
+  --border-subtle: #e7e5e4;
+  --border-focus: #a16207;
+  --accent: #a16207;
+  --accent-hover: #854d0e;
+  --accent-light: #fefce8;
+  --accent-subtle: #fef9c3;
+  --accent-text: #854d0e;
+  --success: #16a34a; --success-light: #f0fdf4; --success-medium: #dcfce7; --success-text: #15803d; --success-border: #bbf7d0;
+  --warning: #ea580c; --warning-light: #fff7ed; --warning-text: #c2410c;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --amber: #d97706; --amber-light: #fffbeb; --amber-medium: #fef3c7; --amber-text: #92400e; --amber-border: #fde68a;
+  --nav-bg: rgba(250, 250, 249, 0.9); --nav-active: #a16207; --nav-inactive: #a8a29e; --nav-border: #e7e5e4;
+  --chat-user-bg: #a16207; --chat-user-text: #ffffff; --chat-coach-bg: #f5f5f0; --chat-coach-text: #292524;
+  --btn-primary-bg: #a16207; --btn-primary-text: #ffffff; --btn-primary-hover: #854d0e;
+  --btn-secondary-bg: #f5f5f0; --btn-secondary-text: #57534e; --btn-secondary-hover: #e7e5e4;
+  --btn-disabled-bg: #e7e5e4; --btn-disabled-text: #a8a29e;
+  --pill-selected-bg: #fefce8; --pill-selected-text: #854d0e; --pill-selected-border: #a16207;
+  --pill-unselected-bg: transparent; --pill-unselected-text: #57534e; --pill-unselected-border: #d6d3d1;
+  --cat-reframe-bg: #faf5ff; --cat-reframe-text: #9333ea; --cat-reframe-border: #e9d5ff; --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb; --cat-truth-text: #d97706; --cat-truth-border: #fde68a; --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff; --cat-plan-text: #2563eb; --cat-plan-border: #bfdbfe; --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4; --cat-practice-text: #16a34a; --cat-practice-border: #bbf7d0; --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa; --cat-kit-text: #0d9488; --cat-kit-border: #99f6e4; --cat-kit-accent: #0d9488;
+  --journey-line: #d6d3d1;
+  --journey-win-bg: #f0fdf4; --journey-win-border: #bbf7d0; --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #fefce8; --journey-milestone-border: #fef9c3; --journey-milestone-tag: #a16207;
+  --journey-first-bg: #fffbeb; --journey-first-border: #fde68a; --journey-first-tag: #f59e0b;
+  --focus-0-bg: #fefce8; --focus-0-border: #fef9c3; --focus-0-tag: #a16207;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a; --length-medium: #2563eb; --length-deep: #9333ea; --length-standing: #d97706;
+  --featured-from: #a16207; --featured-to: #ca8a04;
+  --loading-dot: #a8a29e; --loading-dot-accent: #a16207;
+  --chip-bg: #fefdfb; --chip-text: #854d0e; --chip-border: #d6d3d1; --chip-hover: #fefce8;
+  --theme-color: #fafaf9;
+}
+
+/* ── ROSE ── */
+[data-theme="rose"] {
+  --bg-surface: #fff1f2;
+  --bg-card: #fff5f6;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffe4e6;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --text-primary: #4c0519;
+  --text-secondary: #9f1239;
+  --text-muted: #fda4af;
+  --text-inverse: #ffffff;
+  --border-default: #fecdd3;
+  --border-subtle: #ffe4e6;
+  --border-focus: #e11d48;
+  --accent: #e11d48;
+  --accent-hover: #be123c;
+  --accent-light: #fff1f2;
+  --accent-subtle: #ffe4e6;
+  --accent-text: #be123c;
+  --success: #16a34a; --success-light: #f0fdf4; --success-medium: #dcfce7; --success-text: #15803d; --success-border: #bbf7d0;
+  --warning: #ea580c; --warning-light: #fff7ed; --warning-text: #c2410c;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --amber: #d97706; --amber-light: #fffbeb; --amber-medium: #fef3c7; --amber-text: #92400e; --amber-border: #fde68a;
+  --nav-bg: rgba(255, 241, 242, 0.9); --nav-active: #e11d48; --nav-inactive: #fda4af; --nav-border: #ffe4e6;
+  --chat-user-bg: #e11d48; --chat-user-text: #ffffff; --chat-coach-bg: #ffe4e6; --chat-coach-text: #4c0519;
+  --btn-primary-bg: #e11d48; --btn-primary-text: #ffffff; --btn-primary-hover: #be123c;
+  --btn-secondary-bg: #ffe4e6; --btn-secondary-text: #9f1239; --btn-secondary-hover: #fecdd3;
+  --btn-disabled-bg: #ffe4e6; --btn-disabled-text: #fda4af;
+  --pill-selected-bg: #ffe4e6; --pill-selected-text: #be123c; --pill-selected-border: #e11d48;
+  --pill-unselected-bg: transparent; --pill-unselected-text: #9f1239; --pill-unselected-border: #fecdd3;
+  --cat-reframe-bg: #faf5ff; --cat-reframe-text: #9333ea; --cat-reframe-border: #e9d5ff; --cat-reframe-accent: #9333ea;
+  --cat-truth-bg: #fffbeb; --cat-truth-text: #d97706; --cat-truth-border: #fde68a; --cat-truth-accent: #d97706;
+  --cat-plan-bg: #eff6ff; --cat-plan-text: #2563eb; --cat-plan-border: #bfdbfe; --cat-plan-accent: #2563eb;
+  --cat-practice-bg: #f0fdf4; --cat-practice-text: #16a34a; --cat-practice-border: #bbf7d0; --cat-practice-accent: #16a34a;
+  --cat-kit-bg: #f0fdfa; --cat-kit-text: #0d9488; --cat-kit-border: #99f6e4; --cat-kit-accent: #0d9488;
+  --journey-line: #fecdd3;
+  --journey-win-bg: #f0fdf4; --journey-win-border: #bbf7d0; --journey-win-tag: #22c55e;
+  --journey-milestone-bg: #fff1f2; --journey-milestone-border: #fecdd3; --journey-milestone-tag: #e11d48;
+  --journey-first-bg: #fffbeb; --journey-first-border: #fde68a; --journey-first-tag: #f59e0b;
+  --focus-0-bg: #ffe4e6; --focus-0-border: #fecdd3; --focus-0-tag: #e11d48;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #fbcfe8; --focus-1-tag: #ec4899;
+  --focus-2-bg: #f0f9ff; --focus-2-border: #bae6fd; --focus-2-tag: #38bdf8;
+  --focus-3-bg: #faf5ff; --focus-3-border: #e9d5ff; --focus-3-tag: #a78bfa;
+  --focus-4-bg: #fff7ed; --focus-4-border: #fed7aa; --focus-4-tag: #fb923c;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #eab308;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #34d399;
+  --length-quick: #16a34a; --length-medium: #2563eb; --length-deep: #9333ea; --length-standing: #d97706;
+  --featured-from: #e11d48; --featured-to: #f43f5e;
+  --loading-dot: #fda4af; --loading-dot-accent: #e11d48;
+  --chip-bg: #fff5f6; --chip-text: #be123c; --chip-border: #fecdd3; --chip-hover: #ffe4e6;
+  --theme-color: #fff1f2;
+}
+
+/* ── TAILWIND 4 THEME MAPPING ── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Surfaces → bg-surface, bg-card, bg-elevated, bg-input */
+  --color-surface: var(--bg-surface);
+  --color-card: var(--bg-card);
+  --color-elevated: var(--bg-elevated);
+  --color-input: var(--bg-input);
+
+  /* Text → text-primary, text-secondary, text-muted, text-inverse */
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-inverse: var(--text-inverse);
+
+  /* Borders → border-default, border-subtle, border-focus */
+  --color-default: var(--border-default);
+  --color-subtle: var(--border-subtle);
+  --color-focus: var(--border-focus);
+
+  /* Accent → bg-accent, text-accent, border-accent */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-light: var(--accent-light);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-text: var(--accent-text);
+
+  /* Success → bg-success, text-success */
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-success-medium: var(--success-medium);
+  --color-success-text: var(--success-text);
+  --color-success-border: var(--success-border);
+
+  /* Warning */
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-warning-text: var(--warning-text);
+
+  /* Danger */
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+
+  /* Amber */
+  --color-amber: var(--amber);
+  --color-amber-light: var(--amber-light);
+  --color-amber-medium: var(--amber-medium);
+  --color-amber-text: var(--amber-text);
+  --color-amber-border: var(--amber-border);
+
+  /* Nav */
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-active: var(--nav-active);
+  --color-nav-inactive: var(--nav-inactive);
+  --color-nav-border: var(--nav-border);
+
+  /* Chat bubbles */
+  --color-chat-user: var(--chat-user-bg);
+  --color-chat-user-text: var(--chat-user-text);
+  --color-chat-coach: var(--chat-coach-bg);
+  --color-chat-coach-text: var(--chat-coach-text);
+
+  /* Buttons */
+  --color-btn-primary: var(--btn-primary-bg);
+  --color-btn-primary-text: var(--btn-primary-text);
+  --color-btn-primary-hover: var(--btn-primary-hover);
+  --color-btn-secondary: var(--btn-secondary-bg);
+  --color-btn-secondary-text: var(--btn-secondary-text);
+  --color-btn-secondary-hover: var(--btn-secondary-hover);
+  --color-btn-disabled: var(--btn-disabled-bg);
+  --color-btn-disabled-text: var(--btn-disabled-text);
+
+  /* Pills */
+  --color-pill-selected: var(--pill-selected-bg);
+  --color-pill-selected-text: var(--pill-selected-text);
+  --color-pill-selected-border: var(--pill-selected-border);
+  --color-pill-unselected: var(--pill-unselected-bg);
+  --color-pill-unselected-text: var(--pill-unselected-text);
+  --color-pill-unselected-border: var(--pill-unselected-border);
+
+  /* Card categories */
+  --color-cat-reframe: var(--cat-reframe-bg);
+  --color-cat-reframe-text: var(--cat-reframe-text);
+  --color-cat-reframe-border: var(--cat-reframe-border);
+  --color-cat-reframe-accent: var(--cat-reframe-accent);
+  --color-cat-truth: var(--cat-truth-bg);
+  --color-cat-truth-text: var(--cat-truth-text);
+  --color-cat-truth-border: var(--cat-truth-border);
+  --color-cat-truth-accent: var(--cat-truth-accent);
+  --color-cat-plan: var(--cat-plan-bg);
+  --color-cat-plan-text: var(--cat-plan-text);
+  --color-cat-plan-border: var(--cat-plan-border);
+  --color-cat-plan-accent: var(--cat-plan-accent);
+  --color-cat-practice: var(--cat-practice-bg);
+  --color-cat-practice-text: var(--cat-practice-text);
+  --color-cat-practice-border: var(--cat-practice-border);
+  --color-cat-practice-accent: var(--cat-practice-accent);
+  --color-cat-kit: var(--cat-kit-bg);
+  --color-cat-kit-text: var(--cat-kit-text);
+  --color-cat-kit-border: var(--cat-kit-border);
+  --color-cat-kit-accent: var(--cat-kit-accent);
+
+  /* Featured suggestion gradient */
+  --color-featured-from: var(--featured-from);
+  --color-featured-to: var(--featured-to);
+
+  /* Loading dots */
+  --color-loading-dot: var(--loading-dot);
+  --color-loading-dot-accent: var(--loading-dot-accent);
+
+  /* Chips */
+  --color-chip: var(--chip-bg);
+  --color-chip-text: var(--chip-text);
+  --color-chip-border: var(--chip-border);
+  --color-chip-hover: var(--chip-hover);
+
+  /* Journey */
+  --color-journey-line: var(--journey-line);
+
+  /* Font */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* ── IMPORT CUSTOM THEME ── */
+@import "../styles/theme-custom.css";
+
+/* ── BASE STYLES ── */
 html, body {
   height: 100%;
   overflow: hidden;
@@ -76,43 +902,11 @@ html, body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-}
-
-/* Theme font application — !important needed to override Tailwind's font-sans */
-.theme-heading {
-  font-family: var(--font-heading) !important;
-}
-
-.theme-body {
-  font-family: var(--font-body) !important;
-}
-
-/* Themed surface + card backgrounds */
-.theme-surface {
-  background-color: var(--bg-surface);
-}
-
-.theme-card {
-  background-color: var(--bg-card);
-}
-
-.theme-border {
-  border-color: var(--border-subtle);
-}
-
-.theme-text {
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
-.theme-text-secondary {
-  color: var(--text-secondary);
-}
-
-.theme-text-muted {
-  color: var(--text-muted);
-}
+/* ── UTILITIES ── */
 
 /* Hide scrollbar for cleaner mobile feel */
 .hide-scrollbar::-webkit-scrollbar {
@@ -161,9 +955,9 @@ body {
 }
 
 @keyframes win-glow {
-  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-  40% { box-shadow: 0 0 16px 4px rgba(34, 197, 94, 0.15); }
-  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent); }
+  40% { box-shadow: 0 0 16px 4px color-mix(in srgb, var(--success) 15%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent); }
 }
 
 .animate-win-trophy {
@@ -176,8 +970,8 @@ body {
 
 /* Journey path node pulse */
 @keyframes node-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3); }
-  50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 30%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent); }
 }
 
 .animate-node-pulse {

@@ -21,7 +21,7 @@ export default function TabBar() {
   const { activeTab, setActiveTab } = useToney();
 
   return (
-    <div className="flex-shrink-0 bg-white/90 backdrop-blur-lg border-t border-gray-100 px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="flex-shrink-0 backdrop-blur-lg border-t px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }}>
       <div className="flex items-center justify-around">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -30,9 +30,8 @@ export default function TabBar() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center gap-1 py-1 px-4 transition-all ${
-                isActive ? 'text-indigo-600' : 'text-gray-400'
-              }`}
+              className="flex flex-col items-center gap-1 py-1 px-4 transition-all"
+              style={{ color: isActive ? 'var(--nav-active)' : 'var(--nav-inactive)' }}
             >
               <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
               <span className="text-xs font-medium">{tab.label}</span>

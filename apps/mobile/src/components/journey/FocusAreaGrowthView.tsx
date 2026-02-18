@@ -41,19 +41,19 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center">
-      <div className="w-full max-w-[430px] bg-white rounded-t-3xl max-h-[85vh] flex flex-col animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'var(--bg-overlay)' }}>
+      <div className="w-full max-w-[430px] bg-elevated rounded-t-3xl max-h-[85vh] flex flex-col animate-slide-up">
         {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-default flex-shrink-0">
           <div className="flex-1 min-w-0 mr-3">
-            <h3 className="text-lg font-bold text-gray-900 leading-snug">{focusArea.text}</h3>
-            <p className="text-xs text-gray-400 mt-1">{sourceLabel} · {ageText}</p>
+            <h3 className="text-lg font-bold text-primary leading-snug">{focusArea.text}</h3>
+            <p className="text-xs text-muted mt-1">{sourceLabel} · {ageText}</p>
           </div>
           <button
             onClick={onDismiss}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all flex-shrink-0"
+            className="w-8 h-8 rounded-full bg-input flex items-center justify-center hover:bg-default transition-all flex-shrink-0"
           >
-            <X className="w-4 h-4 text-gray-500" />
+            <X className="w-4 h-4 text-secondary" />
           </button>
         </div>
 
@@ -63,8 +63,8 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
           {linkedWins.length > 0 && (
             <div className="mb-6">
               <div className="flex items-center gap-1.5 mb-3">
-                <Trophy className="w-3.5 h-3.5 text-green-600" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-green-600">
+                <Trophy className="w-3.5 h-3.5 text-success" />
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-success">
                   Evidence ({linkedWins.length} win{linkedWins.length !== 1 ? 's' : ''})
                 </h4>
               </div>
@@ -73,11 +73,11 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
                   const d = w.created_at ? new Date(w.created_at) : w.date ? new Date(w.date) : null;
                   const dateLabel = d ? formatDate(d.toISOString()) : '';
                   return (
-                    <div key={w.id || i} className="flex items-start gap-2.5 bg-green-50 rounded-xl px-3 py-2.5">
+                    <div key={w.id || i} className="flex items-start gap-2.5 bg-success-light rounded-xl px-3 py-2.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-800 leading-relaxed">{w.text}</p>
-                        {dateLabel && <p className="text-xs text-gray-400 mt-0.5">{dateLabel}</p>}
+                        <p className="text-sm text-primary leading-relaxed">{w.text}</p>
+                        {dateLabel && <p className="text-xs text-muted mt-0.5">{dateLabel}</p>}
                       </div>
                     </div>
                   );
@@ -91,8 +91,8 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
             <div className="space-y-4">
               {linkedWins.length > 0 && (
                 <div className="flex items-center gap-1.5 mb-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-indigo-500">Growth observations</h4>
+                  <TrendingUp className="w-3.5 h-3.5 text-accent" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-accent">Growth observations</h4>
                 </div>
               )}
               {/* Reverse chronological — newest first */}
@@ -100,25 +100,25 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
                 <div key={i} className="flex gap-3">
                   {/* Timeline dot + line */}
                   <div className="flex flex-col items-center pt-1.5">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${i === 0 ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${i === 0 ? 'bg-accent' : 'bg-default'}`} />
                     {i < reflections.length - 1 && (
-                      <div className="w-px flex-1 bg-gray-200 mt-1.5" />
+                      <div className="w-px flex-1 bg-default mt-1.5" />
                     )}
                   </div>
                   {/* Content */}
                   <div className="flex-1 pb-2">
-                    <p className="text-xs font-medium text-gray-400 mb-1">{formatDate(ref.date)}</p>
-                    <p className="text-sm text-gray-700 leading-relaxed">{ref.text}</p>
+                    <p className="text-xs font-medium text-muted mb-1">{formatDate(ref.date)}</p>
+                    <p className="text-sm text-secondary leading-relaxed">{ref.text}</p>
                   </div>
                 </div>
               ))}
             </div>
           ) : linkedWins.length === 0 ? (
             <div className="text-center py-8">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3">
-                <TrendingUp className="w-6 h-6 text-indigo-400" />
+              <div className="w-12 h-12 rounded-2xl bg-accent-light flex items-center justify-center mx-auto mb-3">
+                <TrendingUp className="w-6 h-6 text-accent" />
               </div>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <p className="text-sm text-muted leading-relaxed">
                 Your growth story will appear here after your next session.
               </p>
             </div>
@@ -126,20 +126,20 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="px-6 py-4 border-t border-default flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="flex gap-3">
             <button
               onClick={() => {
                 onArchive();
                 onDismiss();
               }}
-              className="flex-1 bg-gray-100 text-gray-600 py-3.5 rounded-2xl font-semibold text-sm hover:bg-gray-200 transition-all active:scale-[0.98]"
+              className="flex-1 bg-btn-secondary text-btn-secondary-text py-3.5 rounded-2xl font-semibold text-sm hover:bg-btn-secondary-hover transition-all active:scale-[0.98]"
             >
               Archive
             </button>
             <button
               onClick={onDismiss}
-              className="flex-1 bg-indigo-600 text-white py-3.5 rounded-2xl font-semibold text-sm hover:bg-indigo-700 transition-all active:scale-[0.98]"
+              className="flex-1 bg-btn-primary text-btn-primary-text py-3.5 rounded-2xl font-semibold text-sm hover:bg-btn-primary-hover transition-all active:scale-[0.98]"
             >
               Done
             </button>

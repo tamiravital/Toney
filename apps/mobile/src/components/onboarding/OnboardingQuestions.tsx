@@ -73,13 +73,13 @@ export default function OnboardingQuestions() {
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-8 pb-2 hide-scrollbar">
         {/* Progress */}
         <div className="mb-8">
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-input rounded-full overflow-hidden">
             <div
-              className="h-full bg-indigo-600 transition-all duration-500 rounded-full"
+              className="h-full bg-accent transition-all duration-500 rounded-full"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-muted mt-2">
             {currentQuestionIndex + 1} of {questions.length}
           </p>
         </div>
@@ -88,7 +88,7 @@ export default function OnboardingQuestions() {
         {currentQuestionIndex > 0 && (
           <button
             onClick={handlePrevQuestion}
-            className="flex items-center gap-1 text-sm text-gray-400 mb-4 -mt-2 self-start active:scale-[0.98]"
+            className="flex items-center gap-1 text-sm text-muted mb-4 -mt-2 self-start active:scale-[0.98]"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -96,8 +96,8 @@ export default function OnboardingQuestions() {
         )}
 
         {/* Question */}
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">{q.question}</h2>
-        <p className="text-sm text-gray-400 mb-6">
+        <h2 className="text-2xl font-bold text-primary mb-2">{q.question}</h2>
+        <p className="text-sm text-muted mb-6">
           {isMultiSelect ? 'Select all that apply' : 'Select what feels closest to you'}
         </p>
 
@@ -116,8 +116,8 @@ export default function OnboardingQuestions() {
                     onClick={() => handleMultiSelectToggle(option.value)}
                     className={`px-3 py-2.5 rounded-full border text-sm transition-all active:scale-[0.97] flex items-center gap-1.5 ${
                       isSelected
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50'
+                        ? 'border-pill-selected-border bg-pill-selected text-pill-selected-text'
+                        : 'border-pill-unselected-border bg-pill-unselected text-pill-unselected-text hover:border-accent-subtle hover:bg-accent-light'
                     }`}
                   >
                     {isSelected && <Check className="w-3.5 h-3.5" />}
@@ -135,7 +135,7 @@ export default function OnboardingQuestions() {
                   onChange={(e) => handleOtherTextChange(e.target.value)}
                   placeholder="What would feel like progress for you?"
                   maxLength={80}
-                  className="w-full px-4 py-3 rounded-xl border border-indigo-200 bg-white text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-400"
+                  className="w-full px-4 py-3 rounded-xl border border-accent-subtle bg-card text-sm text-primary placeholder-muted outline-none focus:border-focus"
                   autoFocus
                 />
               </div>
@@ -150,13 +150,13 @@ export default function OnboardingQuestions() {
                 onClick={() => handleAnswer(q.id, option.value)}
                 className={`w-full text-left p-4 rounded-2xl border-2 transition-all active:scale-[0.98] ${
                   answers[q.id] === option.value
-                    ? 'border-indigo-600 bg-indigo-50'
-                    : 'border-gray-100 bg-white hover:border-gray-200'
+                    ? 'border-pill-selected-border bg-pill-selected'
+                    : 'border-pill-unselected-border bg-pill-unselected hover:border-default'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{option.emoji}</span>
-                  <span className="text-gray-900 font-medium text-sm">{option.label}</span>
+                  <span className="text-primary font-medium text-sm">{option.label}</span>
                 </div>
               </button>
             ))}
@@ -165,14 +165,14 @@ export default function OnboardingQuestions() {
       </div>
 
       {/* Sticky button */}
-      <div className="flex-shrink-0 px-6 py-4 bg-gray-50">
+      <div className="flex-shrink-0 px-6 py-4 bg-surface">
         <button
           onClick={handleNextQuestion}
           disabled={!hasAnswer}
           className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
             hasAnswer
-              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-              : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+              ? 'bg-btn-primary text-btn-primary-text hover:bg-btn-primary-hover'
+              : 'bg-btn-disabled text-btn-disabled-text cursor-not-allowed'
           }`}
         >
           {isLastQuestion ? 'Start coaching' : 'Next'}
