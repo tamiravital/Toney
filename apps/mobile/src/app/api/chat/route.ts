@@ -27,6 +27,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing message or sessionId' }, { status: 400 });
     }
 
+    // ── DEBUG: Test llm_usage insert at the top of the request ──
+    try {
+      const { error: testErr } = await ctx.supabase
+        .from(ctx.table('llm_usage'))
+        .insert({
+          user_id: ctx.userId,
+          session_id: sessionId,
+          call_site: 'debug_test',
+          model: 'test',
+          input_tokens: 1,
+          output_tokens: 1,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        });
+      console.log('[chat] DEBUG insert:', testErr ? `ERROR: ${JSON.stringify(testErr)}` : 'SUCCESS');
+    } catch (e) { console.error('[chat] DEBUG exception:', e); }
+
     // ── Load session context + message history in parallel ──
     const [sessionResult, profileResult, cardsResult, winsResult, focusAreasResult, historyResult] = await Promise.all([
       ctx.supabase
