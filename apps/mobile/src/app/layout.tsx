@@ -39,7 +39,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('toney_theme');if(t&&t!=='default'){document.documentElement.setAttribute('data-theme',t)}var m=document.querySelector('meta[name="theme-color"]');if(m){var c=getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();if(c)m.setAttribute('content',c)}}catch(e){}})()` }} />
         <meta name="theme-color" content="#f9fafb" />
       </head>
-      <body className="font-sans antialiased bg-surface">
+      <body className="font-sans antialiased bg-white">
         <ToneyProvider>
           {children}
         </ToneyProvider>
