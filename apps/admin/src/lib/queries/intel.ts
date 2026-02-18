@@ -1,18 +1,24 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { RewireCard, Win } from '@toney/types';
+import type { RewireCard, Win, FocusArea, SessionSuggestionsRow } from '@toney/types';
 
 // ────────────────────────────────────────────
 // Read queries
 // ────────────────────────────────────────────
 
-export async function getUserUnderstanding(userId: string): Promise<string | null> {
+export async function getUserUnderstanding(userId: string): Promise<{
+  understanding: string | null;
+  understanding_snippet: string | null;
+}> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from('profiles')
-    .select('understanding')
+    .select('understanding, understanding_snippet')
     .eq('id', userId)
     .single();
-  return data?.understanding || null;
+  return {
+    understanding: data?.understanding || null,
+    understanding_snippet: data?.understanding_snippet || null,
+  };
 }
 
 export async function getUserRewireCards(userId: string): Promise<RewireCard[]> {
@@ -55,6 +61,26 @@ export async function getLatestSessionPlan(userId: string): Promise<{
     .limit(1)
     .single();
   return data || null;
+}
+
+export async function getUserFocusAreas(userId: string): Promise<FocusArea[]> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('focus_areas')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  return (data ?? []) as FocusArea[];
+}
+
+export async function getUserSuggestions(userId: string): Promise<SessionSuggestionsRow[]> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('session_suggestions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  return (data ?? []) as SessionSuggestionsRow[];
 }
 
 export async function getAllUserMessages(userId: string): Promise<{ role: string; content: string; created_at: string }[]> {

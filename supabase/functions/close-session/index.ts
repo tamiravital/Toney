@@ -615,6 +615,20 @@ Deno.serve(async (req: Request) => {
         if (typeof parsed.milestone === "string" && parsed.milestone.trim()) {
           sessionNotes.milestone = parsed.milestone.trim();
         }
+
+        // Save LLM usage
+        try {
+          await supabase.from(t("llm_usage")).insert({
+            user_id: userId,
+            session_id: sessionId,
+            call_site: "session_close_notes",
+            model: HAIKU_MODEL,
+            input_tokens: notesResponse.usage.input_tokens,
+            output_tokens: notesResponse.usage.output_tokens,
+            cache_creation_input_tokens: (notesResponse.usage as Record<string, number>).cache_creation_input_tokens || 0,
+            cache_read_input_tokens: (notesResponse.usage as Record<string, number>).cache_read_input_tokens || 0,
+          });
+        } catch { /* non-critical */ }
       } catch (err) {
         console.error("[close-session] Session notes generation failed:", err);
         sessionNotes = {
@@ -815,6 +829,20 @@ Deno.serve(async (req: Request) => {
             newText: a.new_text ? String(a.new_text) : undefined,
           }));
       }
+
+      // Save LLM usage
+      try {
+        await supabase.from(t("llm_usage")).insert({
+          user_id: userId,
+          session_id: sessionId,
+          call_site: "session_close_evolve",
+          model: SONNET_MODEL,
+          input_tokens: evolveResponse.usage.input_tokens,
+          output_tokens: evolveResponse.usage.output_tokens,
+          cache_creation_input_tokens: (evolveResponse.usage as Record<string, number>).cache_creation_input_tokens || 0,
+          cache_read_input_tokens: (evolveResponse.usage as Record<string, number>).cache_read_input_tokens || 0,
+        });
+      } catch { /* non-critical */ }
 
       console.log(
         `[close-session] Evolution complete: ${suggestions.length} suggestions`,

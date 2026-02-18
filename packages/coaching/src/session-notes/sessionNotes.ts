@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { SessionNotesOutput } from '@toney/types';
+import { SessionNotesOutput, LlmUsage } from '@toney/types';
 
 // ────────────────────────────────────────────
 // Session Notes Generator — User-facing session recap
@@ -55,7 +55,7 @@ These notes are FOR THE USER. Write warmly, in second person. Make them feel hea
 - If the session made progress on any of their focus areas, weave that into the narrative naturally. Name the focus area. Help them see their intentions becoming real.
 - If wins were earned this session, they're the highlights — weave them into the narrative. These are moments where they interrupted their pattern. Don't just list them; help the user feel what they accomplished.`;
 
-export async function generateSessionNotes(input: SessionNotesInput): Promise<SessionNotesOutput> {
+export async function generateSessionNotes(input: SessionNotesInput): Promise<{ notes: SessionNotesOutput; usage: LlmUsage }> {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
@@ -105,6 +105,13 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
     messages: [{ role: 'user', content: userMessage }],
   });
 
+  const usage: LlmUsage = {
+    input_tokens: response.usage.input_tokens,
+    output_tokens: response.usage.output_tokens,
+    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? undefined,
+    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? undefined,
+  };
+
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
 
   // Parse JSON from the response
@@ -113,27 +120,30 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<Se
 
   try {
     const parsed = JSON.parse(jsonStr);
-    const result: SessionNotesOutput = {
+    const notes: SessionNotesOutput = {
       headline: parsed.headline || '',
       narrative: parsed.narrative || '',
     };
     // Only include optional fields if they have content
     if (Array.isArray(parsed.keyMoments) && parsed.keyMoments.length > 0) {
-      result.keyMoments = parsed.keyMoments;
+      notes.keyMoments = parsed.keyMoments;
     }
     // Use actually-saved cards from DB, not LLM-extracted
     if (input.savedCards && input.savedCards.length > 0) {
-      result.cardsCreated = input.savedCards;
+      notes.cardsCreated = input.savedCards;
     }
     if (typeof parsed.milestone === 'string' && parsed.milestone.trim()) {
-      result.milestone = parsed.milestone.trim();
+      notes.milestone = parsed.milestone.trim();
     }
-    return result;
+    return { notes, usage };
   } catch {
     // If JSON parse fails, return the raw text as narrative
     return {
-      headline: 'Session complete',
-      narrative: text.trim(),
+      notes: {
+        headline: 'Session complete',
+        narrative: text.trim(),
+      },
+      usage,
     };
   }
 }

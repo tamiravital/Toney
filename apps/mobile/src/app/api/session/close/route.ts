@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveContext } from '@/lib/supabase/sim';
 import { generateSessionNotes } from '@toney/coaching';
 import { fireCloseSessionPipeline } from '@/lib/edgeFunction';
+import { saveUsage } from '@/lib/saveUsage';
 import type { FocusArea, Win } from '@toney/types';
 
 // Notes return in ~3-5s via Haiku. Evolution runs in Edge Function (150s timeout).
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       .map((w) => ({ text: w.text }));
 
     // ── Immediate: Generate session notes (Haiku, ~3-5s) ──
-    const sessionNotes = await generateSessionNotes({
+    const { notes: sessionNotes, usage: notesUsage } = await generateSessionNotes({
       messages,
       tensionType,
       hypothesis,
@@ -144,6 +145,15 @@ export async function POST(request: NextRequest) {
       previousHeadline,
       activeFocusAreas,
       sessionWins: sessionWins.length > 0 ? sessionWins : undefined,
+    });
+
+    // Save notes LLM usage (fire-and-forget)
+    saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+      userId: ctx.userId,
+      sessionId,
+      callSite: 'session_close_notes',
+      model: 'claude-haiku-4-5-20251001',
+      usage: notesUsage,
     });
 
     // ── Save session: notes + status + title + narrative snapshot + milestone ──

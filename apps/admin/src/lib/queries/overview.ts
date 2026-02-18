@@ -16,11 +16,17 @@ export async function getOverviewStats(): Promise<OverviewStats> {
     { count: onboardedUsers },
     { count: totalSessions },
     { count: totalMessages },
+    { count: activeFocusAreas },
+    { count: totalSuggestionSets },
+    { data: evolutionData },
   ] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('onboarding_completed', true),
     supabase.from('sessions').select('*', { count: 'exact', head: true }),
     supabase.from('messages').select('*', { count: 'exact', head: true }),
+    supabase.from('focus_areas').select('*', { count: 'exact', head: true }).is('archived_at', null),
+    supabase.from('session_suggestions').select('*', { count: 'exact', head: true }),
+    supabase.from('sessions').select('evolution_status'),
   ]);
 
   // Active users in last 7 days
@@ -32,6 +38,16 @@ export async function getOverviewStats(): Promise<OverviewStats> {
 
   const activeUserIds = new Set(recentSessions?.map((s) => s.user_id));
 
+  // Evolution status distribution
+  const evolutionStatus = { completed: 0, pending: 0, failed: 0, unknown: 0 };
+  for (const row of evolutionData ?? []) {
+    const status = (row as { evolution_status: string | null }).evolution_status;
+    if (status === 'completed') evolutionStatus.completed++;
+    else if (status === 'pending') evolutionStatus.pending++;
+    else if (status === 'failed') evolutionStatus.failed++;
+    else evolutionStatus.unknown++;
+  }
+
   const total = totalSessions ?? 0;
   const msgs = totalMessages ?? 0;
 
@@ -42,6 +58,9 @@ export async function getOverviewStats(): Promise<OverviewStats> {
     totalMessages: msgs,
     avgMessagesPerSession: total > 0 ? Math.round((msgs / total) * 10) / 10 : 0,
     activeUsers7d: activeUserIds.size,
+    activeFocusAreas: activeFocusAreas ?? 0,
+    totalSuggestionSets: totalSuggestionSets ?? 0,
+    evolutionStatus,
   };
 }
 

@@ -4,6 +4,7 @@ import { resolveContext } from '@/lib/supabase/sim';
 import { planSessionStep } from '@toney/coaching';
 import { Profile, FocusArea, SessionSuggestion } from '@toney/types';
 import { fireCloseSessionPipeline } from '@/lib/edgeFunction';
+import { saveUsage } from '@/lib/saveUsage';
 
 // Vercel Hobby hard limit is 10s — keep critical path under 5s.
 export const maxDuration = 60;
@@ -204,6 +205,25 @@ export async function POST(request: NextRequest) {
               .select('id')
               .single();
             savedMessageId = savedMsg?.id || null;
+          } catch { /* non-critical */ }
+
+          // Save LLM usage (fire-and-forget)
+          try {
+            const finalMessage = await stream.finalMessage();
+            if (finalMessage.usage) {
+              saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+                userId: ctx.userId,
+                sessionId,
+                callSite: 'session_open',
+                model: 'claude-sonnet-4-5-20250929',
+                usage: {
+                  input_tokens: finalMessage.usage.input_tokens,
+                  output_tokens: finalMessage.usage.output_tokens,
+                  cache_creation_input_tokens: (finalMessage.usage as unknown as { cache_creation_input_tokens?: number }).cache_creation_input_tokens,
+                  cache_read_input_tokens: (finalMessage.usage as unknown as { cache_read_input_tokens?: number }).cache_read_input_tokens,
+                },
+              });
+            }
           } catch { /* non-critical */ }
 
           timing('done');

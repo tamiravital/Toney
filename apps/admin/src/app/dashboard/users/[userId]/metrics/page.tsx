@@ -3,7 +3,7 @@ import { formatDateTime, formatRelativeTime } from '@/lib/format';
 import Badge from '@/components/Badge';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
-import { BarChart3, MessageSquare, User, Bot } from 'lucide-react';
+import { BarChart3, MessageSquare, User, Bot, Trophy, Layers, Target, RefreshCw } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,6 +57,34 @@ export default async function MetricsPage({
           icon={Bot}
           iconColor="text-emerald-600"
           iconBg="bg-emerald-50"
+        />
+        <StatCard
+          title="Wins"
+          value={metrics.totalWins}
+          icon={Trophy}
+          iconColor="text-amber-600"
+          iconBg="bg-amber-50"
+        />
+        <StatCard
+          title="Cards Saved"
+          value={metrics.totalCards}
+          icon={Layers}
+          iconColor="text-purple-600"
+          iconBg="bg-purple-50"
+        />
+        <StatCard
+          title="Active Focus Areas"
+          value={metrics.activeFocusAreas}
+          icon={Target}
+          iconColor="text-rose-600"
+          iconBg="bg-rose-50"
+        />
+        <StatCard
+          title="Evolved Sessions"
+          value={metrics.evolvedSessions}
+          icon={RefreshCw}
+          iconColor="text-cyan-600"
+          iconBg="bg-cyan-50"
         />
       </div>
 

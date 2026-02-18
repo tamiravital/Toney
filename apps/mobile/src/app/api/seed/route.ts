@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveContext } from '@/lib/supabase/sim';
 import { seedUnderstanding, seedSuggestions } from '@toney/coaching';
 import { formatAnswersReadable, questions } from '@toney/constants';
+import { saveUsage } from '@/lib/saveUsage';
 
 // Two parallel Sonnet calls + DB saves
 export const maxDuration = 60;
@@ -93,6 +94,24 @@ export async function POST(request: NextRequest) {
       seedSuggestions(seedInput),
     ]);
     timing('both Sonnet calls complete');
+
+    // Save LLM usage (fire-and-forget)
+    if (understandingResult.usage) {
+      saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+        userId: ctx.userId,
+        callSite: 'seed_understanding',
+        model: 'claude-sonnet-4-5-20250929',
+        usage: understandingResult.usage,
+      });
+    }
+    if (suggestionsResult.usage) {
+      saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+        userId: ctx.userId,
+        callSite: 'seed_suggestions',
+        model: 'claude-sonnet-4-5-20250929',
+        usage: suggestionsResult.usage,
+      });
+    }
 
     // ── Save all results in parallel ──
     const saves = await Promise.all([

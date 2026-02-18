@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { buildSystemPrompt } from '@toney/coaching';
 import { SystemPromptBlock, Profile, RewireCard, Win, FocusArea } from '@toney/types';
+import { saveUsage } from '@/lib/saveUsage';
 
 // Sonnet streaming response
 export const maxDuration = 60;
@@ -155,6 +156,25 @@ export async function POST(request: NextRequest) {
               .select('id')
               .single();
             savedMessageId = data?.id || null;
+          } catch { /* non-critical */ }
+
+          // Save LLM usage (fire-and-forget)
+          try {
+            const finalMessage = await stream.finalMessage();
+            if (finalMessage.usage) {
+              saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+                userId: ctx.userId,
+                sessionId,
+                callSite: 'chat',
+                model: 'claude-sonnet-4-5-20250929',
+                usage: {
+                  input_tokens: finalMessage.usage.input_tokens,
+                  output_tokens: finalMessage.usage.output_tokens,
+                  cache_creation_input_tokens: (finalMessage.usage as unknown as { cache_creation_input_tokens?: number }).cache_creation_input_tokens,
+                  cache_read_input_tokens: (finalMessage.usage as unknown as { cache_read_input_tokens?: number }).cache_read_input_tokens,
+                },
+              });
+            }
           } catch { /* non-critical */ }
 
           // Send final message with saved ID

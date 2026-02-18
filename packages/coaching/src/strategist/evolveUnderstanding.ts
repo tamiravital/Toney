@@ -1,7 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { SessionSuggestion, RewireCard, Win, FocusArea } from '@toney/types';
+import type { SessionSuggestion, RewireCard, Win, FocusArea, LlmUsage } from '@toney/types';
 import { GROWTH_LENSES_DESCRIPTION } from './constants';
 import { formatToolkit, formatWins, formatFocusAreas } from './formatters';
+
+function extractUsage(response: { usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null } }): LlmUsage {
+  return {
+    input_tokens: response.usage.input_tokens,
+    output_tokens: response.usage.output_tokens,
+    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? undefined,
+    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? undefined,
+  };
+}
 
 // ────────────────────────────────────────────
 // Understanding Evolution — The living clinical narrative
@@ -36,6 +45,8 @@ export interface EvolveUnderstandingOutput {
   stageOfChange?: string;
   /** One-sentence home screen snippet: what Toney sees right now */
   snippet?: string;
+  /** Token usage from the LLM call */
+  usage?: LlmUsage;
 }
 
 // ────────────────────────────────────────────
@@ -81,6 +92,8 @@ export interface EvolveAndSuggestOutput extends EvolveUnderstandingOutput {
   focusAreaReflections?: FocusAreaGrowthReflection[];
   /** Actions to take on focus areas (archive, reframe) — from check-in sessions */
   focusAreaActions?: FocusAreaAction[];
+  /** Token usage from the LLM call */
+  usage?: LlmUsage;
 }
 
 const EVOLVE_AND_SUGGEST_PROMPT = `You are the clinical intelligence behind Toney, an AI money coaching app. You maintain an evolving understanding of each person AND generate personalized session suggestions for their home screen.
@@ -296,6 +309,7 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
     messages: [{ role: 'user', content: userMessage }],
   });
 
+  const usage = extractUsage(response);
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
 
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
@@ -306,6 +320,7 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
     const result: EvolveAndSuggestOutput = {
       understanding: parsed.understanding || input.currentUnderstanding || '',
       suggestions: [],
+      usage,
     };
 
     if (parsed.stage_of_change && typeof parsed.stage_of_change === 'string') {
@@ -356,6 +371,7 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
     return {
       understanding: input.currentUnderstanding || '',
       suggestions: [],
+      usage,
     };
   }
 }
@@ -454,6 +470,7 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
     messages: [{ role: 'user', content: userMessage }],
   });
 
+  const usage = extractUsage(response);
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
 
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
@@ -463,6 +480,7 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
     const parsed = JSON.parse(jsonStr);
     const result: EvolveUnderstandingOutput = {
       understanding: parsed.understanding || input.currentUnderstanding || '',
+      usage,
     };
 
     if (parsed.stage_of_change && typeof parsed.stage_of_change === 'string') {
@@ -478,6 +496,7 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
     // Parse failed — return existing understanding unchanged
     return {
       understanding: input.currentUnderstanding || '',
+      usage,
     };
   }
 }
@@ -513,11 +532,15 @@ export interface SeedUnderstandingOutput {
   secondaryTensionLabel?: string | null;
   /** One-sentence home screen snippet: first impression */
   snippet?: string;
+  /** Token usage from the LLM call */
+  usage?: LlmUsage;
 }
 
 export interface SeedSuggestionsOutput {
   /** Initial session suggestions (4-5) */
   suggestions: SessionSuggestion[];
+  /** Token usage from the LLM call */
+  usage?: LlmUsage;
 }
 
 // ── Prompt: understanding + tension (no suggestions) ──
@@ -599,6 +622,7 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
     messages: [{ role: 'user', content: userMessage }],
   });
 
+  const usage = extractUsage(response);
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   const jsonStr = jsonMatch ? jsonMatch[1] : text;
@@ -610,12 +634,14 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
       tensionLabel: parsed.tension_label || 'avoid',
       secondaryTensionLabel: parsed.secondary_tension_label || null,
       snippet: parsed.snippet || undefined,
+      usage,
     };
   } catch {
     return {
       understanding: '',
       tensionLabel: 'avoid',
       secondaryTensionLabel: null,
+      usage,
     };
   }
 }
@@ -637,6 +663,7 @@ export async function seedSuggestions(input: SeedUnderstandingInput): Promise<Se
     messages: [{ role: 'user', content: userMessage }],
   });
 
+  const usage = extractUsage(response);
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
   const jsonStr = jsonMatch ? jsonMatch[1] : text;
@@ -658,8 +685,8 @@ export async function seedSuggestions(input: SeedUnderstandingInput): Promise<Se
       }));
     }
 
-    return { suggestions };
+    return { suggestions, usage };
   } catch {
-    return { suggestions: [] };
+    return { suggestions: [], usage };
   }
 }

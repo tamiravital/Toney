@@ -58,7 +58,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
   // Notes come first — they provide the headline for suggestion context
   let sessionNotes: SessionNotesOutput;
   try {
-    sessionNotes = await generateSessionNotes({
+    const notesResult = await generateSessionNotes({
       messages: input.messages,
       tensionType: input.tensionType,
       hypothesis: input.hypothesis,
@@ -69,6 +69,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       previousHeadline: input.previousHeadline,
       activeFocusAreas: input.activeFocusAreas,
     });
+    sessionNotes = notesResult.notes;
   } catch (err) {
     console.error('generateSessionNotes failed:', err);
     sessionNotes = { headline: 'Session complete', narrative: 'Notes could not be generated for this session.' };
