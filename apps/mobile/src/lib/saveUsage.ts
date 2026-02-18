@@ -4,8 +4,9 @@ import type { LlmUsage } from '@toney/types';
  * Fire-and-forget: save LLM usage data to the llm_usage table.
  * Non-blocking — errors are logged but never thrown.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function saveUsage(
-  supabase: { from: (table: string) => { insert: (data: Record<string, unknown>) => { then?: unknown } } },
+  supabase: any,
   table: string,
   params: {
     userId: string;
@@ -15,7 +16,7 @@ export function saveUsage(
     usage: LlmUsage;
   },
 ): void {
-  try {
+  Promise.resolve(
     supabase.from(table).insert({
       user_id: params.userId,
       session_id: params.sessionId || null,
@@ -25,8 +26,10 @@ export function saveUsage(
       output_tokens: params.usage.output_tokens,
       cache_creation_input_tokens: params.usage.cache_creation_input_tokens || 0,
       cache_read_input_tokens: params.usage.cache_read_input_tokens || 0,
-    });
-  } catch (err) {
+    })
+  ).then((result: any) => {
+    if (result?.error) console.error('[saveUsage] Insert failed:', result.error);
+  }).catch((err: unknown) => {
     console.error('[saveUsage] Failed:', err);
-  }
+  });
 }

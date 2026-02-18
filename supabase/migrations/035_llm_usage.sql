@@ -19,6 +19,10 @@ CREATE INDEX idx_llm_usage_created_at ON llm_usage(created_at);
 
 ALTER TABLE llm_usage ENABLE ROW LEVEL SECURITY;
 
+-- Users can insert their own usage rows (written by API routes on their behalf)
+CREATE POLICY "Users can insert own usage" ON llm_usage
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 -- Simulator equivalent (no FK to auth.users)
 CREATE TABLE sim_llm_usage (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
