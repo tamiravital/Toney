@@ -161,20 +161,22 @@ export async function POST(request: NextRequest) {
           // Save LLM usage
           try {
             const finalMessage = await stream.finalMessage();
-            if (finalMessage.usage) {
-              await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
-                userId: ctx.userId,
-                sessionId,
-                callSite: 'chat',
+            console.log('[chat] finalMessage.usage:', JSON.stringify(finalMessage.usage));
+
+            // Direct insert test — bypass saveUsage to isolate the issue
+            const { error: directError } = await ctx.supabase
+              .from(ctx.table('llm_usage'))
+              .insert({
+                user_id: ctx.userId,
+                session_id: sessionId,
+                call_site: 'chat',
                 model: 'claude-sonnet-4-5-20250929',
-                usage: {
-                  input_tokens: finalMessage.usage.input_tokens,
-                  output_tokens: finalMessage.usage.output_tokens,
-                  cache_creation_input_tokens: (finalMessage.usage as unknown as { cache_creation_input_tokens?: number }).cache_creation_input_tokens,
-                  cache_read_input_tokens: (finalMessage.usage as unknown as { cache_read_input_tokens?: number }).cache_read_input_tokens,
-                },
+                input_tokens: finalMessage.usage?.input_tokens ?? 0,
+                output_tokens: finalMessage.usage?.output_tokens ?? 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
               });
-            }
+            console.log('[chat] Direct insert result:', directError ? `ERROR: ${directError.message} | ${directError.details} | ${directError.hint}` : 'SUCCESS');
           } catch (e) { console.error('[chat] Usage save error:', e); }
 
           // Send final message with saved ID
