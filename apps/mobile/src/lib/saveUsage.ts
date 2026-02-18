@@ -2,7 +2,7 @@ import type { LlmUsage } from '@toney/types';
 
 /**
  * Save LLM usage data to the llm_usage table.
- * Returns a promise — caller can await or fire-and-forget.
+ * Awaitable — caller should await to ensure the insert completes.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function saveUsage(
@@ -27,12 +27,8 @@ export async function saveUsage(
       cache_creation_input_tokens: params.usage.cache_creation_input_tokens || 0,
       cache_read_input_tokens: params.usage.cache_read_input_tokens || 0,
     });
-    if (error) {
-      console.error('[saveUsage] Insert failed:', error.message, error.details, error.hint);
-    } else {
-      console.log('[saveUsage] Saved:', params.callSite, params.usage.input_tokens, 'in /', params.usage.output_tokens, 'out');
-    }
+    if (error) console.error('[saveUsage]', params.callSite, error.message);
   } catch (err) {
-    console.error('[saveUsage] Exception:', err);
+    console.error('[saveUsage]', params.callSite, err);
   }
 }

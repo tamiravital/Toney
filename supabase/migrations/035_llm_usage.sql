@@ -17,11 +17,8 @@ CREATE TABLE llm_usage (
 CREATE INDEX idx_llm_usage_user_id ON llm_usage(user_id);
 CREATE INDEX idx_llm_usage_created_at ON llm_usage(created_at);
 
-ALTER TABLE llm_usage ENABLE ROW LEVEL SECURITY;
-
--- Users can insert their own usage rows (written by API routes on their behalf)
-CREATE POLICY "Users can insert own usage" ON llm_usage
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- No RLS — this is internal telemetry, only read by admin (service role).
+-- API routes insert on behalf of the authenticated user.
 
 -- Simulator equivalent (no FK to auth.users)
 CREATE TABLE sim_llm_usage (
