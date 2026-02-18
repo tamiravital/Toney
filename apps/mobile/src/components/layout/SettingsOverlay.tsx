@@ -1,36 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, RotateCcw, LogOut, Palette } from 'lucide-react';
+import { X, RotateCcw, LogOut } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
 import { LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
-
-type ThemeOption = 'default' | 'fraunces' | 'lora' | 'dm-serif';
-
-const themeOptions: { value: ThemeOption; label: string; description: string }[] = [
-  { value: 'default', label: 'Current', description: 'Geist Sans' },
-  { value: 'fraunces', label: 'Fraunces', description: 'Warm & quirky' },
-  { value: 'lora', label: 'Lora', description: 'Classic editorial' },
-  { value: 'dm-serif', label: 'DM Serif', description: 'Bold premium' },
-];
-
-function applyTheme(theme: ThemeOption) {
-  if (theme === 'default') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme);
-  }
-  try { localStorage.setItem('toney_theme', theme); } catch { /* */ }
-}
-
-function getStoredTheme(): ThemeOption {
-  if (typeof window === 'undefined') return 'default';
-  try {
-    return (localStorage.getItem('toney_theme') as ThemeOption) || 'default';
-  } catch { return 'default'; }
-}
 
 const lifeStageOptions = [
   { value: 'student', label: 'Student' },
@@ -63,10 +38,6 @@ export default function SettingsOverlay() {
   const [relationship, setRelationship] = useState('');
   const [emotionalWhy, setEmotionalWhy] = useState('');
   const [saving, setSaving] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<ThemeOption>(getStoredTheme);
-
-  // Apply theme on mount (for page refresh)
-  useEffect(() => { applyTheme(activeTheme); }, [activeTheme]);
 
   // Load About You fields from profile on mount
   useEffect(() => {
@@ -140,76 +111,17 @@ export default function SettingsOverlay() {
   const colors = tension ? tensionColor(tension.primary) : null;
 
   return (
-    <div className="absolute inset-0 z-50 overflow-y-auto hide-scrollbar" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="absolute inset-0 bg-white z-50 overflow-y-auto hide-scrollbar">
       <div className="px-6 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-bold theme-heading" style={{ color: 'var(--text-primary)' }}>Settings</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
           <button
             onClick={() => setShowSettings(false)}
             className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
-        </div>
-
-        {/* Theme Preview */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <Palette className="w-4 h-4 text-indigo-500" />
-            <h3 className="font-semibold text-gray-900 text-sm">Theme</h3>
-          </div>
-
-          {/* Live preview card */}
-          <div
-            className="rounded-2xl p-5 mb-4 transition-all duration-300"
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              borderWidth: '1px',
-              borderColor: 'var(--border-subtle)',
-            }}
-          >
-            <p
-              className="text-xl font-bold leading-snug mb-1 transition-all duration-300"
-              style={{ fontFamily: 'var(--font-heading)', color: 'var(--text-primary)' }}
-            >
-              Good morning, {localDisplayName?.split(' ')[0] || 'Sarah'}
-            </p>
-            <p
-              className="text-sm leading-relaxed mb-3 transition-all duration-300"
-              style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)' }}
-            >
-              You noticed something shift this week — the guilt around spending is loosening its grip.
-            </p>
-            <p
-              className="text-xs font-semibold uppercase tracking-wider transition-all duration-300"
-              style={{ fontFamily: 'var(--font-body)', color: 'var(--text-muted)' }}
-            >
-              Where you&apos;re growing
-            </p>
-          </div>
-
-          {/* Theme selector pills */}
-          <div className="grid grid-cols-2 gap-2">
-            {themeOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => { setActiveTheme(opt.value); applyTheme(opt.value); }}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${
-                  activeTheme === opt.value
-                    ? 'border-indigo-600 bg-indigo-50'
-                    : 'border-gray-100 hover:border-gray-200'
-                }`}
-              >
-                <span className={`text-xs font-semibold block ${activeTheme === opt.value ? 'text-indigo-700' : 'text-gray-800'}`}>
-                  {opt.label}
-                </span>
-                <span className={`text-[10px] block mt-0.5 ${activeTheme === opt.value ? 'text-indigo-500' : 'text-gray-400'}`}>
-                  {opt.description}
-                </span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Display name */}

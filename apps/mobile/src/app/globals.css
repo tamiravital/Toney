@@ -1,64 +1,8 @@
 @import "tailwindcss";
 
-/* ============================================
-   THEME SYSTEM
-   Applied via data-theme attribute on <html>
-   Default = current look (Geist Sans, cool white)
-   ============================================ */
-
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --bg-surface: #f9fafb;       /* gray-50 — main app bg */
-  --bg-card: #ffffff;
-  --border-subtle: #f3f4f6;    /* gray-100 */
-  --text-primary: #111827;     /* gray-900 */
-  --text-secondary: #6b7280;   /* gray-500 */
-  --text-muted: #9ca3af;       /* gray-400 */
-  --font-heading: var(--font-geist-sans);
-  --font-body: var(--font-geist-sans);
-}
-
-/* Theme A: Fraunces — warm, quirky serif + Plus Jakarta Sans body */
-[data-theme="fraunces"] {
-  --background: #FFFBF7;
-  --foreground: #1C1917;
-  --bg-surface: #FFF8F2;
-  --bg-card: #FFFBF7;
-  --border-subtle: #F5E6D3;
-  --text-primary: #1C1917;
-  --text-secondary: #78716C;
-  --text-muted: #A8A29E;
-  --font-heading: var(--font-fraunces);
-  --font-body: var(--font-plus-jakarta);
-}
-
-/* Theme B: Lora — classic editorial serif + Plus Jakarta Sans body */
-[data-theme="lora"] {
-  --background: #FAFAF8;
-  --foreground: #1A1A1A;
-  --bg-surface: #F7F6F3;
-  --bg-card: #FAFAF8;
-  --border-subtle: #E8E5DE;
-  --text-primary: #1A1A1A;
-  --text-secondary: #6B6B6B;
-  --text-muted: #9B9B9B;
-  --font-heading: var(--font-lora);
-  --font-body: var(--font-plus-jakarta);
-}
-
-/* Theme C: DM Serif Display — bold premium serif + Plus Jakarta Sans body */
-[data-theme="dm-serif"] {
-  --background: #FAF9F7;
-  --foreground: #18181B;
-  --bg-surface: #F5F4F0;
-  --bg-card: #FAF9F7;
-  --border-subtle: #E4E2DB;
-  --text-primary: #18181B;
-  --text-secondary: #71717A;
-  --text-muted: #A1A1AA;
-  --font-heading: var(--font-dm-serif);
-  --font-body: var(--font-plus-jakarta);
 }
 
 @theme inline {
@@ -78,40 +22,6 @@ html, body {
 body {
   background: var(--background);
   color: var(--foreground);
-}
-
-/* Theme font application */
-.theme-heading {
-  font-family: var(--font-heading);
-}
-
-.theme-body {
-  font-family: var(--font-body);
-}
-
-/* Themed surface + card backgrounds */
-.theme-surface {
-  background-color: var(--bg-surface);
-}
-
-.theme-card {
-  background-color: var(--bg-card);
-}
-
-.theme-border {
-  border-color: var(--border-subtle);
-}
-
-.theme-text {
-  color: var(--text-primary);
-}
-
-.theme-text-secondary {
-  color: var(--text-secondary);
-}
-
-.theme-text-muted {
-  color: var(--text-muted);
 }
 
 /* Hide scrollbar for cleaner mobile feel */
