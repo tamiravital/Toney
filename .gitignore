@@ -43,7 +43,8 @@ pnpm-debug.log*
 next-env.d.ts
 
 # claude code
-.claude/
+.claude/*
+!.claude/skills/
 
 # reference PDFs
 *.pdf
