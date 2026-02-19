@@ -459,7 +459,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
             const [{ data: recentSession }, { count: sessionCount }] = await Promise.all([
               supabase
                 .from('sessions')
-                .select('id')
+                .select('id, session_status')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
                 .limit(1)
@@ -474,6 +474,12 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
             if (recentSession) {
               setCurrentSessionId(recentSession.id);
+
+              // Set session status immediately from DB — prevents auto-open
+              // from creating a duplicate session before loadMessages reconciles
+              if (recentSession.session_status === 'completed') {
+                setSessionStatus('completed');
+              }
 
               // Get last message timestamp for boundary detection
               const { data: lastMsg } = await supabase
