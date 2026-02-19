@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
       rewireCards: (cardsResult.data || []) as RewireCard[],
       recentWins: (winsResult.data || []) as Win[],
       activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
+      language: profile.language,
     });
 
     const historyRows = historyResult.data;
@@ -155,6 +156,23 @@ export async function POST(request: NextRequest) {
         });
 
         stream.on('end', async () => {
+          // ── Language auto-detection: strip [LANG:xx] tag and save to profile ──
+          if (profile.language === null || profile.language === undefined) {
+            const langMatch = fullContent.match(/\[LANG:([a-z]{2,5})\]\s*$/);
+            if (langMatch) {
+              const detectedLang = langMatch[1];
+              // Strip the tag from the content before saving
+              fullContent = fullContent.replace(/\s*\[LANG:[a-z]{2,5}]\s*$/, '').trim();
+              // Save detected language to profile (fire-and-forget)
+              try {
+                await ctx.supabase
+                  .from(ctx.table('profiles'))
+                  .update({ language: detectedLang })
+                  .eq('id', ctx.userId);
+              } catch { /* non-critical */ }
+            }
+          }
+
           // Save assistant message to DB
           let savedMessageId: string | null = null;
           try {

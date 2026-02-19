@@ -26,6 +26,8 @@ export interface SessionNotesInput {
   activeFocusAreas?: { text: string }[] | null;
   /** Wins earned in this session (from DB, not LLM-guessed) */
   sessionWins?: { text: string }[] | null;
+  /** User's language preference (null = not yet detected, 'en' = English) */
+  language?: string | null;
 }
 
 const SESSION_NOTES_PROMPT = `You are writing session notes for Toney, an AI money coaching app. The user just finished a coaching session and will read these as their personal recap.
@@ -85,6 +87,11 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<{ 
   }
   if (input.sessionWins && input.sessionWins.length > 0) {
     contextLines.push(`Wins earned this session: ${input.sessionWins.map(w => `"${w.text}"`).join(', ')}`);
+  }
+
+  // Language instruction for user-facing notes
+  if (input.language && input.language !== 'en') {
+    contextLines.push(`Language: Write ALL session notes in ${input.language}. headline, narrative, keyMoments, milestone — everything user-facing must be in ${input.language}.`);
   }
 
   const contextSection = contextLines.length > 0

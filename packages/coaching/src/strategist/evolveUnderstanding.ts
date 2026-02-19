@@ -36,6 +36,8 @@ export interface EvolveUnderstandingInput {
   currentStageOfChange?: string | null;
   /** Active focus areas (full objects including reflections for context) */
   activeFocusAreas?: FocusArea[] | null;
+  /** User's language preference (null = not yet detected, 'en' = English) */
+  language?: string | null;
 }
 
 export interface EvolveUnderstandingOutput {
@@ -299,6 +301,12 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
     sections.push(`## Previous Suggestion Titles (avoid repeating these exactly)\n${input.previousSuggestionTitles.map(t => `- "${t}"`).join('\n')}`);
   }
 
+  // Language instruction for user-facing outputs
+  const lang = input.language;
+  if (lang && lang !== 'en') {
+    sections.push(`## Language\nThis user's language is ${lang}. ALL user-facing text must be in ${lang}:\n- suggestions: title, teaser, opening_message\n- focus_area_reflections: reflection text\n- snippet\n\nThe understanding narrative STAYS IN ENGLISH (it is clinical, Coach-facing). Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`);
+  }
+
   const userMessage = `Evolve the understanding based on this session, then generate session suggestions.\n\n${sections.join('\n\n')}`;
 
   const response = await anthropic.messages.create({
@@ -460,7 +468,12 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
     ? `## Current Understanding\n${input.currentUnderstanding}`
     : '## Current Understanding\nNo prior understanding — this is the first post-session evolution. Build a comprehensive picture from what the session revealed.';
 
-  const userMessage = `Evolve the understanding based on this session.\n\n${currentSection}${contextSection}\n\n## Session Transcript\n\n${transcript}`;
+  // Language instruction for snippet
+  const langSection = (input.language && input.language !== 'en')
+    ? `\n\n## Language\nThis user's language is ${input.language}. The snippet must be in ${input.language}. The understanding narrative stays in English.`
+    : '';
+
+  const userMessage = `Evolve the understanding based on this session.\n\n${currentSection}${contextSection}\n\n## Session Transcript\n\n${transcript}${langSection}`;
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5-20250929',
@@ -521,6 +534,8 @@ export interface SeedUnderstandingInput {
   lifeStage?: string | null;
   incomeType?: string | null;
   relationshipStatus?: string | null;
+  /** User's language preference (null = not yet detected, 'en' = English) */
+  language?: string | null;
 }
 
 export interface SeedUnderstandingOutput {
@@ -612,6 +627,12 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
   });
 
   const sections = buildSeedSections(input);
+
+  // Language instruction for snippet
+  if (input.language && input.language !== 'en') {
+    sections.push(`## Language\nThis user's language is ${input.language}. The snippet must be in ${input.language}. The understanding narrative stays in English.`);
+  }
+
   const userMessage = `Form an initial understanding of this person from their onboarding data.\n\n${sections.join('\n\n')}`;
 
   const response = await anthropic.messages.create({
@@ -653,6 +674,12 @@ export async function seedSuggestions(input: SeedUnderstandingInput): Promise<Se
   });
 
   const sections = buildSeedSections(input);
+
+  // Language instruction for user-facing suggestion text
+  if (input.language && input.language !== 'en') {
+    sections.push(`## Language\nThis user's language is ${input.language}. All user-facing text must be in ${input.language}: title, teaser, opening_message. Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`);
+  }
+
   const userMessage = `Generate initial session suggestions for this person based on their onboarding data.\n\n${sections.join('\n\n')}`;
 
   const response = await anthropic.messages.create({

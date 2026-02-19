@@ -27,6 +27,7 @@ export interface Profile {
   what_brought_you?: string | null;
   understanding?: string | null;
   understanding_snippet?: string | null;
+  language?: string | null;
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

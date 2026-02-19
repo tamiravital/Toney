@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     let incomeType: string | null = null;
     let relationshipStatus: string | null = null;
     let onboardingAnswers: Record<string, string> | null = null;
+    let userLanguage: string | null = null;
 
     try {
       const body = await request.clone().json();
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (!readableAnswers) {
       const { data: profile } = await ctx.supabase
         .from(ctx.table('profiles'))
-        .select('onboarding_answers, what_brought_you, emotional_why, life_stage, income_type, relationship_status')
+        .select('onboarding_answers, what_brought_you, emotional_why, life_stage, income_type, relationship_status, language')
         .eq('id', ctx.userId)
         .single();
 
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
       lifeStage = profile.life_stage;
       incomeType = profile.income_type;
       relationshipStatus = profile.relationship_status;
+      userLanguage = profile.language || null;
     }
 
     if (!readableAnswers) {
@@ -84,6 +86,7 @@ export async function POST(request: NextRequest) {
       lifeStage,
       incomeType,
       relationshipStatus,
+      language: userLanguage,
     };
 
     timing('input ready');

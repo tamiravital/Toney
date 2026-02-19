@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         .order('created_at', { ascending: true }),
       ctx.supabase
         .from(ctx.table('profiles'))
-        .select('tension_type, stage_of_change, understanding')
+        .select('tension_type, stage_of_change, understanding, language')
         .eq('id', ctx.userId)
         .single(),
       // Cards from this session (for notes)
@@ -134,6 +134,8 @@ export async function POST(request: NextRequest) {
       .map((w) => ({ text: w.text }));
 
     // ── Immediate: Generate session notes (Haiku, ~3-5s) ──
+    const userLanguage = profileResult.data?.language || undefined;
+
     const { notes: sessionNotes, usage: notesUsage } = await generateSessionNotes({
       messages,
       tensionType,
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
       previousHeadline,
       activeFocusAreas,
       sessionWins: sessionWins.length > 0 ? sessionWins : undefined,
+      language: userLanguage,
     });
 
     // Save notes LLM usage
@@ -181,6 +184,7 @@ export async function POST(request: NextRequest) {
         headline: sessionNotes.headline,
         keyMoments: sessionNotes.keyMoments,
       },
+      language: userLanguage,
     });
 
     // ── Response (immediate) ──

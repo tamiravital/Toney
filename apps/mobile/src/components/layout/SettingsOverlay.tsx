@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, RotateCcw, LogOut, Check, Palette } from 'lucide-react';
+import { X, RotateCcw, LogOut, Check, Palette, Globe } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
 import { LearningStyle } from '@toney/types';
@@ -68,6 +68,21 @@ const relationshipOptions = [
   { value: 'shared_finances', label: 'Shared finances' },
 ];
 
+const languageOptions = [
+  { value: '', label: 'Auto-detect' },
+  { value: 'en', label: 'English' },
+  { value: 'he', label: 'עברית (Hebrew)' },
+  { value: 'es', label: 'Español (Spanish)' },
+  { value: 'fr', label: 'Français (French)' },
+  { value: 'de', label: 'Deutsch (German)' },
+  { value: 'pt', label: 'Português (Portuguese)' },
+  { value: 'ar', label: 'العربية (Arabic)' },
+  { value: 'ru', label: 'Русский (Russian)' },
+  { value: 'zh', label: '中文 (Chinese)' },
+  { value: 'ja', label: '日本語 (Japanese)' },
+  { value: 'ko', label: '한국어 (Korean)' },
+];
+
 export default function SettingsOverlay() {
   const { identifiedTension, styleProfile, setStyleProfile, setShowSettings, displayName, setDisplayName, signOut, retakeQuiz } = useToney();
   const [localStyle, setLocalStyle] = useState({ ...styleProfile });
@@ -76,6 +91,7 @@ export default function SettingsOverlay() {
   const [incomeType, setIncomeType] = useState('');
   const [relationship, setRelationship] = useState('');
   const [emotionalWhy, setEmotionalWhy] = useState('');
+  const [language, setLanguage] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeOption>(getStoredTheme);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
@@ -96,7 +112,7 @@ export default function SettingsOverlay() {
         if (!user) return;
         const { data } = await supabase
           .from('profiles')
-          .select('life_stage, income_type, relationship_status, emotional_why')
+          .select('life_stage, income_type, relationship_status, emotional_why, language')
           .eq('id', user.id)
           .single();
         if (data) {
@@ -104,6 +120,7 @@ export default function SettingsOverlay() {
           if (data.income_type) setIncomeType(data.income_type);
           if (data.relationship_status) setRelationship(data.relationship_status);
           if (data.emotional_why) setEmotionalWhy(data.emotional_why);
+          if (data.language) setLanguage(data.language);
         }
       } catch {
         // Silent fail
@@ -143,6 +160,7 @@ export default function SettingsOverlay() {
             income_type: incomeType || null,
             relationship_status: relationship || null,
             emotional_why: emotionalWhy || null,
+            language: language || null,
           }).eq('id', user.id);
         }
       } catch {
@@ -241,6 +259,26 @@ export default function SettingsOverlay() {
             placeholder="Your name"
             className="w-full p-3 rounded-xl border-2 border-default text-sm text-primary placeholder-muted focus:border-accent focus:outline-none bg-card"
           />
+        </div>
+
+        {/* Coach Language */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Globe className="w-4 h-4 text-accent" />
+            <h3 className="font-semibold text-primary text-sm">Coach Language</h3>
+          </div>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="w-full p-3 rounded-xl border-2 border-default text-sm text-primary focus:border-accent focus:outline-none bg-card appearance-none"
+          >
+            {languageOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted mt-1.5">Toney will respond in this language</p>
         </div>
 
         {/* Tension info */}

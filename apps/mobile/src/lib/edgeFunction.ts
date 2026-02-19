@@ -14,6 +14,7 @@ interface CloseSessionPayload {
   userId: string;
   isSimMode?: boolean;
   sessionNotes?: { headline?: string; keyMoments?: string[] };
+  language?: string;
 }
 
 /**

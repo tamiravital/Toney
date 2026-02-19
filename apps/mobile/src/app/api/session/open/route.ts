@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
         sessionId: previousSessionId,
         userId: ctx.userId,
         isSimMode: ctx.isSimMode,
+        language: profile.language || undefined,
       });
 
       timing('deferred close fired');

@@ -143,6 +143,8 @@ export interface BuildSystemPromptInput {
   recentWins?: Win[];
   /** Active focus areas */
   activeFocusAreas?: FocusArea[];
+  /** User's language preference (null = not yet detected, 'en' = English, 'he' = Hebrew, etc.) */
+  language?: string | null;
 }
 
 /**
@@ -186,6 +188,17 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
   }
 
   sections.push(`COACHING STYLE:\n${formatCoachingStyle(profile)}`);
+
+  // Language instruction — Block 2 only (per-user, not in cached Block 1)
+  const lang = input.language;
+  if (lang && lang !== 'en') {
+    // Language is set and non-English — instruct Coach to respond in that language
+    sections.push(`LANGUAGE:\nRespond entirely in ${lang}. All output — including text inside [CARD]...[/CARD], [FOCUS]...[/FOCUS], [WIN]...[/WIN] markers — must be in ${lang}. The marker tags themselves (CARD, FOCUS, WIN, LANG) stay in English. Only your words should be in ${lang}.`);
+  } else if (lang === null || lang === undefined) {
+    // Language not yet determined — detect from user's first message
+    sections.push(`LANGUAGE DETECTION:\nDetect which language the user writes in. Respond in that same language. At the very end of your response (after all other content), append [LANG:xx] where xx is the ISO 639-1 language code (e.g., en, he, es, fr, ar). If they write in English, append [LANG:en]. This tag is only needed until their language is detected — it will not be shown to the user.`);
+  }
+  // When lang === 'en', no language section needed — English is the default
 
   const briefingContent = sections.join('\n\n');
 
@@ -231,6 +244,7 @@ export function buildSessionOpeningBlock(isFirstSession?: boolean, totalWinCount
 Your opening should:
 - Make them feel seen — reference their goals (what would feel like progress) and their tension naturally, as understanding not diagnosis
 - Be warm and human. They just took a step by downloading this — acknowledge that without being cheesy
+- Mention naturally that they can talk to you in whatever language feels most natural to them. Keep it brief and casual — one line woven into your greeting, not a formal announcement.
 - Ask one specific, open question that invites them to share what's on their mind right now
 - Keep it to 3-4 sentences. Conversational, not clinical.
 

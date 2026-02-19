@@ -354,6 +354,7 @@ Deno.serve(async (req: Request) => {
     userId: string;
     isSimMode?: boolean;
     sessionNotes?: { headline?: string; keyMoments?: string[] };
+    language?: string;
   };
   try {
     body = await req.json();
@@ -400,7 +401,7 @@ Deno.serve(async (req: Request) => {
       supabase
         .from(t("profiles"))
         .select(
-          "tension_type, stage_of_change, understanding",
+          "tension_type, stage_of_change, understanding, language",
         )
         .eq("id", userId)
         .single(),
@@ -491,6 +492,7 @@ Deno.serve(async (req: Request) => {
     const hypothesis = sessionResult.data?.hypothesis || null;
     const currentStageOfChange = profileResult.data?.stage_of_change || null;
     const currentUnderstanding = profileResult.data?.understanding || null;
+    const userLanguage = body.language || profileResult.data?.language || null;
 
     const savedCards = (sessionCardsResult.data || []).map(
       (c: { title: string; category: string }) => ({
@@ -574,6 +576,12 @@ Deno.serve(async (req: Request) => {
       if (sessionWins.length > 0) {
         contextLines.push(
           `Wins earned this session: ${sessionWins.map((w) => `"${w.text}"`).join(", ")}`,
+        );
+      }
+      // Language instruction for user-facing notes
+      if (userLanguage && userLanguage !== "en") {
+        contextLines.push(
+          `Language: Write ALL session notes in ${userLanguage}. headline, narrative, keyMoments, milestone — everything user-facing must be in ${userLanguage}.`,
         );
       }
 
@@ -732,6 +740,13 @@ Deno.serve(async (req: Request) => {
     if (previousSuggestionTitles.length > 0) {
       sections.push(
         `## Previous Suggestion Titles (avoid repeating these exactly)\n${previousSuggestionTitles.map((t) => `- "${t}"`).join("\n")}`,
+      );
+    }
+
+    // Language instruction for user-facing outputs
+    if (userLanguage && userLanguage !== "en") {
+      sections.push(
+        `## Language\nThis user's language is ${userLanguage}. ALL user-facing text must be in ${userLanguage}:\n- suggestions: title, teaser, opening_message\n- focus_area_reflections: reflection text\n- snippet\n\nThe understanding narrative STAYS IN ENGLISH (it is clinical, Coach-facing). Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`,
       );
     }
 
