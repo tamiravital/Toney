@@ -239,7 +239,7 @@ Profile auto-created on signup via DB trigger.
 - `user_knowledge` table still exists but is only written to by focus card reflections — the main coaching pipeline uses `profiles.understanding`
 - **No coaching_briefings table** — dropped in migration 027. Coaching plan fields live on `sessions` row.
 - **Chat route builds fresh system prompt** every message from session row + profile + DB context (no stale briefing).
-- **Vercel Hobby plan default timeout is 10s** — any LLM-calling route MUST export `maxDuration = 60`.
+- **Vercel Pro plan** — `maxDuration = 300` on close/open routes (evolution runs in `after()`). Simple LLM routes use `maxDuration = 60`.
 - **Supabase rejects entire update on unknown column** — if ANY column in `.update({...})` doesn't exist, the ENTIRE update silently fails.
 - **Supabase + dynamic table names** — `supabase.from(dynamicString)` returns `never`. `SimContext.supabase` typed as `any`.
 

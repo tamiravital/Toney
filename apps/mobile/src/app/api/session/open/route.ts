@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { planSessionStep } from '@toney/coaching';
 import { Profile, FocusArea, SessionSuggestion } from '@toney/types';
-import { fireCloseSessionPipeline } from '@/lib/edgeFunction';
 import { saveUsage } from '@/lib/saveUsage';
+import { runClosePipeline } from '@/lib/closePipeline';
 
-// Vercel Hobby hard limit is 10s — keep critical path under 5s.
-export const maxDuration = 60;
+// Vercel Pro: 300s timeout. Open path is fast (~2s). Deferred close runs in after() (~30s).
+export const maxDuration = 300;
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -21,7 +21,7 @@ const LANGUAGE_REMINDER = "Oh, and feel free to talk to me in whatever language 
  * FAST PATH (~2s): auth → 1 query (profile) → plan → create row → stream
  * Client sends: suggestion, focusAreas, isFirstSession (already in state).
  * Server queries only the profile (for understanding + coaching style).
- * BACKGROUND: deferred close + legacy seed fire-and-forget to Edge Function.
+ * BACKGROUND: deferred close runs in after() (full pipeline: notes + evolution).
  */
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
@@ -66,25 +66,30 @@ export async function POST(request: NextRequest) {
     const isFirstSession = clientIsFirstSession ?? true;
     const activeFocusAreas = (clientFocusAreas || []) as FocusArea[];
 
-    // ── INSTANT deferred close: just mark completed, full pipeline in Edge Function ──
+    // ── Deferred close: mark completed now, full pipeline in after() ──
     if (previousSessionId) {
+      const prevSessId = previousSessionId; // Capture for closure
       const { error: markErr } = await ctx.supabase.from(ctx.table('sessions')).update({
         session_status: 'completed',
         evolution_status: 'pending',
         narrative_snapshot: profile.understanding || null,
-      }).eq('id', previousSessionId)
+      }).eq('id', prevSessId)
         .eq('session_status', 'active'); // Only mark if still active (idempotent)
       if (markErr) console.error('Deferred close mark failed:', markErr);
 
-      // Fire-and-forget: Edge Function handles the full close pipeline
-      fireCloseSessionPipeline({
-        sessionId: previousSessionId,
-        userId: ctx.userId,
-        isSimMode: ctx.isSimMode,
-        language: profile.language || undefined,
+      // Full close pipeline runs in after() — loads data, generates notes, evolves understanding
+      after(async () => {
+        try {
+          await runClosePipeline(ctx, prevSessId, profile, '[open/after]');
+        } catch (err) {
+          console.error('[open/after] Deferred close failed:', err);
+          try {
+            await ctx.supabase.from(ctx.table('sessions')).update({ evolution_status: 'failed' }).eq('id', prevSessId);
+          } catch { /* last resort */ }
+        }
       });
 
-      timing('deferred close fired');
+      timing('deferred close scheduled');
     }
 
     // Resolve focusAreaId for check-in suggestions
