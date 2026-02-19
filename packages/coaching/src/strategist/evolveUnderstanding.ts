@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { SessionSuggestion, RewireCard, Win, FocusArea, LlmUsage } from '@toney/types';
 import { GROWTH_LENSES_DESCRIPTION } from './constants';
 import { formatToolkit, formatWins, formatFocusAreas } from './formatters';
+import { isoToLanguageName } from '../prompts/systemPromptBuilder';
 
 function extractUsage(response: { usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null } }): LlmUsage {
   return {
@@ -304,7 +305,8 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
   // Language instruction for user-facing outputs
   const lang = input.language;
   if (lang && lang !== 'en') {
-    sections.push(`## Language\nThis user's language is ${lang}. ALL user-facing text must be in ${lang}:\n- suggestions: title, teaser, opening_message\n- focus_area_reflections: reflection text\n- snippet\n\nThe understanding narrative STAYS IN ENGLISH (it is clinical, Coach-facing). Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`);
+    const langName = isoToLanguageName(lang);
+    sections.push(`## Language\nThis user's language is ${langName}. ALL user-facing text must be in ${langName}:\n- suggestions: title, teaser, opening_message\n- focus_area_reflections: reflection text\n- snippet\n\nThe understanding narrative STAYS IN ENGLISH (it is clinical, Coach-facing). Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`);
   }
 
   const userMessage = `Evolve the understanding based on this session, then generate session suggestions.\n\n${sections.join('\n\n')}`;
@@ -470,7 +472,7 @@ export async function evolveUnderstanding(input: EvolveUnderstandingInput): Prom
 
   // Language instruction for snippet
   const langSection = (input.language && input.language !== 'en')
-    ? `\n\n## Language\nThis user's language is ${input.language}. The snippet must be in ${input.language}. The understanding narrative stays in English.`
+    ? `\n\n## Language\nThis user's language is ${isoToLanguageName(input.language)}. The snippet must be in ${isoToLanguageName(input.language)}. The understanding narrative stays in English.`
     : '';
 
   const userMessage = `Evolve the understanding based on this session.\n\n${currentSection}${contextSection}\n\n## Session Transcript\n\n${transcript}${langSection}`;
@@ -630,7 +632,8 @@ export async function seedUnderstanding(input: SeedUnderstandingInput): Promise<
 
   // Language instruction for snippet
   if (input.language && input.language !== 'en') {
-    sections.push(`## Language\nThis user's language is ${input.language}. The snippet must be in ${input.language}. The understanding narrative stays in English.`);
+    const langName = isoToLanguageName(input.language);
+    sections.push(`## Language\nThis user's language is ${langName}. The snippet must be in ${langName}. The understanding narrative stays in English.`);
   }
 
   const userMessage = `Form an initial understanding of this person from their onboarding data.\n\n${sections.join('\n\n')}`;
@@ -677,7 +680,8 @@ export async function seedSuggestions(input: SeedUnderstandingInput): Promise<Se
 
   // Language instruction for user-facing suggestion text
   if (input.language && input.language !== 'en') {
-    sections.push(`## Language\nThis user's language is ${input.language}. All user-facing text must be in ${input.language}: title, teaser, opening_message. Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`);
+    const langName = isoToLanguageName(input.language);
+    sections.push(`## Language\nThis user's language is ${langName}. All user-facing text must be in ${langName}: title, teaser, opening_message. Coaching plan fields (hypothesis, leveragePoint, curiosities, openingDirection) stay in English.`);
   }
 
   const userMessage = `Generate initial session suggestions for this person based on their onboarding data.\n\n${sections.join('\n\n')}`;

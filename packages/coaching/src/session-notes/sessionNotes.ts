@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SessionNotesOutput, LlmUsage } from '@toney/types';
+import { isoToLanguageName } from '../prompts/systemPromptBuilder';
 
 // ────────────────────────────────────────────
 // Session Notes Generator — User-facing session recap
@@ -91,7 +92,8 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<{ 
 
   // Language instruction for user-facing notes
   if (input.language && input.language !== 'en') {
-    contextLines.push(`Language: Write ALL session notes in ${input.language}. headline, narrative, keyMoments, milestone — everything user-facing must be in ${input.language}.`);
+    const langName = isoToLanguageName(input.language);
+    contextLines.push(`Language: Write ALL session notes in ${langName}. headline, narrative, keyMoments, milestone — everything user-facing must be in ${langName}.`);
   }
 
   const contextSection = contextLines.length > 0

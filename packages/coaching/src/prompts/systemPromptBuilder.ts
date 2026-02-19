@@ -126,6 +126,17 @@ Your briefing follows this message. Here's how to use it:
 // System prompt from Strategist briefing
 // ────────────────────────────────────────────
 
+/** Map ISO 639-1 code to full language name so prompts say "Hebrew" not "he". */
+export function isoToLanguageName(code: string): string {
+  const map: Record<string, string> = {
+    he: 'Hebrew', ar: 'Arabic', es: 'Spanish', fr: 'French', de: 'German',
+    pt: 'Portuguese', ru: 'Russian', ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
+    it: 'Italian', nl: 'Dutch', tr: 'Turkish', pl: 'Polish', sv: 'Swedish',
+    hi: 'Hindi', th: 'Thai', vi: 'Vietnamese', uk: 'Ukrainian', ro: 'Romanian',
+  };
+  return map[code] || code;
+}
+
 export interface BuildSystemPromptInput {
   /** The understanding narrative from profiles.understanding */
   understanding: string;
@@ -191,9 +202,10 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
 
   // Language instruction — Block 2 only (per-user, not in cached Block 1)
   const lang = input.language;
-  if (lang && lang !== 'en') {
+  const langName = lang ? isoToLanguageName(lang) : null;
+  if (lang && lang !== 'en' && langName) {
     // Language is set and non-English — instruct Coach to respond in that language
-    sections.push(`LANGUAGE:\nRespond entirely in ${lang}. All output — including text inside [CARD]...[/CARD], [FOCUS]...[/FOCUS], [WIN]...[/WIN] markers — must be in ${lang}. The marker tags themselves (CARD, FOCUS, WIN, LANG) stay in English. Only your words should be in ${lang}.`);
+    sections.push(`LANGUAGE:\nRespond entirely in ${langName}. All output — including text inside [CARD]...[/CARD], [FOCUS]...[/FOCUS], [WIN]...[/WIN] markers — must be in ${langName}. The marker tags themselves (CARD, FOCUS, WIN, LANG) stay in English. Only your words should be in ${langName}.`);
   } else if (lang === null || lang === undefined) {
     // Language not yet determined — detect from user's first message
     sections.push(`LANGUAGE DETECTION:\nDetect which language the user writes in. Respond in that same language. At the very end of your response (after all other content), append [LANG:xx] where xx is the ISO 639-1 language code (e.g., en, he, es, fr, ar). If they write in English, append [LANG:en]. This tag is only needed until their language is detected — it will not be shown to the user.`);
