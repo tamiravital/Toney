@@ -362,13 +362,13 @@ export default function ChatScreen() {
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className="w-10/12">
                         {msg.role === 'user' ? (
-                          <div className="p-4 rounded-2xl text-sm leading-relaxed rounded-br-md whitespace-pre-line" style={{ backgroundColor: 'var(--chat-user-bg)', color: 'var(--chat-user-text)' }}>
+                          <div dir="auto" className="p-4 rounded-2xl text-sm leading-relaxed rounded-br-md whitespace-pre-line" style={{ backgroundColor: 'var(--chat-user-bg)', color: 'var(--chat-user-text)' }}>
                             {msg.content}
                           </div>
                         ) : (
-                          <div className="p-4 rounded-2xl text-sm leading-relaxed rounded-bl-md" style={{ backgroundColor: 'var(--chat-coach-bg)', color: 'var(--chat-coach-text)' }}>
+                          <div dir="auto" className="p-4 rounded-2xl text-sm leading-relaxed rounded-bl-md" style={{ backgroundColor: 'var(--chat-coach-bg)', color: 'var(--chat-coach-text)' }}>
                             <ReactMarkdown components={markdownComponents}>
-                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1')}
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1').replace(/\s*\[LANG:[a-z]{2,5}\]\s*$/, '')}
                             </ReactMarkdown>
                           </div>
                         )}
@@ -452,11 +452,12 @@ export default function ChatScreen() {
                           return (
                             <div
                               key={`${msg.id}-text-${i}`}
+                              dir="auto"
                               className="p-4 rounded-2xl text-sm leading-relaxed rounded-bl-md"
                               style={{ backgroundColor: 'var(--chat-coach-bg)', color: 'var(--chat-coach-text)' }}
                             >
                               <ReactMarkdown components={markdownComponents}>
-                                {segment.content}
+                                {segment.content.replace(/\s*\[LANG:[a-z]{2,5}\]\s*$/, '')}
                               </ReactMarkdown>
                             </div>
                           );

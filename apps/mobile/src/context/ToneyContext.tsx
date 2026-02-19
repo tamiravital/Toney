@@ -898,11 +898,11 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                       )
                     );
                   } else if (event.type === 'done') {
-                    // Update message ID to the saved DB ID
+                    // Update message ID to the saved DB ID + strip [LANG:xx] tag if present
                     setMessages(prev =>
                       prev.map(m =>
                         m.id === streamingMsgId
-                          ? { ...m, id: event.id }
+                          ? { ...m, id: event.id, content: m.content.replace(/\s*\[LANG:[a-z]{2,5}\]\s*$/, '').trim() }
                           : m
                       )
                     );
