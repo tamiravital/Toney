@@ -77,7 +77,7 @@ export default function SessionHistoryOverlay({ onDismiss, onSelectSession }: Se
                         <FileText className="w-4 h-4 text-accent" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-primary leading-snug mb-1">{session.headline}</p>
+                        <p dir="auto" className="text-sm font-medium text-primary leading-snug mb-1">{session.headline}</p>
                         <div className="flex items-center gap-2 text-xs text-muted">
                           <span>{session.dayLabel}</span>
                           {cardsCount > 0 && (

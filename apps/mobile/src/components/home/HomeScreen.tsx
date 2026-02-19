@@ -124,8 +124,8 @@ export default function HomeScreen() {
                   onClick={() => setActiveFocusArea(area)}
                   className="w-full rounded-2xl p-4 text-left bg-card border border-subtle hover:border-accent-subtle transition-colors"
                 >
-                  <p className="text-sm font-semibold text-accent-text leading-snug theme-heading">{area.text}</p>
-                  <p className="text-sm leading-snug mt-1 line-clamp-2 text-secondary theme-body">
+                  <p dir="auto" className="text-sm font-semibold text-accent-text leading-snug theme-heading">{area.text}</p>
+                  <p dir="auto" className="text-sm leading-snug mt-1 line-clamp-2 text-secondary theme-body">
                     {latestReflection
                       ? latestReflection.text
                       : <span className="italic text-muted">Toney will share observations after your next session.</span>}
@@ -175,7 +175,7 @@ export default function HomeScreen() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-primary font-medium leading-snug truncate">
+            <p dir="auto" className="text-sm text-primary font-medium leading-snug truncate">
               {latestWin ? latestWin.text : 'Your first win is waiting'}
             </p>
             <p className="text-xs text-success font-semibold mt-0.5">{momentumLabel}</p>
@@ -192,7 +192,7 @@ export default function HomeScreen() {
             className="flex-1 rounded-2xl p-4 text-left bg-card border border-subtle"
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider mb-2 text-muted theme-body">Last Session</p>
-            <p className="text-sm font-medium leading-snug line-clamp-3 text-primary theme-body">
+            <p dir="auto" className="text-sm font-medium leading-snug line-clamp-3 text-primary theme-body">
               {lastNotes.headline}
             </p>
             <p className="text-xs mt-1.5 text-muted theme-body">{daysAgoText}</p>
@@ -209,7 +209,7 @@ export default function HomeScreen() {
           <p className="text-[10px] text-accent font-semibold uppercase tracking-wider mb-2 theme-body">
             What Toney Sees
           </p>
-          <p className="text-sm text-secondary leading-snug line-clamp-4 theme-body">
+          <p dir="auto" className="text-sm text-secondary leading-snug line-clamp-4 theme-body">
             {understandingSnippet || 'Will appear after your first session.'}
           </p>
         </div>
@@ -224,7 +224,7 @@ export default function HomeScreen() {
           Latest Card
         </p>
         {latestCard ? (
-          <p className="text-sm leading-snug line-clamp-2 font-medium text-primary theme-body">
+          <p dir="auto" className="text-sm leading-snug line-clamp-2 font-medium text-primary theme-body">
             {latestCard.title || latestCard.content.substring(0, 80)}
           </p>
         ) : (

@@ -202,7 +202,7 @@ export default function JourneyScreen() {
                       className="rounded-2xl px-4 py-3 text-left w-full active:scale-[0.98] transition-transform"
                       style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}
                     >
-                      <p className="text-[14px] font-semibold text-primary leading-snug">{node.text}</p>
+                      <p dir="auto" className="text-[14px] font-semibold text-primary leading-snug">{node.text}</p>
                       {node.focusAreaText && (
                         <p className="text-[11px] mt-1 font-medium" style={{ color: style.tag }}>{node.focusAreaText}</p>
                       )}
@@ -213,7 +213,7 @@ export default function JourneyScreen() {
                       className="rounded-2xl px-4 py-3"
                       style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}
                     >
-                      <p className={`text-[14px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-muted' : 'text-primary'}`}>
+                      <p dir="auto" className={`text-[14px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-muted' : 'text-primary'}`}>
                         {node.text}
                       </p>
                       <p className="text-[11px] text-muted mt-1.5">{formatNodeDate(node.date)}</p>

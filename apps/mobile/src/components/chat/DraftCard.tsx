@@ -60,10 +60,11 @@ export default function DraftCard({ category, initialTitle, initialContent, onSa
 
         {/* Title */}
         {isSaved ? (
-          <h4 className="font-bold text-primary text-sm mb-2">{title}</h4>
+          <h4 dir="auto" className="font-bold text-primary text-sm mb-2">{title}</h4>
         ) : (
           <input
             type="text"
+            dir="auto"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className={`w-full font-bold text-primary text-sm mb-2 bg-card/60 rounded-lg px-2.5 py-1.5 border ${meta.borderColor} outline-none focus:ring-1 focus:ring-focus`}
@@ -73,9 +74,10 @@ export default function DraftCard({ category, initialTitle, initialContent, onSa
 
         {/* Content */}
         {isSaved ? (
-          <p className="text-sm text-secondary leading-relaxed whitespace-pre-line">{content}</p>
+          <p dir="auto" className="text-sm text-secondary leading-relaxed whitespace-pre-line">{content}</p>
         ) : (
           <textarea
+            dir="auto"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={3}

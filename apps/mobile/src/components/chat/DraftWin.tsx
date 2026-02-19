@@ -50,7 +50,7 @@ export default function DraftWin({ text, onAutoSave }: DraftWinProps) {
             />
             <span className="text-xs font-semibold uppercase tracking-wider text-success">Win</span>
           </div>
-          <p className="text-sm text-primary font-medium leading-relaxed">{text}</p>
+          <p dir="auto" className="text-sm text-primary font-medium leading-relaxed">{text}</p>
           <div
             className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success transition-opacity duration-500"
             style={{ opacity: showFooter ? 1 : 0 }}

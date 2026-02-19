@@ -53,12 +53,12 @@ export default function SessionNotesView({ notes, onDismiss, onContinue, session
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 hide-scrollbar">
           {/* Headline */}
-          <p className="text-base font-semibold text-primary leading-snug">
+          <p dir="auto" className="text-base font-semibold text-primary leading-snug">
             {notes.headline}
           </p>
 
           {/* Narrative */}
-          <div>
+          <div dir="auto">
             <ReactMarkdown components={notesMarkdown}>
               {notes.narrative}
             </ReactMarkdown>
@@ -73,7 +73,7 @@ export default function SessionNotesView({ notes, onDismiss, onContinue, session
               </div>
               <ul className="space-y-2">
                 {notes.keyMoments.map((moment, i) => (
-                  <li key={i} className="text-sm text-amber-text leading-relaxed">
+                  <li key={i} dir="auto" className="text-sm text-amber-text leading-relaxed">
                     {moment}
                   </li>
                 ))}
@@ -94,7 +94,7 @@ export default function SessionNotesView({ notes, onDismiss, onContinue, session
                     <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${categoryColors[card.category] || 'bg-input text-secondary'}`}>
                       {card.category.replace('_', ' ')}
                     </span>
-                    <span className="text-sm text-primary font-medium">{card.title}</span>
+                    <span dir="auto" className="text-sm text-primary font-medium">{card.title}</span>
                   </div>
                 ))}
               </div>

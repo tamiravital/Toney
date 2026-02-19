@@ -36,10 +36,11 @@ export default function DraftFocusArea({ initialTitle, initialDescription, onSav
 
         {/* Title */}
         {isSaved ? (
-          <h4 className="font-bold text-primary text-sm mb-1">{title}</h4>
+          <h4 dir="auto" className="font-bold text-primary text-sm mb-1">{title}</h4>
         ) : (
           <input
             type="text"
+            dir="auto"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full font-bold text-primary text-sm mb-1 bg-card/60 rounded-lg px-2.5 py-1.5 border border-accent-subtle outline-none focus:ring-1 focus:ring-focus"
@@ -49,7 +50,7 @@ export default function DraftFocusArea({ initialTitle, initialDescription, onSav
 
         {/* Description (read-only context, not saved) */}
         {initialDescription && (
-          <p className="text-sm text-secondary leading-relaxed mb-3">{initialDescription}</p>
+          <p dir="auto" className="text-sm text-secondary leading-relaxed mb-3">{initialDescription}</p>
         )}
 
         {/* Save button */}

@@ -46,7 +46,7 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-default flex-shrink-0">
           <div className="flex-1 min-w-0 mr-3">
-            <h3 className="text-lg font-bold text-primary leading-snug">{focusArea.text}</h3>
+            <h3 dir="auto" className="text-lg font-bold text-primary leading-snug">{focusArea.text}</h3>
             <p className="text-xs text-muted mt-1">{sourceLabel} · {ageText}</p>
           </div>
           <button
@@ -76,7 +76,7 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
                     <div key={w.id || i} className="flex items-start gap-2.5 bg-success-light rounded-xl px-3 py-2.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-400 mt-1.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-primary leading-relaxed">{w.text}</p>
+                        <p dir="auto" className="text-sm text-primary leading-relaxed">{w.text}</p>
                         {dateLabel && <p className="text-xs text-muted mt-0.5">{dateLabel}</p>}
                       </div>
                     </div>
@@ -108,7 +108,7 @@ export default function FocusAreaGrowthView({ focusArea, wins, onDismiss, onArch
                   {/* Content */}
                   <div className="flex-1 pb-2">
                     <p className="text-xs font-medium text-muted mb-1">{formatDate(ref.date)}</p>
-                    <p className="text-sm text-secondary leading-relaxed">{ref.text}</p>
+                    <p dir="auto" className="text-sm text-secondary leading-relaxed">{ref.text}</p>
                   </div>
                 </div>
               ))}

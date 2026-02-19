@@ -4,6 +4,11 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Manual Vercel env vars over Marketplace integration (2026-02-19)
+Researched the Vercel Marketplace Supabase integration for automatic env var syncing. Decided against it for this project. Reasons: (1) Public Alpha with known bugs — multiple reports of env vars not syncing correctly for preview deployments. (2) Can't link existing Supabase projects — integration is designed for new projects created through Vercel. (3) Transfers billing to Vercel and makes Supabase org management Vercel-only. (4) Integration-managed env vars become read-only in Vercel dashboard, blocking custom vars like `CLOSE_PIPELINE_SECRET`, `SIM_SECRET`, `ANTHROPIC_API_KEY`. (5) Manual env vars take 5 minutes and give full control. The Marketplace integration is better suited for greenfield projects. Supabase Branching (automatic per-PR preview databases) is the more compelling feature but also has rough edges — deferred for revisit in a few months.
+
+---
+
 ### LLM usage: raw tokens in DB, cost at query time (2026-02-18)
 Store raw token counts (input, output, cache_creation, cache_read) in `llm_usage` table. Calculate dollar costs at display time using a pricing constants file. This avoids needing to update historical rows when Anthropic changes pricing. The pricing file (`apps/admin/src/lib/pricing.ts`) is the single source of truth. Trade-off: cost calculation happens on every admin page load, but the math is trivial (multiply + sum).
 

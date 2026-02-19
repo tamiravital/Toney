@@ -18,7 +18,7 @@ import {
 function CardContent({ category, content }: { category: string; content: string }) {
   const wrapperClass = categoryWrapperStyles[category] || '';
   return (
-    <div className={wrapperClass}>
+    <div dir="auto" className={wrapperClass}>
       <ReactMarkdown components={mdComponents}>{content}</ReactMarkdown>
     </div>
   );
@@ -47,7 +47,7 @@ function CardFront({ insight }: { insight: CategorizedInsight }) {
       </span>
 
       {/* Title */}
-      <h2 className="text-xl font-bold text-primary text-center leading-snug px-4">
+      <h2 dir="auto" className="text-xl font-bold text-primary text-center leading-snug px-4">
         {displayTitle}
       </h2>
 
@@ -102,7 +102,7 @@ function CardBack({ insight, onEdit, onDelete, onRevisit }: {
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto px-5 pb-3 hide-scrollbar min-h-0">
         {insight.title && (
-          <p className="text-base font-semibold text-primary mb-2">{insight.title}</p>
+          <p dir="auto" className="text-base font-semibold text-primary mb-2">{insight.title}</p>
         )}
         <CardContent category={insight.category} content={insight.content} />
       </div>

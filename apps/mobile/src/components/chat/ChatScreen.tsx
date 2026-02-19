@@ -260,10 +260,10 @@ export default function ChatScreen() {
                   </span>
                   <ArrowRight className="w-4 h-4 text-white opacity-60" />
                 </div>
-                <p className="text-base font-semibold text-white leading-snug mb-1.5">
+                <p dir="auto" className="text-base font-semibold text-white leading-snug mb-1.5">
                   {sortedSuggestions[0].title}
                 </p>
-                <p className="text-sm text-white/75 leading-relaxed line-clamp-2">
+                <p dir="auto" className="text-sm text-white/75 leading-relaxed line-clamp-2">
                   {sortedSuggestions[0].teaser}
                 </p>
               </button>
@@ -279,8 +279,8 @@ export default function ChatScreen() {
                       className="w-full bg-card border border-default rounded-xl px-4 py-3.5 text-left hover:border-accent-subtle transition-all flex items-center gap-3"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-primary leading-snug">{s.title}</p>
-                        <p className="text-xs text-muted mt-0.5">{s.teaser}</p>
+                        <p dir="auto" className="text-sm font-medium text-primary leading-snug">{s.title}</p>
+                        <p dir="auto" className="text-xs text-muted mt-0.5">{s.teaser}</p>
                       </div>
                       <span className="flex-shrink-0 text-[11px] font-semibold" style={{ color: `var(${cfg.cssVar})` }}>
                         {cfg.label}
@@ -413,7 +413,7 @@ export default function ChatScreen() {
                 <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className="w-10/12">
                     {msg.role === 'user' ? (
-                      <div className="p-4 rounded-2xl text-sm leading-relaxed rounded-br-md whitespace-pre-line" style={{ backgroundColor: 'var(--chat-user-bg)', color: 'var(--chat-user-text)' }}>
+                      <div dir="auto" className="p-4 rounded-2xl text-sm leading-relaxed rounded-br-md whitespace-pre-line" style={{ backgroundColor: 'var(--chat-user-bg)', color: 'var(--chat-user-text)' }}>
                         {msg.content}
                       </div>
                     ) : (
