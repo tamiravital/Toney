@@ -4,6 +4,20 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### LLM usage: raw tokens in DB, cost at query time (2026-02-18)
+Store raw token counts (input, output, cache_creation, cache_read) in `llm_usage` table. Calculate dollar costs at display time using a pricing constants file. This avoids needing to update historical rows when Anthropic changes pricing. The pricing file (`apps/admin/src/lib/pricing.ts`) is the single source of truth. Trade-off: cost calculation happens on every admin page load, but the math is trivial (multiply + sum).
+
+### Usage table: RLS disabled, not policy-based (2026-02-18)
+`llm_usage` is internal telemetry — users never read or write it directly. API routes insert on behalf of authenticated users using the anon key client. Admin reads via service role. Enabling RLS with INSERT policies caused silent failures that were hard to debug (Supabase returns null error when RLS blocks an insert). Disabled RLS entirely since this table has no user-facing access path.
+
+### Stream usage: finalMessage event, not await (2026-02-18)
+For streaming routes (chat, session open), capturing token usage requires the final message from the Anthropic SDK. Two options: (1) `await stream.finalMessage()` inside the `'end'` handler — risky because the stream may already be consumed. (2) `stream.on('finalMessage', ...)` event registered before the ReadableStream constructor — fires synchronously before `'end'`, guaranteed to have the usage data. Chose (2) after (1) failed silently in production. The captured usage is stored in a closure variable and saved in the `'end'` handler.
+
+### Coaching functions return usage, don't save it (2026-02-18)
+`packages/coaching` functions are pure — no DB, no framework. Rather than injecting Supabase into them, each function returns `usage: LlmUsage` alongside its existing output. The calling route/Edge Function saves to DB. This preserves the package's purity and keeps the save logic close to the context (table name, user ID, sim mode).
+
+---
+
 ### Two Supabase projects for PROD/DEV, not one project with branching (2026-02-17)
 Needed environment isolation as real users approach. Options considered: (1) Supabase branching (built-in, but limited to Pro plan and doesn't fully isolate Edge Functions/secrets). (2) Single project with prefixed tables (sim_ pattern already used for simulator, but complex and error-prone for a full second environment). (3) Two completely separate Supabase projects — PROD and DEV. Chose (3): complete isolation, independent Edge Function deployments, independent secrets, independent auth users. Cost: must run migrations on both, must deploy Edge Function to both, prompts must be synced manually (already a constraint from Edge Function architecture). The `edgeFunction.ts` helper already reads `NEXT_PUBLIC_SUPABASE_URL` dynamically, so it auto-routes to the correct project's Edge Function without code changes.
 

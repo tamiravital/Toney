@@ -1,5 +1,17 @@
 # Toney — Changelog
 
+## 2026-02-18 — Admin Visibility Pass + LLM Usage Tracking
+- **LLM usage tracking**: New `llm_usage` table (migration 035) captures token counts at all 9 LLM call sites — chat, session open, session close notes, session close evolve, seed understanding, seed suggestions, admin session split, and Edge Function calls. `saveUsage()` helper for Vercel routes, direct inserts in Edge Function.
+- **Admin: Usage tab**: Per-user LLM cost breakdown — stat cards (total cost, total calls, input/output tokens), per-call-site table, per-session cost table, cache hit rate.
+- **Admin: Overview cost cards**: Total LLM Cost and Total API Calls on the main dashboard.
+- **Admin: Focus Areas tab**: New tab showing user's focus areas with reflections, observation/win counts, and status.
+- **Admin: Suggestions tab**: New tab showing latest and historical session suggestions with coaching plan details.
+- **Admin: Expanded session detail**: Session detail page now shows narrative snapshot, coaching plan fields, and evolution status.
+- **Admin: Richer metrics**: Metrics tab now shows wins count, cards count, active focus areas, sessions with evolution, and engagement rates.
+- **`LlmUsage` type**: New shared type in `@toney/types` for token usage data.
+- **Coaching functions return usage**: `generateSessionNotes()`, `evolveAndSuggest()`, `seedUnderstanding()`, `seedSuggestions()` all return `{ ...output, usage: LlmUsage }`.
+- **Pricing constants**: `apps/admin/src/lib/pricing.ts` with Sonnet and Haiku per-token costs. Cost calculated at query time.
+
 ## 2026-02-17 — PROD/DEV Environment Split
 - **Two Supabase projects**: PROD (`vnuhtgkqkrlsbtukjgwp`) and DEV (`dpunrkhndskfmtdajesi`) for complete environment isolation. All 34 migrations applied to DEV via `supabase db push`. Edge Function deployed to both projects with secrets configured.
 - **Git branching**: `dev` branch created from `main`. Development happens on `dev`, production deploys from `main`. Vercel auto-deploys: push to `main` → Production deployment (PROD Supabase), push to `dev` → Preview deployment (DEV Supabase).
