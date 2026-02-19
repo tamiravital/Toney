@@ -202,13 +202,12 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
 
   // Language instruction — Block 2 only (per-user, not in cached Block 1)
   const lang = input.language;
-  const langName = lang ? isoToLanguageName(lang) : null;
-  if (lang && lang !== 'en' && langName) {
-    // Language is set and non-English — instruct Coach to respond in that language
-    sections.push(`LANGUAGE:\nRespond entirely in ${langName}. All output — including text inside [CARD]...[/CARD], [FOCUS]...[/FOCUS], [WIN]...[/WIN] markers — must be in ${langName}. The marker tags themselves (CARD, FOCUS, WIN, LANG) stay in English. Only your words should be in ${langName}.`);
+  if (lang && lang !== 'en') {
+    // Language is set and non-English — minimal note. Let Sonnet mirror naturally from conversation.
+    sections.push(`LANGUAGE:\nThis user communicates in ${isoToLanguageName(lang)}. Respond in their language. Marker tags ([CARD], [FOCUS], [WIN], [LANG]) stay in English.`);
   } else if (lang === null || lang === undefined) {
     // Language not yet determined — detect from user's first message
-    sections.push(`LANGUAGE DETECTION:\nDetect which language the user writes in. Respond in that same language. At the very end of your response (after all other content), append [LANG:xx] where xx is the ISO 639-1 language code (e.g., en, he, es, fr, ar). If they write in English, append [LANG:en]. This tag is only needed until their language is detected — it will not be shown to the user.`);
+    sections.push(`LANGUAGE DETECTION:\nRespond in whatever language the user writes in. At the very end of your response (after all other content), append [LANG:xx] where xx is the ISO 639-1 language code (e.g., en, he, es, fr, ar). If they write in English, append [LANG:en]. This tag is only needed until their language is detected — it will not be shown to the user.`);
   }
   // When lang === 'en', no language section needed — English is the default
 
