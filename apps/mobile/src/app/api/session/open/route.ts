@@ -92,6 +92,31 @@ export async function POST(request: NextRequest) {
       timing('deferred close scheduled');
     }
 
+    // ── Guard: close any stale active sessions (prevents duplicates from multi-tab, race conditions) ──
+    const { data: staleActiveSessions } = await ctx.supabase
+      .from(ctx.table('sessions'))
+      .select('id')
+      .eq('user_id', ctx.userId)
+      .eq('session_status', 'active');
+
+    if (staleActiveSessions && staleActiveSessions.length > 0) {
+      const staleIds = staleActiveSessions.map((s: { id: string }) => s.id);
+      // Exclude the previousSessionId we just marked completed above
+      const toClose = previousSessionId
+        ? staleIds.filter((id: string) => id !== previousSessionId)
+        : staleIds;
+
+      if (toClose.length > 0) {
+        console.warn(`[session/open] Closing ${toClose.length} stale active session(s): ${toClose.map((id: string) => id.slice(0, 8)).join(', ')}`);
+        await ctx.supabase
+          .from(ctx.table('sessions'))
+          .update({ session_status: 'completed' })
+          .in('id', toClose);
+      }
+    }
+
+    timing('stale sessions check');
+
     // Resolve focusAreaId for check-in suggestions
     let focusAreaId: string | null = null;
     if (selectedSuggestion?.focusAreaText && selectedSuggestion.length === 'standing' && activeFocusAreas.length > 0) {
