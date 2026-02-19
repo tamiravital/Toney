@@ -1213,6 +1213,15 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
                       : m
                   )
                 );
+              } else if (event.type === 'language_reminder') {
+                setMessages(prev => [...prev, {
+                  id: event.id || `msg-lang-${Date.now()}`,
+                  role: 'assistant',
+                  content: event.content,
+                  timestamp: new Date(),
+                  canSave: false,
+                  saved: false,
+                }]);
               } else if (event.type === 'error') {
                 setLoadingChat(false);
                 setMessages(prev => [...prev, {
@@ -1236,14 +1245,25 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
           sessionIdRef.current = data.sessionId;
         }
         if (data.message) {
-          setMessages(prev => [...prev, {
+          const newMessages: Array<{ id: string; role: 'assistant'; content: string; timestamp: Date; canSave: boolean; saved: boolean }> = [{
             id: data.message.id || `msg-${Date.now()}`,
             role: 'assistant',
             content: data.message.content,
             timestamp: new Date(data.message.timestamp || Date.now()),
             canSave: false,
             saved: false,
-          }]);
+          }];
+          if (data.languageReminder) {
+            newMessages.push({
+              id: data.languageReminder.id || `msg-lang-${Date.now()}`,
+              role: 'assistant',
+              content: data.languageReminder.content,
+              timestamp: new Date(data.languageReminder.timestamp || Date.now()),
+              canSave: false,
+              saved: false,
+            });
+          }
+          setMessages(prev => [...prev, ...newMessages]);
         }
         setLoadingChat(false);
       }

@@ -244,7 +244,6 @@ export function buildSessionOpeningBlock(isFirstSession?: boolean, totalWinCount
 Your opening should:
 - Make them feel seen — reference their goals (what would feel like progress) and their tension naturally, as understanding not diagnosis
 - Be warm and human. They just took a step by downloading this — acknowledge that without being cheesy
-- Mention naturally that they can talk to you in whatever language feels most natural to them. Keep it brief and casual — one line woven into your greeting, not a formal announcement.
 - Ask one specific, open question that invites them to share what's on their mind right now
 - Keep it to 3-4 sentences. Conversational, not clinical.
 

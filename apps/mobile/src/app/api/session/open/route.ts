@@ -13,6 +13,8 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const LANGUAGE_REMINDER = "Oh, and feel free to talk to me in whatever language feels most comfortable 🙂";
+
 /**
  * POST /api/session/open
  *
@@ -152,6 +154,28 @@ export async function POST(request: NextRequest) {
         savedMessageId = savedMsg?.id || null;
       } catch { /* non-critical */ }
 
+      // Language reminder — first session only, one-time
+      let languageReminder: { id: string; content: string; timestamp: string } | undefined;
+      if (isFirstSession) {
+        try {
+          const { data: reminderMsg } = await ctx.supabase
+            .from(ctx.table('messages'))
+            .insert({
+              session_id: sessionId,
+              user_id: ctx.userId,
+              role: 'assistant',
+              content: LANGUAGE_REMINDER,
+            })
+            .select('id')
+            .single();
+          languageReminder = {
+            id: reminderMsg?.id || `msg-${Date.now()}-lang`,
+            content: LANGUAGE_REMINDER,
+            timestamp: new Date().toISOString(),
+          };
+        } catch { /* non-critical */ }
+      }
+
       timing('done');
       return NextResponse.json({
         sessionId,
@@ -160,6 +184,7 @@ export async function POST(request: NextRequest) {
           content: selectedSuggestion.openingMessage,
           timestamp: new Date().toISOString(),
         },
+        ...(languageReminder && { languageReminder }),
       });
     }
 
@@ -234,6 +259,28 @@ export async function POST(request: NextRequest) {
 
           timing('done');
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
+
+          // Language reminder — first session only, one-time
+          if (isFirstSession) {
+            try {
+              const { data: reminderMsg } = await ctx.supabase
+                .from(ctx.table('messages'))
+                .insert({
+                  session_id: sessionId,
+                  user_id: ctx.userId,
+                  role: 'assistant',
+                  content: LANGUAGE_REMINDER,
+                })
+                .select('id')
+                .single();
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                type: 'language_reminder',
+                id: reminderMsg?.id || `msg-${Date.now()}-lang`,
+                content: LANGUAGE_REMINDER,
+              })}\n\n`));
+            } catch { /* non-critical */ }
+          }
+
           controller.close();
         });
 
