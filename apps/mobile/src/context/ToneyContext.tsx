@@ -1311,20 +1311,6 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (sessionOpenedRef.current) return;
     if (sessionStatus !== 'active') return;
 
-    // ── 12h boundary check FIRST — must run before suggestions/messages guards ──
-    // If >12h has passed since last message, always close the old session and open a new one,
-    // regardless of whether suggestions exist or messages are loaded.
-    if (currentSessionId && lastMessageTimestampRef.current) {
-      const lastTime = new Date(lastMessageTimestampRef.current).getTime();
-      const hoursSince = (Date.now() - lastTime) / (1000 * 60 * 60);
-
-      if (hoursSince >= 12) {
-        sessionOpenedRef.current = true;
-        openSession(currentSessionId); // deferred close + new session
-        return;
-      }
-    }
-
     // If suggestions exist, show picker first — don't auto-open unless user tapped a suggestion
     if (suggestions.length > 0 && !userInitiatedSessionRef.current) return;
 
@@ -1332,6 +1318,17 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     if (messages.length > 0) return;
 
     sessionOpenedRef.current = true;
+
+    // 12h boundary — close old session and open new one
+    if (currentSessionId && lastMessageTimestampRef.current) {
+      const lastTime = new Date(lastMessageTimestampRef.current).getTime();
+      const hoursSince = (Date.now() - lastTime) / (1000 * 60 * 60);
+
+      if (hoursSince >= 12) {
+        openSession(currentSessionId); // deferred close + new session
+        return;
+      }
+    }
 
     // No existing session or no timestamp — open fresh
     if (currentSessionId) {
