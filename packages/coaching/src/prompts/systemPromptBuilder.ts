@@ -200,16 +200,13 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
 
   sections.push(`COACHING STYLE:\n${formatCoachingStyle(profile)}`);
 
-  // Language instruction — Block 2 only (per-user, not in cached Block 1)
+  // Language — let Sonnet mirror naturally from conversation history.
+  // Only add instructions when language hasn't been detected yet (need the [LANG:xx] tag).
   const lang = input.language;
-  if (lang && lang !== 'en') {
-    // Language is set and non-English — minimal note. Let Sonnet mirror naturally from conversation.
-    sections.push(`LANGUAGE:\nThis user communicates in ${isoToLanguageName(lang)}. Respond in their language. Marker tags ([CARD], [FOCUS], [WIN], [LANG]) stay in English.`);
-  } else if (lang === null || lang === undefined) {
+  if (lang === null || lang === undefined) {
     // Language not yet determined — detect from user's first message
     sections.push(`LANGUAGE DETECTION:\nRespond in whatever language the user writes in. At the very end of your response (after all other content), append [LANG:xx] where xx is the ISO 639-1 language code (e.g., en, he, es, fr, ar). If they write in English, append [LANG:en]. This tag is only needed until their language is detected — it will not be shown to the user.`);
   }
-  // When lang === 'en', no language section needed — English is the default
 
   const briefingContent = sections.join('\n\n');
 
