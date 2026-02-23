@@ -48,7 +48,7 @@ function formatNodeDate(date: Date): string {
 
 export default function JourneyScreen() {
   const {
-    wins, focusAreas, handleLogWin, setActiveTab,
+    wins, focusAreas, handleLogWin, setActiveTab, openSession, currentSessionId,
   } = useToney();
 
   const { days, loading, milestones } = useSessionHistory();
@@ -299,9 +299,11 @@ export default function JourneyScreen() {
           sessionDate={viewingNotes.date}
           onDismiss={() => setViewingNotes(null)}
           onContinue={() => {
+            const notes = viewingNotes.notes;
             setViewingNotes(null);
             setActiveTab('chat');
             window.location.hash = '#chat';
+            openSession(currentSessionId || undefined, false, undefined, notes);
           }}
         />
       )}
