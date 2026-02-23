@@ -28,6 +28,7 @@ export interface Profile {
   understanding?: string | null;
   understanding_snippet?: string | null;
   language?: string | null;
+  is_beta?: boolean;
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

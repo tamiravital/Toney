@@ -93,6 +93,7 @@ export default function SettingsOverlay() {
   const [emotionalWhy, setEmotionalWhy] = useState('');
   const [language, setLanguage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isBeta, setIsBeta] = useState(false);
   const [activeTheme, setActiveTheme] = useState<ThemeOption>(getStoredTheme);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
 
@@ -112,7 +113,7 @@ export default function SettingsOverlay() {
         if (!user) return;
         const { data } = await supabase
           .from('profiles')
-          .select('life_stage, income_type, relationship_status, emotional_why, language')
+          .select('life_stage, income_type, relationship_status, emotional_why, language, is_beta')
           .eq('id', user.id)
           .single();
         if (data) {
@@ -121,6 +122,7 @@ export default function SettingsOverlay() {
           if (data.relationship_status) setRelationship(data.relationship_status);
           if (data.emotional_why) setEmotionalWhy(data.emotional_why);
           if (data.language) setLanguage(data.language);
+          if (data.is_beta) setIsBeta(true);
         }
       } catch {
         // Silent fail
@@ -189,7 +191,8 @@ export default function SettingsOverlay() {
           </button>
         </div>
 
-        {/* Theme */}
+        {/* Theme — only visible to beta users (set via admin) */}
+        {isBeta && (
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
             <Palette className="w-4 h-4 text-accent" />
@@ -248,6 +251,7 @@ export default function SettingsOverlay() {
             </button>
           )}
         </div>
+        )}
 
         {/* Display name */}
         <div className="mb-6">
