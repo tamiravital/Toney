@@ -87,6 +87,7 @@ export function planSessionStep(input: OpenSessionInput): PlanSessionOutput {
     rewireCards: (input.rewireCards || undefined) as RewireCard[] | undefined,
     recentWins: (input.recentWins || undefined) as Win[] | undefined,
     activeFocusAreas: (input.activeFocusAreas || undefined) as FocusArea[] | undefined,
+    language: input.profile.language,
   });
 
   // Resolve focus area check-in: standing suggestion with focusAreaText

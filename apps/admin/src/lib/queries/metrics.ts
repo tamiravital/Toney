@@ -10,6 +10,10 @@ export interface UserEngagementMetrics {
   firstSession: string | null;
   lastSession: string | null;
   sessions: SessionMetric[];
+  totalWins: number;
+  totalCards: number;
+  activeFocusAreas: number;
+  evolvedSessions: number;
 }
 
 export interface SessionMetric {
@@ -27,19 +31,44 @@ export interface SessionMetric {
 export async function getUserEngagementMetrics(userId: string): Promise<UserEngagementMetrics> {
   const supabase = createAdminClient();
 
-  // Get all sessions for this user
-  const { data: sessions } = await supabase
-    .from('sessions')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  // Get all messages for this user
-  const { data: messages } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true });
+  // Get all data in parallel
+  const [
+    { data: sessions },
+    { data: messages },
+    { count: winsCount },
+    { count: cardsCount },
+    { count: focusAreasCount },
+    { count: evolvedCount },
+  ] = await Promise.all([
+    supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('wins')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    supabase
+      .from('rewire_cards')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId),
+    supabase
+      .from('focus_areas')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .is('archived_at', null),
+    supabase
+      .from('sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('evolution_status', 'completed'),
+  ]);
 
   const sessList = sessions ?? [];
   const msgs = messages ?? [];
@@ -82,5 +111,9 @@ export async function getUserEngagementMetrics(userId: string): Promise<UserEnga
     firstSession: sessList.length > 0 ? sessList[sessList.length - 1].created_at : null,
     lastSession: sessList.length > 0 ? sessList[0].created_at : null,
     sessions: sessionMetrics,
+    totalWins: winsCount ?? 0,
+    totalCards: cardsCount ?? 0,
+    activeFocusAreas: focusAreasCount ?? 0,
+    evolvedSessions: evolvedCount ?? 0,
   };
 }

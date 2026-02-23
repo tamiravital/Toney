@@ -19,7 +19,7 @@ export default function MessageReaction({ messageId, onReact }: MessageReactionP
 
   if (reacted) {
     return (
-      <span className="text-xs text-gray-400 ml-2">
+      <span className="text-xs text-muted ml-2">
         {reacted === 'up' ? '\u{1F44D}' : '\u{1F44E}'}
       </span>
     );
@@ -29,13 +29,13 @@ export default function MessageReaction({ messageId, onReact }: MessageReactionP
     <span className="inline-flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
       <button
         onClick={() => handleReact('up')}
-        className="text-gray-300 hover:text-green-500 transition-colors"
+        className="text-muted hover:text-success transition-colors"
       >
         <ThumbsUp className="w-3 h-3" />
       </button>
       <button
         onClick={() => handleReact('down')}
-        className="text-gray-300 hover:text-red-400 transition-colors"
+        className="text-muted hover:text-danger transition-colors"
       >
         <ThumbsDown className="w-3 h-3" />
       </button>

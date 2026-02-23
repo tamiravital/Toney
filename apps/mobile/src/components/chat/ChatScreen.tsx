@@ -120,11 +120,11 @@ function parseMessageContent(raw: string): MessageSegment[] {
   return segments;
 }
 
-const lengthConfig: Record<SuggestionLength, { label: string; color: string }> = {
-  quick: { label: '~3 min', color: 'text-emerald-600' },
-  medium: { label: '~8 min', color: 'text-blue-600' },
-  deep: { label: '~12 min', color: 'text-purple-600' },
-  standing: { label: 'Anytime', color: 'text-amber-600' },
+const lengthConfig: Record<SuggestionLength, { label: string; cssVar: string }> = {
+  quick: { label: '~3 min', cssVar: '--length-quick' },
+  medium: { label: '~8 min', cssVar: '--length-medium' },
+  deep: { label: '~12 min', cssVar: '--length-deep' },
+  standing: { label: 'Anytime', cssVar: '--length-standing' },
 };
 
 const lengthOrder: SuggestionLength[] = ['standing', 'quick', 'medium', 'deep'];
@@ -232,13 +232,13 @@ export default function ChatScreen() {
   if (seedingInProgress) {
     return (
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
-          <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
+        <div className="px-4 py-3 border-b border-default backdrop-blur-lg z-10" style={{ backgroundColor: 'var(--nav-bg)' }}>
+          <h1 className="text-lg font-bold text-primary">Chat with Toney</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
-          <p className="text-base font-medium text-gray-900 mb-1">Getting to know you...</p>
-          <p className="text-sm text-gray-400 text-center">Preparing your first coaching sessions</p>
+          <div className="w-8 h-8 border-2 border-accent-subtle rounded-full animate-spin mb-4" style={{ borderTopColor: 'var(--color-accent)' }} />
+          <p className="text-base font-medium text-primary mb-1">Getting to know you...</p>
+          <p className="text-sm text-muted text-center">Preparing your first coaching sessions</p>
         </div>
       </div>
     );
@@ -248,8 +248,8 @@ export default function ChatScreen() {
   if (showSuggestionPicker && !isTyping) {
     return (
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10">
-          <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
+        <div className="px-4 py-3 border-b border-default backdrop-blur-lg z-10" style={{ backgroundColor: 'var(--nav-bg)' }}>
+          <h1 className="text-lg font-bold text-primary">Chat with Toney</h1>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 hide-scrollbar">
@@ -258,19 +258,20 @@ export default function ChatScreen() {
               {/* Featured suggestion */}
               <button
                 onClick={() => handleSuggestionTap(0)}
-                className="w-full bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-left mb-3"
+                className="w-full rounded-2xl p-5 text-left mb-3"
+                style={{ background: 'linear-gradient(135deg, var(--featured-from), var(--featured-to))' }}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
                     <Clock className="w-3 h-3" />
                     {lengthConfig[sortedSuggestions[0].length].label}
                   </span>
-                  <ArrowRight className="w-4 h-4 text-white/60" />
+                  <ArrowRight className="w-4 h-4 text-white opacity-60" />
                 </div>
-                <p className="text-base font-semibold text-white leading-snug mb-1.5">
+                <p dir="auto" className="text-base font-semibold text-white leading-snug mb-1.5">
                   {sortedSuggestions[0].title}
                 </p>
-                <p className="text-sm text-white/75 leading-relaxed line-clamp-2">
+                <p dir="auto" className="text-sm text-white/75 leading-relaxed line-clamp-2">
                   {sortedSuggestions[0].teaser}
                 </p>
               </button>
@@ -283,13 +284,13 @@ export default function ChatScreen() {
                     <button
                       key={i + 1}
                       onClick={() => handleSuggestionTap(i + 1)}
-                      className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3.5 text-left hover:border-indigo-200 transition-all flex items-center gap-3"
+                      className="w-full bg-card border border-default rounded-xl px-4 py-3.5 text-left hover:border-accent-subtle transition-all flex items-center gap-3"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 leading-snug">{s.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{s.teaser}</p>
+                        <p dir="auto" className="text-sm font-medium text-primary leading-snug">{s.title}</p>
+                        <p dir="auto" className="text-xs text-muted mt-0.5">{s.teaser}</p>
                       </div>
-                      <span className={`flex-shrink-0 text-[11px] font-semibold ${cfg.color}`}>
+                      <span className="flex-shrink-0 text-[11px] font-semibold" style={{ color: `var(${cfg.cssVar})` }}>
                         {cfg.label}
                       </span>
                     </button>
@@ -300,7 +301,7 @@ export default function ChatScreen() {
               {/* Free conversation */}
               <button
                 onClick={handleFreeChat}
-                className="w-full mt-4 py-3 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-all flex items-center justify-center gap-1.5"
+                className="w-full mt-4 py-3 text-sm font-medium text-accent transition-all flex items-center justify-center gap-1.5"
               >
                 <MessageCircle className="w-4 h-4" />
                 Or just start talking
@@ -308,10 +309,10 @@ export default function ChatScreen() {
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-16">
-              <p className="text-gray-500 text-sm mb-4">What&apos;s on your mind with money?</p>
+              <p className="text-secondary text-sm mb-4">What&apos;s on your mind with money?</p>
               <button
                 onClick={handleFreeChat}
-                className="bg-indigo-600 text-white py-3 px-6 rounded-2xl text-sm font-semibold hover:bg-indigo-700 transition-all"
+                className="bg-btn-primary text-btn-primary-text py-3 px-6 rounded-2xl text-sm font-semibold hover:bg-btn-primary-hover transition-all"
               >
                 Start a Session
               </button>
@@ -325,19 +326,19 @@ export default function ChatScreen() {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Header with session control button */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-lg z-10 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">Chat with Toney</h1>
+      <div className="px-4 py-3 border-b border-default backdrop-blur-lg z-10 flex items-center justify-between" style={{ backgroundColor: 'var(--nav-bg)' }}>
+        <h1 className="text-lg font-bold text-primary">Chat with Toney</h1>
         {showEndSession && (
           <button
             onClick={endSession}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-accent bg-accent-light hover:bg-accent-subtle active:scale-95 transition-all"
           >
             <Square className="w-3 h-3" />
             End Session
           </button>
         )}
         {sessionStatus === 'ending' && (
-          <span className="text-xs text-gray-400 font-medium">Wrapping up...</span>
+          <span className="text-xs text-muted font-medium">Wrapping up...</span>
         )}
       </div>
 
@@ -350,8 +351,8 @@ export default function ChatScreen() {
               onClick={handleTogglePrevious}
               className="flex items-center gap-3 py-2 my-2 w-full"
             >
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400 font-medium whitespace-nowrap flex items-center gap-1">
+              <div className="flex-1 h-px bg-default" />
+              <span className="text-xs text-muted font-medium whitespace-nowrap flex items-center gap-1">
                 {previousSessionCollapsed ? (
                   <ChevronRight className="w-3 h-3" />
                 ) : (
@@ -359,7 +360,7 @@ export default function ChatScreen() {
                 )}
                 Previous session
               </span>
-              <div className="flex-1 h-px bg-gray-200" />
+              <div className="flex-1 h-px bg-default" />
             </button>
 
             {!previousSessionCollapsed && (
@@ -369,13 +370,13 @@ export default function ChatScreen() {
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className="w-10/12">
                         {msg.role === 'user' ? (
-                          <div className="p-4 rounded-2xl text-sm leading-relaxed bg-indigo-600 text-white rounded-br-md whitespace-pre-line">
+                          <div dir="auto" className="p-4 rounded-2xl text-sm leading-relaxed rounded-br-md whitespace-pre-line" style={{ backgroundColor: 'var(--chat-user-bg)', color: 'var(--chat-user-text)' }}>
                             {msg.content}
                           </div>
                         ) : (
-                          <div className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md">
+                          <div dir="auto" className="p-4 rounded-2xl text-sm leading-relaxed rounded-bl-md" style={{ backgroundColor: 'var(--chat-coach-bg)', color: 'var(--chat-coach-text)' }}>
                             <ReactMarkdown components={markdownComponents}>
-                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1').replace(/\[(REFRAME|TRUTH|PLAN|PRACTICE|CONVERSATION_KIT)\]([\s\S]*?)\[\/\1\]/gi, '$2')}
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1').replace(/\[(REFRAME|TRUTH|PLAN|PRACTICE|CONVERSATION_KIT)\]([\s\S]*?)\[\/\1\]/gi, '$2').replace(/\s*\[LANG:[a-z]{2,5}\]\s*$/, '')}
                             </ReactMarkdown>
                           </div>
                         )}
@@ -394,12 +395,12 @@ export default function ChatScreen() {
             <div className="text-center">
               <div className="flex justify-center mb-3">
                 <div className="flex gap-1.5">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '300ms' }} />
                 </div>
               </div>
-              <p className="text-sm text-gray-400">Toney is preparing your session...</p>
+              <p className="text-sm text-muted">Toney is preparing your session...</p>
             </div>
           </div>
         )}
@@ -409,18 +410,18 @@ export default function ChatScreen() {
             {msg.role === 'divider' ? (
               /* ── Session divider ── */
               <div className="flex items-center gap-3 py-2 my-2">
-                <div className="flex-1 h-px bg-gray-200" />
-                <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+                <div className="flex-1 h-px bg-default" />
+                <span className="text-xs text-muted font-medium whitespace-nowrap">
                   Session ended — {msg.content}
                 </span>
-                <div className="flex-1 h-px bg-gray-200" />
+                <div className="flex-1 h-px bg-default" />
               </div>
             ) : (
               <>
                 <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className="w-10/12">
                     {msg.role === 'user' ? (
-                      <div className="p-4 rounded-2xl text-sm leading-relaxed bg-indigo-600 text-white rounded-br-md whitespace-pre-line">
+                      <div dir="auto" className="p-4 rounded-2xl text-sm leading-relaxed rounded-br-md whitespace-pre-line" style={{ backgroundColor: 'var(--chat-user-bg)', color: 'var(--chat-user-text)' }}>
                         {msg.content}
                       </div>
                     ) : (
@@ -459,10 +460,12 @@ export default function ChatScreen() {
                           return (
                             <div
                               key={`${msg.id}-text-${i}`}
-                              className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md"
+                              dir="auto"
+                              className="p-4 rounded-2xl text-sm leading-relaxed rounded-bl-md"
+                              style={{ backgroundColor: 'var(--chat-coach-bg)', color: 'var(--chat-coach-text)' }}
                             >
                               <ReactMarkdown components={markdownComponents}>
-                                {segment.content}
+                                {segment.content.replace(/\s*\[LANG:[a-z]{2,5}\]\s*$/, '')}
                               </ReactMarkdown>
                             </div>
                           );
@@ -478,7 +481,10 @@ export default function ChatScreen() {
                       <button
                         key={i}
                         onClick={() => handleSendMessage(reply)}
-                        className="text-xs bg-white border border-indigo-200 text-indigo-700 px-3 py-2 rounded-full hover:bg-indigo-50 hover:border-indigo-300 transition-all active:scale-95"
+                        className="text-xs px-3 py-2 rounded-full transition-all active:scale-95"
+                        style={{ backgroundColor: 'var(--chip-bg)', color: 'var(--chip-text)', border: '1px solid var(--chip-border)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--chip-hover)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--chip-bg)'; }}
                       >
                         {reply}
                       </button>
@@ -492,11 +498,11 @@ export default function ChatScreen() {
 
         {(isTyping || (loadingChat && messages.length > 0)) && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="rounded-2xl rounded-bl-md px-4 py-3" style={{ backgroundColor: 'var(--chat-coach-bg)' }}>
               <div className="flex gap-1.5">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '150ms' }} />
+                <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot)', animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -506,9 +512,9 @@ export default function ChatScreen() {
 
       {/* Input or post-session footer */}
       {!isSessionEnded ? (
-        <div className="flex-shrink-0 px-4 py-3 border-t border-gray-100 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex-shrink-0 px-4 py-3 border-t border-default bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="flex items-end gap-2">
-            <div className="flex-1 bg-gray-100 rounded-2xl px-4 py-3">
+            <div className="flex-1 bg-input rounded-2xl px-4 py-3">
               <textarea
                 ref={inputRef}
                 value={chatInput}
@@ -531,7 +537,7 @@ export default function ChatScreen() {
                 }}
                 placeholder="What's on your mind?"
                 rows={1}
-                className="w-full bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none outline-none"
+                className="w-full bg-transparent text-sm text-primary placeholder-muted resize-none outline-none"
                 style={{ height: 20, maxHeight: 120 }}
               />
             </div>
@@ -556,8 +562,8 @@ export default function ChatScreen() {
               disabled={!chatInput.trim()}
               className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
                 chatInput.trim()
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
-                  : 'bg-gray-100 text-gray-300'
+                  ? 'bg-btn-primary text-btn-primary-text hover:bg-btn-primary-hover active:scale-95'
+                  : 'bg-btn-disabled text-btn-disabled-text'
               }`}
             >
               <Send className="w-4 h-4" />
@@ -565,11 +571,11 @@ export default function ChatScreen() {
           </div>
         </div>
       ) : (
-        <div className="flex-shrink-0 px-4 py-3 border-t border-gray-100 bg-gray-50 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex-shrink-0 px-4 py-3 border-t border-default bg-surface pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-center">
             <button
               onClick={() => setActiveTab('home')}
-              className="text-sm text-gray-400 hover:text-gray-600 transition-all"
+              className="text-sm text-muted hover:text-secondary transition-all"
             >
               Home
             </button>

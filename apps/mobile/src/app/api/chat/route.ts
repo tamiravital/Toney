@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { buildSystemPrompt } from '@toney/coaching';
 import { SystemPromptBlock, Profile, RewireCard, Win, FocusArea } from '@toney/types';
+import { saveUsage } from '@/lib/saveUsage';
 
 // Sonnet streaming response
 export const maxDuration = 60;
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
       rewireCards: (cardsResult.data || []) as RewireCard[],
       recentWins: (winsResult.data || []) as Win[],
       activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
+      language: profile.language,
     });
 
     const historyRows = historyResult.data;
@@ -129,6 +131,19 @@ export async function POST(request: NextRequest) {
       messages: messageHistory,
     });
 
+    // Track usage from the final message event
+    let capturedUsage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | null = null;
+    stream.on('finalMessage', (msg) => {
+      if (msg.usage) {
+        capturedUsage = {
+          input_tokens: msg.usage.input_tokens,
+          output_tokens: msg.usage.output_tokens,
+          cache_creation_input_tokens: (msg.usage as unknown as Record<string, unknown>).cache_creation_input_tokens as number | undefined,
+          cache_read_input_tokens: (msg.usage as unknown as Record<string, unknown>).cache_read_input_tokens as number | undefined,
+        };
+      }
+    });
+
     // Create a ReadableStream that forwards SSE chunks to the client
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
@@ -141,6 +156,23 @@ export async function POST(request: NextRequest) {
         });
 
         stream.on('end', async () => {
+          // ── Language auto-detection: strip [LANG:xx] tag and save to profile ──
+          if (profile.language === null || profile.language === undefined) {
+            const langMatch = fullContent.match(/\[LANG:([a-z]{2,5})\]\s*$/);
+            if (langMatch) {
+              const detectedLang = langMatch[1];
+              // Strip the tag from the content before saving
+              fullContent = fullContent.replace(/\s*\[LANG:[a-z]{2,5}]\s*$/, '').trim();
+              // Save detected language to profile (fire-and-forget)
+              try {
+                await ctx.supabase
+                  .from(ctx.table('profiles'))
+                  .update({ language: detectedLang })
+                  .eq('id', ctx.userId);
+              } catch { /* non-critical */ }
+            }
+          }
+
           // Save assistant message to DB
           let savedMessageId: string | null = null;
           try {
@@ -156,6 +188,17 @@ export async function POST(request: NextRequest) {
               .single();
             savedMessageId = data?.id || null;
           } catch { /* non-critical */ }
+
+          // Save LLM usage
+          if (capturedUsage) {
+            await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+              userId: ctx.userId,
+              sessionId,
+              callSite: 'chat',
+              model: 'claude-sonnet-4-5-20250929',
+              usage: capturedUsage,
+            });
+          }
 
           // Send final message with saved ID
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));

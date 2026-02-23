@@ -30,9 +30,9 @@ export default function DraftWin({ text, onAutoSave }: DraftWinProps) {
   }, []);
 
   return (
-    <div className="relative rounded-2xl border border-green-200 bg-green-50 overflow-hidden my-2">
+    <div className="relative rounded-2xl border border-success-border bg-success-light overflow-hidden my-2">
       {/* Green accent line — always visible, acts as the "seed" before expansion */}
-      <div className="h-1 bg-green-500" />
+      <div className="h-1 bg-success" />
 
       {/* Expandable content */}
       <div
@@ -46,13 +46,13 @@ export default function DraftWin({ text, onAutoSave }: DraftWinProps) {
         <div className="p-4">
           <div className="flex items-center gap-1.5 mb-2">
             <Trophy
-              className={`w-3.5 h-3.5 text-green-600 ${expanded ? 'animate-win-trophy' : ''}`}
+              className={`w-3.5 h-3.5 text-success ${expanded ? 'animate-win-trophy' : ''}`}
             />
-            <span className="text-xs font-semibold uppercase tracking-wider text-green-600">Win</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-success">Win</span>
           </div>
-          <p className="text-sm text-gray-900 font-medium leading-relaxed">{text}</p>
+          <p dir="auto" className="text-sm text-primary font-medium leading-relaxed">{text}</p>
           <div
-            className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-green-600 transition-opacity duration-500"
+            className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success transition-opacity duration-500"
             style={{ opacity: showFooter ? 1 : 0 }}
           >
             <Trophy className="w-3 h-3" />

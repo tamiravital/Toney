@@ -128,6 +128,17 @@ Your briefing follows this message. Here's how to use it:
 // System prompt from Strategist briefing
 // ────────────────────────────────────────────
 
+/** Map ISO 639-1 code to full language name so prompts say "Hebrew" not "he". */
+export function isoToLanguageName(code: string): string {
+  const map: Record<string, string> = {
+    he: 'Hebrew', ar: 'Arabic', es: 'Spanish', fr: 'French', de: 'German',
+    pt: 'Portuguese', ru: 'Russian', ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
+    it: 'Italian', nl: 'Dutch', tr: 'Turkish', pl: 'Polish', sv: 'Swedish',
+    hi: 'Hindi', th: 'Thai', vi: 'Vietnamese', uk: 'Ukrainian', ro: 'Romanian',
+  };
+  return map[code] || code;
+}
+
 export interface BuildSystemPromptInput {
   /** The understanding narrative from profiles.understanding */
   understanding: string;
@@ -145,6 +156,8 @@ export interface BuildSystemPromptInput {
   recentWins?: Win[];
   /** Active focus areas */
   activeFocusAreas?: FocusArea[];
+  /** User's language preference (null = not yet detected, 'en' = English, 'he' = Hebrew, etc.) */
+  language?: string | null;
 }
 
 /**
@@ -188,6 +201,14 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
   }
 
   sections.push(`COACHING STYLE:\n${formatCoachingStyle(profile)}`);
+
+  // Language — let Sonnet mirror naturally from conversation history.
+  // Only add instructions when language hasn't been detected yet (need the [LANG:xx] tag).
+  const lang = input.language;
+  if (lang === null || lang === undefined) {
+    // Language not yet determined — detect from user's first message
+    sections.push(`LANGUAGE DETECTION:\nRespond in whatever language the user writes in. At the very end of your response (after all other content), append [LANG:xx] where xx is the ISO 639-1 language code (e.g., en, he, es, fr, ar). If they write in English, append [LANG:en]. This tag is only needed until their language is detected — it will not be shown to the user.`);
+  }
 
   const briefingContent = sections.join('\n\n');
 

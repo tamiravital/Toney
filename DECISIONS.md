@@ -4,6 +4,25 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Manual Vercel env vars over Marketplace integration (2026-02-19)
+Researched the Vercel Marketplace Supabase integration for automatic env var syncing. Decided against it for this project. Reasons: (1) Public Alpha with known bugs — multiple reports of env vars not syncing correctly for preview deployments. (2) Can't link existing Supabase projects — integration is designed for new projects created through Vercel. (3) Transfers billing to Vercel and makes Supabase org management Vercel-only. (4) Integration-managed env vars become read-only in Vercel dashboard, blocking custom vars like `CLOSE_PIPELINE_SECRET`, `SIM_SECRET`, `ANTHROPIC_API_KEY`. (5) Manual env vars take 5 minutes and give full control. The Marketplace integration is better suited for greenfield projects. Supabase Branching (automatic per-PR preview databases) is the more compelling feature but also has rough edges — deferred for revisit in a few months.
+
+---
+
+### LLM usage: raw tokens in DB, cost at query time (2026-02-18)
+Store raw token counts (input, output, cache_creation, cache_read) in `llm_usage` table. Calculate dollar costs at display time using a pricing constants file. This avoids needing to update historical rows when Anthropic changes pricing. The pricing file (`apps/admin/src/lib/pricing.ts`) is the single source of truth. Trade-off: cost calculation happens on every admin page load, but the math is trivial (multiply + sum).
+
+### Usage table: RLS disabled, not policy-based (2026-02-18)
+`llm_usage` is internal telemetry — users never read or write it directly. API routes insert on behalf of authenticated users using the anon key client. Admin reads via service role. Enabling RLS with INSERT policies caused silent failures that were hard to debug (Supabase returns null error when RLS blocks an insert). Disabled RLS entirely since this table has no user-facing access path.
+
+### Stream usage: finalMessage event, not await (2026-02-18)
+For streaming routes (chat, session open), capturing token usage requires the final message from the Anthropic SDK. Two options: (1) `await stream.finalMessage()` inside the `'end'` handler — risky because the stream may already be consumed. (2) `stream.on('finalMessage', ...)` event registered before the ReadableStream constructor — fires synchronously before `'end'`, guaranteed to have the usage data. Chose (2) after (1) failed silently in production. The captured usage is stored in a closure variable and saved in the `'end'` handler.
+
+### Coaching functions return usage, don't save it (2026-02-18)
+`packages/coaching` functions are pure — no DB, no framework. Rather than injecting Supabase into them, each function returns `usage: LlmUsage` alongside its existing output. The calling route/Edge Function saves to DB. This preserves the package's purity and keeps the save logic close to the context (table name, user ID, sim mode).
+
+---
+
 ### Two Supabase projects for PROD/DEV, not one project with branching (2026-02-17)
 Needed environment isolation as real users approach. Options considered: (1) Supabase branching (built-in, but limited to Pro plan and doesn't fully isolate Edge Functions/secrets). (2) Single project with prefixed tables (sim_ pattern already used for simulator, but complex and error-prone for a full second environment). (3) Two completely separate Supabase projects — PROD and DEV. Chose (3): complete isolation, independent Edge Function deployments, independent secrets, independent auth users. Cost: must run migrations on both, must deploy Edge Function to both, prompts must be synced manually (already a constraint from Edge Function architecture). The `edgeFunction.ts` helper already reads `NEXT_PUBLIC_SUPABASE_URL` dynamically, so it auto-routes to the correct project's Edge Function without code changes.
 
@@ -21,8 +40,11 @@ Google OAuth creates different UUIDs per Supabase project (the UUID comes from `
 ### Pre-generated opening messages for instant session open (2026-02-17)
 Session open was ~8s because Sonnet needs ~6s for the first token. But the opening message only depends on the suggestion's coaching plan (hypothesis, leverage point, curiosities, opening direction) — all of which are already known at suggestion generation time. By writing the `openingMessage` at close time (when `evolveAndSuggest()` already has full context), session open can serve it instantly from the DB without any LLM call. Trade-off: opening messages are less reactive to changes between sessions (new cards saved, new wins) — but the suggestion text itself is already snapshot-at-generation-time, so the opening matching it is consistent. Free chat (no suggestion) and old suggestions without `openingMessage` fall back to live Sonnet streaming. Win milestones also fall through to live streaming so milestone text integrates naturally.
 
-### Supabase Edge Function replaces after() for evolution pipeline (2026-02-17)
-Vercel Hobby has a hard 10s timeout that kills both the function response AND `after()` callbacks. The evolution pipeline (Sonnet evolveAndSuggest, ~15-25s) was never completing — understanding never evolved, no new suggestions generated, no focus area reflections written. Alternatives considered: (1) Vercel Pro plan ($20/mo, 300s timeout) — solves it but costs money and creates vendor lock-in for a background job. (2) External queue (SQS, BullMQ) — overkill for a single background task. (3) Supabase Edge Function (Deno, 150s timeout, free plan) — uses existing infra, simple HTTP fire-and-forget, supports sim mode. Chose (3). The function has inline copies of all prompts and formatters because Deno can't resolve pnpm workspace packages — this means prompt changes must be synced manually (acceptable trade-off since prompts change rarely). Auth uses a shared secret (`CLOSE_PIPELINE_SECRET`) as Bearer token rather than the Supabase anon key — simpler, no RLS complexity for server-to-server calls. Legacy seed (users without understanding) and evolution retry (incomplete evolutions) were also removed from the open route — the Edge Function's 150s timeout makes these edge cases rare enough to handle manually via admin if needed.
+### Vercel Pro replaces Edge Function for evolution pipeline (2026-02-19)
+Upgraded to Vercel Pro ($20/mo, 300s timeout). The Supabase Edge Function (1034 lines of Deno with inline prompt copies) was eliminated. Evolution pipeline now runs in `after()` callbacks on the close and open routes, importing `evolveAndSuggest()` directly from `@toney/coaching`. Every prompt lives in one place — no more drift risk. Shared `runClosePipeline()` helper (`apps/mobile/src/lib/closePipeline.ts`) handles the full pipeline for deferred close in the open route. Close route keeps a split pattern (notes inline for client response, evolution in `after()`). `CLOSE_PIPELINE_SECRET` env var no longer needed.
+
+### ~~Supabase Edge Function replaces after() for evolution pipeline (2026-02-17)~~
+*(Superseded by Vercel Pro upgrade above.)*
 
 ### Home screen reorder: focus areas as spine, not bottom section (2026-02-16)
 Focus areas are the growth signal now — they accumulate reflections, link to wins, and carry the user's declared intentions. But they were at the bottom of the home screen, below the last session hero tile, the win strip, and two side-by-side tiles. Promoted to position 2 (right after the greeting + CTA). Last session compressed from a hero tile to a compact side-by-side with the understanding snippet. The old hero treatment gave too much weight to looking backward. Now: CTA ("Continue your coaching") → focus areas → wins → reference tiles. Tapping a focus area opens FocusAreaGrowthView directly from home (was: navigate to Journey tab), keeping the user in context.

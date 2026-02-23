@@ -42,6 +42,8 @@ export interface CloseSessionInput {
   recentWins?: Win[] | null;
   /** Previous suggestion titles (to avoid repetition) */
   previousSuggestionTitles?: string[];
+  /** User's language preference (null = not yet detected, 'en' = English) */
+  language?: string | null;
 }
 
 export interface CloseSessionOutput {
@@ -58,7 +60,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
   // Notes come first — they provide the headline for suggestion context
   let sessionNotes: SessionNotesOutput;
   try {
-    sessionNotes = await generateSessionNotes({
+    const notesResult = await generateSessionNotes({
       messages: input.messages,
       tensionType: input.tensionType,
       hypothesis: input.hypothesis,
@@ -68,7 +70,9 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       stageOfChange: input.currentStageOfChange || undefined,
       previousHeadline: input.previousHeadline,
       activeFocusAreas: input.activeFocusAreas,
+      language: input.language,
     });
+    sessionNotes = notesResult.notes;
   } catch (err) {
     console.error('generateSessionNotes failed:', err);
     sessionNotes = { headline: 'Session complete', narrative: 'Notes could not be generated for this session.' };
@@ -89,6 +93,7 @@ export async function closeSessionPipeline(input: CloseSessionInput): Promise<Cl
       recentSessionHeadline: sessionNotes.headline,
       recentKeyMoments: sessionNotes.keyMoments,
       previousSuggestionTitles: input.previousSuggestionTitles,
+      language: input.language,
     });
   } catch (err) {
     console.error('evolveAndSuggest failed:', err);

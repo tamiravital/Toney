@@ -14,6 +14,9 @@ export interface OverviewStats {
   totalMessages: number;
   avgMessagesPerSession: number;
   activeUsers7d: number;
+  activeFocusAreas: number;
+  totalSuggestionSets: number;
+  evolutionStatus: { completed: number; pending: number; failed: number; unknown: number };
 }
 
 export interface TensionDistribution {

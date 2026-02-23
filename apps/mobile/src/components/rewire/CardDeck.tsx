@@ -49,7 +49,7 @@ function DotIndicators({
         key={i}
         onClick={() => onDotClick(i)}
         className={`rounded-full transition-all duration-200 ${sizeClass} ${
-          isActive ? 'bg-indigo-500' : 'bg-gray-300'
+          isActive ? 'bg-accent' : 'bg-muted'
         }`}
         aria-label={`Go to card ${i + 1}`}
       />

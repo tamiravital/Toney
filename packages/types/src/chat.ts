@@ -38,4 +38,6 @@ export interface Session {
   evolution_status?: 'pending' | 'completed' | 'failed';
   /** If this session is a focus area check-in, which focus area */
   focus_area_id?: string | null;
+  /** Snapshot of profiles.understanding BEFORE this session's evolution */
+  narrative_snapshot?: string | null;
 }

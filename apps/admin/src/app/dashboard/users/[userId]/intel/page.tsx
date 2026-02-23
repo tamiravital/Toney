@@ -3,6 +3,7 @@ import {
   Target,
   MessageSquare,
   BookOpen,
+  Quote,
 } from 'lucide-react';
 import { getUserUnderstanding, getLatestSessionPlan } from '@/lib/queries/intel';
 import { formatDate } from '@/lib/format';
@@ -15,11 +16,14 @@ export default async function IntelPage({
 }) {
   const { userId } = await params;
 
-  let understanding: string | null = null;
+  let understandingData: { understanding: string | null; understanding_snippet: string | null } = {
+    understanding: null,
+    understanding_snippet: null,
+  };
   let sessionPlan: Awaited<ReturnType<typeof getLatestSessionPlan>> = null;
 
   try {
-    [understanding, sessionPlan] = await Promise.all([
+    [understandingData, sessionPlan] = await Promise.all([
       getUserUnderstanding(userId),
       getLatestSessionPlan(userId),
     ]);
@@ -27,6 +31,8 @@ export default async function IntelPage({
     console.error('Intel page data load error:', err);
   }
 
+  const understanding = understandingData?.understanding ?? null;
+  const understandingSnippet = understandingData?.understanding_snippet ?? null;
   const hasAnyIntel = !!(understanding || sessionPlan);
 
   return (
@@ -35,6 +41,18 @@ export default async function IntelPage({
       <div className="flex items-center justify-between">
         <RunFullIntelButton userId={userId} hasExistingIntel={hasAnyIntel} />
       </div>
+
+      {/* Understanding Snippet */}
+      {understandingSnippet && (
+        <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Quote className="h-4 w-4 text-amber-500" />
+            <h3 className="text-sm font-semibold text-amber-900">Understanding Snippet</h3>
+            <span className="text-xs text-amber-400 ml-auto">What the user sees</span>
+          </div>
+          <p className="text-sm text-amber-800 font-medium">{understandingSnippet}</p>
+        </div>
+      )}
 
       {/* Understanding Narrative */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">

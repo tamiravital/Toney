@@ -5,6 +5,11 @@ import {
   MessagesSquare,
   TrendingUp,
   Activity,
+  Target,
+  Sparkles,
+  RefreshCw,
+  DollarSign,
+  Zap,
 } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 import Badge from '@/components/Badge';
@@ -14,6 +19,8 @@ import {
   getStageDistribution,
   getRecentActivity,
 } from '@/lib/queries/overview';
+import { getOverallUsageStats } from '@/lib/queries/usage';
+import { formatCost } from '@/lib/pricing';
 import { tensionLabel, stageLabel, formatRelativeTime, formatNumber } from '@/lib/format';
 import { tensionColor, stageColor } from '@toney/constants';
 import Link from 'next/link';
@@ -22,11 +29,12 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 
 export default async function OverviewPage() {
-  const [stats, tensions, stages, recent] = await Promise.all([
+  const [stats, tensions, stages, recent, usageStats] = await Promise.all([
     getOverviewStats(),
     getTensionDistribution(),
     getStageDistribution(),
     getRecentActivity(),
+    getOverallUsageStats(),
   ]);
 
   const maxTensionCount = Math.max(...tensions.map((t) => t.count), 1);
@@ -81,6 +89,51 @@ export default async function OverviewPage() {
           icon={TrendingUp}
           iconColor="text-teal-600"
           iconBg="bg-teal-50"
+        />
+        <StatCard
+          title="Active Focus Areas"
+          value={formatNumber(stats.activeFocusAreas)}
+          icon={Target}
+          iconColor="text-rose-600"
+          iconBg="bg-rose-50"
+        />
+        <StatCard
+          title="Suggestion Sets"
+          value={formatNumber(stats.totalSuggestionSets)}
+          icon={Sparkles}
+          iconColor="text-violet-600"
+          iconBg="bg-violet-50"
+        />
+        <StatCard
+          title="Evolutions"
+          value={formatNumber(stats.evolutionStatus.completed)}
+          subtitle={
+            stats.evolutionStatus.failed > 0
+              ? `${stats.evolutionStatus.failed} failed`
+              : stats.evolutionStatus.pending > 0
+                ? `${stats.evolutionStatus.pending} pending`
+                : undefined
+          }
+          icon={RefreshCw}
+          iconColor="text-cyan-600"
+          iconBg="bg-cyan-50"
+        />
+        <StatCard
+          title="Total LLM Cost"
+          value={formatCost(usageStats.totalCost)}
+          subtitle={usageStats.totalCalls > 0
+            ? `${formatCost(usageStats.totalCost / Math.max(1, stats.totalSessions))}/session avg`
+            : undefined}
+          icon={DollarSign}
+          iconColor="text-emerald-600"
+          iconBg="bg-emerald-50"
+        />
+        <StatCard
+          title="API Calls"
+          value={formatNumber(usageStats.totalCalls)}
+          icon={Zap}
+          iconColor="text-orange-600"
+          iconBg="bg-orange-50"
         />
       </div>
 

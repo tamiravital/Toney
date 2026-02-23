@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { ToneyProvider } from '@/context/ToneyContext';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
+  variable: '--font-inter',
   subsets: ['latin'],
 });
 
@@ -32,13 +32,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#4f46e5" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('toney_theme');if(t&&t!=='default'){document.documentElement.setAttribute('data-theme',t)}var m=document.querySelector('meta[name="theme-color"]');if(m){var c=getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();if(c)m.setAttribute('content',c)}}catch(e){}})()` }} />
+        <meta name="theme-color" content="#f9fafb" />
       </head>
-      <body className={`${geistSans.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased bg-white">
         <ToneyProvider>
           {children}
         </ToneyProvider>

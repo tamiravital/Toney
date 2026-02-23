@@ -220,7 +220,7 @@ async function main() {
         console.log(`    ✅ Closed in ${((Date.now() - t0) / 1000).toFixed(1)}s — "${result.sessionNotes.headline}"`);
       } else {
         // Just re-generate notes (session already completed, understanding already evolved)
-        const notes = await generateSessionNotes({
+        const { notes } = await generateSessionNotes({
           messages,
           tensionType: profile.tension_type || null,
           hypothesis: sessionPlan?.hypothesis || null,

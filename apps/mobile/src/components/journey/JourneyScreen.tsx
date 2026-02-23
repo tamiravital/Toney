@@ -24,20 +24,16 @@ const NODE_EMOJI: Record<PathNode['type'], string> = {
   first_session: '\uD83C\uDF31',
 };
 
-// Flat colors per focus area (rotating hues)
-const FOCUS_HUES = [
-  { bg: '#eef2ff', border: '#c7d2fe', tag: '#818cf8' },  // indigo
-  { bg: '#fdf2f8', border: '#fbcfe8', tag: '#ec4899' },  // pink
-  { bg: '#f0f9ff', border: '#bae6fd', tag: '#38bdf8' },  // sky
-  { bg: '#faf5ff', border: '#e9d5ff', tag: '#a78bfa' },  // purple
-  { bg: '#fff7ed', border: '#fed7aa', tag: '#fb923c' },  // orange
-  { bg: '#fefce8', border: '#fde68a', tag: '#eab308' },  // yellow
-  { bg: '#ecfdf5', border: '#a7f3d0', tag: '#34d399' },  // emerald
-];
+// Focus area hues from CSS variables (theme-aware, 7 rotating)
+const FOCUS_HUES = Array.from({ length: 7 }, (_, i) => ({
+  bg: `var(--focus-${i}-bg)`,
+  border: `var(--focus-${i}-border)`,
+  tag: `var(--focus-${i}-tag)`,
+}));
 
-const WIN_STYLE = { bg: '#f0fdf4', border: '#bbf7d0', tag: '#22c55e' };
-const FIRST_SESSION_STYLE = { bg: '#fffbeb', border: '#fde68a', tag: '#f59e0b' };
-const DEFAULT_MILESTONE_STYLE = { bg: '#eef2ff', border: '#c7d2fe', tag: '#818cf8' };
+const WIN_STYLE = { bg: 'var(--journey-win-bg)', border: 'var(--journey-win-border)', tag: 'var(--journey-win-tag)' };
+const FIRST_SESSION_STYLE = { bg: 'var(--journey-first-bg)', border: 'var(--journey-first-border)', tag: 'var(--journey-first-tag)' };
+const DEFAULT_MILESTONE_STYLE = { bg: 'var(--journey-milestone-bg)', border: 'var(--journey-milestone-border)', tag: 'var(--journey-milestone-tag)' };
 
 function formatNodeDate(date: Date): string {
   const now = new Date();
@@ -155,13 +151,13 @@ export default function JourneyScreen() {
     <div className="flex-1 min-h-0 overflow-y-auto px-4 py-6 pb-2 hide-scrollbar">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 px-2">
-        <h1 className="text-2xl font-bold text-gray-900">Journey</h1>
+        <h1 className="text-2xl font-bold text-primary">Journey</h1>
         {hasSessions && (
           <button
             onClick={() => setShowSessionHistory(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-input hover:bg-default transition-all"
           >
-            <BookOpen className="w-4 h-4 text-gray-500" />
+            <BookOpen className="w-4 h-4 text-secondary" />
           </button>
         )}
       </div>
@@ -170,9 +166,9 @@ export default function JourneyScreen() {
       {loading && (
         <div className="flex justify-center py-12">
           <div className="flex gap-1">
-            <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot-accent)', animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot-accent)', animationDelay: '150ms' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--loading-dot-accent)', animationDelay: '300ms' }} />
           </div>
         </div>
       )}
@@ -181,7 +177,7 @@ export default function JourneyScreen() {
       {!loading && hasContent && (
         <div className="relative pl-8 mb-8">
           {/* Vertical line */}
-          <div className="absolute left-[23px] top-6 bottom-0 w-[3px] rounded-full bg-indigo-100" />
+          <div className="absolute left-[23px] top-6 bottom-0 w-[3px] rounded-full" style={{ backgroundColor: 'var(--journey-line)' }} />
 
           {/* Nodes */}
           {pathNodes.map((node, i) => {
@@ -206,21 +202,21 @@ export default function JourneyScreen() {
                       className="rounded-2xl px-4 py-3 text-left w-full active:scale-[0.98] transition-transform"
                       style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}
                     >
-                      <p className="text-[14px] font-semibold text-gray-800 leading-snug">{node.text}</p>
+                      <p dir="auto" className="text-[14px] font-semibold text-primary leading-snug">{node.text}</p>
                       {node.focusAreaText && (
                         <p className="text-[11px] mt-1 font-medium" style={{ color: style.tag }}>{node.focusAreaText}</p>
                       )}
-                      <p className="text-[11px] text-gray-400 mt-1.5">{formatNodeDate(node.date)}</p>
+                      <p className="text-[11px] text-muted mt-1.5">{formatNodeDate(node.date)}</p>
                     </button>
                   ) : (
                     <div
                       className="rounded-2xl px-4 py-3"
                       style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }}
                     >
-                      <p className={`text-[14px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-gray-400' : 'text-gray-800'}`}>
+                      <p dir="auto" className={`text-[14px] font-semibold leading-snug ${node.type === 'first_session' ? 'text-muted' : 'text-primary'}`}>
                         {node.text}
                       </p>
-                      <p className="text-[11px] text-gray-400 mt-1.5">{formatNodeDate(node.date)}</p>
+                      <p className="text-[11px] text-muted mt-1.5">{formatNodeDate(node.date)}</p>
                     </div>
                   )}
                 </div>
@@ -236,32 +232,32 @@ export default function JourneyScreen() {
           {!showWinInput ? (
             <button
               onClick={() => setShowWinInput(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-green-200 text-green-600 text-sm font-medium hover:bg-green-50 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-success-border text-success text-sm font-medium hover:bg-success-light transition-all"
             >
               <Trophy className="w-4 h-4" />
               Log a Win
             </button>
           ) : (
-            <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <div className="bg-card border border-default rounded-2xl p-4">
               <textarea
                 value={newWin}
                 onChange={(e) => setNewWin(e.target.value)}
                 placeholder="What did you do differently?"
                 rows={2}
                 autoFocus
-                className="w-full text-sm text-gray-900 placeholder-gray-400 resize-none outline-none mb-3"
+                className="w-full text-sm text-primary placeholder-muted resize-none outline-none mb-3"
               />
               <div className="flex gap-2">
                 <button
                   onClick={saveWin}
                   disabled={!newWin.trim()}
-                  className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-300 transition-all"
+                  className="flex-1 bg-success text-inverse py-2.5 rounded-xl text-sm font-semibold disabled:bg-btn-disabled disabled:text-btn-disabled-text transition-all"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => { setShowWinInput(false); setNewWin(''); }}
-                  className="px-4 py-2.5 rounded-xl text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition-all"
+                  className="px-4 py-2.5 rounded-xl text-sm text-btn-secondary-text bg-btn-secondary hover:bg-btn-secondary-hover transition-all"
                 >
                   Cancel
                 </button>
@@ -275,10 +271,10 @@ export default function JourneyScreen() {
       {!loading && !hasContent && (
         <div className="flex-1 flex items-center justify-center min-h-[300px]">
           <div className="text-center px-8">
-            <p className="text-lg text-gray-500 leading-relaxed mb-2">
+            <p className="text-lg text-secondary leading-relaxed mb-2">
               Every journey has a quiet beginning.
             </p>
-            <p className="text-sm text-gray-400 leading-relaxed">
+            <p className="text-sm text-muted leading-relaxed">
               After your first session, your path will appear here.
             </p>
           </div>

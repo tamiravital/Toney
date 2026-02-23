@@ -4,12 +4,18 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ExternalLink, Trash2, Plus, Copy, Pencil, Check, X } from 'lucide-react';
 
-const MOBILE_URL = process.env.NEXT_PUBLIC_MOBILE_URL || 'http://localhost:3000';
 const SIM_SECRET = process.env.NEXT_PUBLIC_SIM_SECRET || '';
+
+function getMobileUrl(): string {
+  if (process.env.NEXT_PUBLIC_MOBILE_URL) {
+    return process.env.NEXT_PUBLIC_MOBILE_URL;
+  }
+  return 'http://localhost:3000';
+}
 
 function openSimPopup(path: string) {
   window.open(
-    `${MOBILE_URL}${path}`,
+    `${getMobileUrl()}${path}`,
     '_blank',
     'width=430,height=932,menubar=no,toolbar=no,location=no,status=no'
   );

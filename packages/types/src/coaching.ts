@@ -86,6 +86,15 @@ export interface SessionSuggestionsRow {
   created_at: string;
 }
 
+// --- LLM Usage Tracking ---
+
+export interface LlmUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
 // --- System Prompt Blocks (for prompt caching) ---
 
 export interface SystemPromptBlock {

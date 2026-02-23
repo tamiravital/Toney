@@ -25,39 +25,39 @@ export interface CategoryConfig {
 // ── Constants ──
 
 export const categories: CategoryConfig[] = [
-  { id: 'all', label: 'All', icon: Sparkles, color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
-  { id: 'reframe', label: 'Reframes', icon: Brain, color: 'text-purple-600', bgColor: 'bg-purple-50' },
-  { id: 'truth', label: 'Truths', icon: Lightbulb, color: 'text-amber-600', bgColor: 'bg-amber-50' },
-  { id: 'plan', label: 'Plans', icon: ClipboardList, color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  { id: 'practice', label: 'Practices', icon: RotateCcw, color: 'text-green-600', bgColor: 'bg-green-50' },
-  { id: 'conversation_kit', label: 'Kits', icon: MessageCircle, color: 'text-teal-600', bgColor: 'bg-teal-50' },
+  { id: 'all', label: 'All', icon: Sparkles, color: 'text-accent', bgColor: 'bg-accent-light' },
+  { id: 'reframe', label: 'Reframes', icon: Brain, color: 'text-cat-reframe-text', bgColor: 'bg-cat-reframe' },
+  { id: 'truth', label: 'Truths', icon: Lightbulb, color: 'text-cat-truth-text', bgColor: 'bg-cat-truth' },
+  { id: 'plan', label: 'Plans', icon: ClipboardList, color: 'text-cat-plan-text', bgColor: 'bg-cat-plan' },
+  { id: 'practice', label: 'Practices', icon: RotateCcw, color: 'text-cat-practice-text', bgColor: 'bg-cat-practice' },
+  { id: 'conversation_kit', label: 'Kits', icon: MessageCircle, color: 'text-cat-kit-text', bgColor: 'bg-cat-kit' },
 ];
 
 export const cardStyles: Record<RewireCardCategory, { shell: string; accent: string; iconBg: string }> = {
   reframe: {
-    shell: 'bg-white border border-purple-100',
-    accent: 'text-purple-600',
-    iconBg: 'bg-purple-50',
+    shell: 'bg-card border border-cat-reframe-border',
+    accent: 'text-cat-reframe-text',
+    iconBg: 'bg-cat-reframe',
   },
   truth: {
-    shell: 'bg-gradient-to-br from-amber-50/80 to-white border border-amber-100/60',
-    accent: 'text-amber-600',
-    iconBg: 'bg-amber-100',
+    shell: 'bg-cat-truth border border-cat-truth-border',
+    accent: 'text-cat-truth-text',
+    iconBg: 'bg-cat-truth',
   },
   plan: {
-    shell: 'bg-white border border-blue-100',
-    accent: 'text-blue-600',
-    iconBg: 'bg-blue-50',
+    shell: 'bg-card border border-cat-plan-border',
+    accent: 'text-cat-plan-text',
+    iconBg: 'bg-cat-plan',
   },
   practice: {
-    shell: 'bg-white border border-green-100',
-    accent: 'text-green-600',
-    iconBg: 'bg-green-50',
+    shell: 'bg-card border border-cat-practice-border',
+    accent: 'text-cat-practice-text',
+    iconBg: 'bg-cat-practice',
   },
   conversation_kit: {
-    shell: 'bg-white border border-teal-100',
-    accent: 'text-teal-600',
-    iconBg: 'bg-teal-50',
+    shell: 'bg-card border border-cat-kit-border',
+    accent: 'text-cat-kit-text',
+    iconBg: 'bg-cat-kit',
   },
 };
 
@@ -118,19 +118,19 @@ export function guessCategory(content: string): RewireCardCategory {
 // ── Markdown components for card content ──
 
 export const mdComponents: Components = {
-  p: (props: ComponentPropsWithoutRef<'p'>) => <p className="text-sm text-gray-700 leading-relaxed mb-2 last:mb-0" {...props} />,
-  strong: (props: ComponentPropsWithoutRef<'strong'>) => <strong className="font-semibold text-gray-900" {...props} />,
+  p: (props: ComponentPropsWithoutRef<'p'>) => <p className="text-sm text-secondary leading-relaxed mb-2 last:mb-0" {...props} />,
+  strong: (props: ComponentPropsWithoutRef<'strong'>) => <strong className="font-semibold text-primary" {...props} />,
   em: (props: ComponentPropsWithoutRef<'em'>) => <em className="italic" {...props} />,
   ul: (props: ComponentPropsWithoutRef<'ul'>) => <ul className="list-disc pl-4 space-y-1 mb-2 last:mb-0" {...props} />,
   ol: (props: ComponentPropsWithoutRef<'ol'>) => <ol className="list-decimal pl-4 space-y-1 mb-2 last:mb-0" {...props} />,
-  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm text-gray-700 leading-relaxed" {...props} />,
+  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-sm text-secondary leading-relaxed" {...props} />,
 };
 
 // Category-specific content wrapper styles
 const categoryWrapperStyles: Record<string, string> = {
-  reframe: 'pl-3 border-l-2 border-purple-200',
-  practice: 'bg-green-50/60 rounded-xl px-3.5 py-3',
-  conversation_kit: 'bg-teal-50/50 rounded-xl px-4 py-3',
+  reframe: 'pl-3 border-l-2 border-cat-reframe-border',
+  practice: 'bg-cat-practice/60 rounded-xl px-3.5 py-3',
+  conversation_kit: 'bg-cat-kit/50 rounded-xl px-4 py-3',
 };
 
 export { categoryWrapperStyles };

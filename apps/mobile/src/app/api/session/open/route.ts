@@ -1,16 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { planSessionStep } from '@toney/coaching';
 import { Profile, FocusArea, SessionSuggestion } from '@toney/types';
-import { fireCloseSessionPipeline } from '@/lib/edgeFunction';
+import { saveUsage } from '@/lib/saveUsage';
+import { runClosePipeline } from '@/lib/closePipeline';
 
-// Vercel Hobby hard limit is 10s — keep critical path under 5s.
-export const maxDuration = 60;
+// Vercel Pro: 300s timeout. Open path is fast (~2s). Deferred close runs in after() (~30s).
+export const maxDuration = 300;
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+const LANGUAGE_REMINDER = "Oh, and feel free to talk to me in whatever language feels most comfortable 🙂";
 
 /**
  * POST /api/session/open
@@ -18,7 +21,7 @@ const anthropic = new Anthropic({
  * FAST PATH (~2s): auth → 1 query (profile) → plan → create row → stream
  * Client sends: suggestion, focusAreas, isFirstSession (already in state).
  * Server queries only the profile (for understanding + coaching style).
- * BACKGROUND: deferred close + legacy seed fire-and-forget to Edge Function.
+ * BACKGROUND: deferred close runs in after() (full pipeline: notes + evolution).
  */
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
@@ -63,25 +66,56 @@ export async function POST(request: NextRequest) {
     const isFirstSession = clientIsFirstSession ?? true;
     const activeFocusAreas = (clientFocusAreas || []) as FocusArea[];
 
-    // ── INSTANT deferred close: just mark completed, full pipeline in Edge Function ──
+    // ── Deferred close: mark completed now, full pipeline in after() ──
     if (previousSessionId) {
+      const prevSessId = previousSessionId; // Capture for closure
       const { error: markErr } = await ctx.supabase.from(ctx.table('sessions')).update({
         session_status: 'completed',
         evolution_status: 'pending',
         narrative_snapshot: profile.understanding || null,
-      }).eq('id', previousSessionId)
+      }).eq('id', prevSessId)
         .eq('session_status', 'active'); // Only mark if still active (idempotent)
       if (markErr) console.error('Deferred close mark failed:', markErr);
 
-      // Fire-and-forget: Edge Function handles the full close pipeline
-      fireCloseSessionPipeline({
-        sessionId: previousSessionId,
-        userId: ctx.userId,
-        isSimMode: ctx.isSimMode,
+      // Full close pipeline runs in after() — loads data, generates notes, evolves understanding
+      after(async () => {
+        try {
+          await runClosePipeline(ctx, prevSessId, profile, '[open/after]');
+        } catch (err) {
+          console.error('[open/after] Deferred close failed:', err);
+          try {
+            await ctx.supabase.from(ctx.table('sessions')).update({ evolution_status: 'failed' }).eq('id', prevSessId);
+          } catch { /* last resort */ }
+        }
       });
 
-      timing('deferred close fired');
+      timing('deferred close scheduled');
     }
+
+    // ── Guard: close any stale active sessions (prevents duplicates from multi-tab, race conditions) ──
+    const { data: staleActiveSessions } = await ctx.supabase
+      .from(ctx.table('sessions'))
+      .select('id')
+      .eq('user_id', ctx.userId)
+      .eq('session_status', 'active');
+
+    if (staleActiveSessions && staleActiveSessions.length > 0) {
+      const staleIds = staleActiveSessions.map((s: { id: string }) => s.id);
+      // Exclude the previousSessionId we just marked completed above
+      const toClose = previousSessionId
+        ? staleIds.filter((id: string) => id !== previousSessionId)
+        : staleIds;
+
+      if (toClose.length > 0) {
+        console.warn(`[session/open] Closing ${toClose.length} stale active session(s): ${toClose.map((id: string) => id.slice(0, 8)).join(', ')}`);
+        await ctx.supabase
+          .from(ctx.table('sessions'))
+          .update({ session_status: 'completed' })
+          .in('id', toClose);
+      }
+    }
+
+    timing('stale sessions check');
 
     // Resolve focusAreaId for check-in suggestions
     let focusAreaId: string | null = null;
@@ -150,6 +184,28 @@ export async function POST(request: NextRequest) {
         savedMessageId = savedMsg?.id || null;
       } catch { /* non-critical */ }
 
+      // Language reminder — first session only, one-time
+      let languageReminder: { id: string; content: string; timestamp: string } | undefined;
+      if (isFirstSession) {
+        try {
+          const { data: reminderMsg } = await ctx.supabase
+            .from(ctx.table('messages'))
+            .insert({
+              session_id: sessionId,
+              user_id: ctx.userId,
+              role: 'assistant',
+              content: LANGUAGE_REMINDER,
+            })
+            .select('id')
+            .single();
+          languageReminder = {
+            id: reminderMsg?.id || `msg-${Date.now()}-lang`,
+            content: LANGUAGE_REMINDER,
+            timestamp: new Date().toISOString(),
+          };
+        } catch { /* non-critical */ }
+      }
+
       timing('done');
       return NextResponse.json({
         sessionId,
@@ -158,6 +214,7 @@ export async function POST(request: NextRequest) {
           content: selectedSuggestion.openingMessage,
           timestamp: new Date().toISOString(),
         },
+        ...(languageReminder && { languageReminder }),
       });
     }
 
@@ -170,6 +227,19 @@ export async function POST(request: NextRequest) {
       messages: [
         { role: 'user', content: '[Session started — please open the conversation]' },
       ],
+    });
+
+    // Track usage from the final message event
+    let capturedUsage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | null = null;
+    stream.on('finalMessage', (msg) => {
+      if (msg.usage) {
+        capturedUsage = {
+          input_tokens: msg.usage.input_tokens,
+          output_tokens: msg.usage.output_tokens,
+          cache_creation_input_tokens: (msg.usage as unknown as Record<string, unknown>).cache_creation_input_tokens as number | undefined,
+          cache_read_input_tokens: (msg.usage as unknown as Record<string, unknown>).cache_read_input_tokens as number | undefined,
+        };
+      }
     });
 
     const encoder = new TextEncoder();
@@ -206,8 +276,41 @@ export async function POST(request: NextRequest) {
             savedMessageId = savedMsg?.id || null;
           } catch { /* non-critical */ }
 
+          // Save LLM usage
+          if (capturedUsage) {
+            await saveUsage(ctx.supabase, ctx.table('llm_usage'), {
+              userId: ctx.userId,
+              sessionId,
+              callSite: 'session_open',
+              model: 'claude-sonnet-4-5-20250929',
+              usage: capturedUsage,
+            });
+          }
+
           timing('done');
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', id: savedMessageId || `msg-${Date.now()}` })}\n\n`));
+
+          // Language reminder — first session only, one-time
+          if (isFirstSession) {
+            try {
+              const { data: reminderMsg } = await ctx.supabase
+                .from(ctx.table('messages'))
+                .insert({
+                  session_id: sessionId,
+                  user_id: ctx.userId,
+                  role: 'assistant',
+                  content: LANGUAGE_REMINDER,
+                })
+                .select('id')
+                .single();
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                type: 'language_reminder',
+                id: reminderMsg?.id || `msg-${Date.now()}-lang`,
+                content: LANGUAGE_REMINDER,
+              })}\n\n`));
+            } catch { /* non-critical */ }
+          }
+
           controller.close();
         });
 
