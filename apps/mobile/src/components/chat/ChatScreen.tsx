@@ -69,7 +69,7 @@ function extractTitleAndBody(body: string): { title: string; rest: string } {
 function parseMessageContent(raw: string): MessageSegment[] {
   const segments: MessageSegment[] = [];
   // Combined regex: find the next [CARD:...], [FOCUS], or [WIN]/[WIN:focus=X] marker
-  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]|\[WIN(?::focus=([^\]]*))?\]([\s\S]*?)\[\/WIN\]/g;
+  const markerRegex = /\[CARD:(\w+)\]([\s\S]*?)\[\/CARD\]|\[FOCUS\]([\s\S]*?)\[\/FOCUS\]|\[WIN(?::focus=([^\]]*))?\]([\s\S]*?)\[\/WIN\]|\[(REFRAME|TRUTH|PLAN|PRACTICE|CONVERSATION_KIT)\]([\s\S]*?)\[\/\6\]/gi;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -93,6 +93,14 @@ function parseMessageContent(raw: string): MessageSegment[] {
     } else if (match[5] !== undefined) {
       // Win match: match[4] = optional focus area text, match[5] = win text
       segments.push({ type: 'win', text: match[5].trim(), focusAreaText: match[4]?.trim() || undefined });
+    } else if (match[6] !== undefined) {
+      // Hallucinated card syntax: [REFRAME]...[/REFRAME], [PRACTICE]...[/PRACTICE], etc.
+      const categoryMap: Record<string, RewireCardCategory> = {
+        reframe: 'reframe', truth: 'truth', plan: 'plan', practice: 'practice', conversation_kit: 'conversation_kit',
+      };
+      const category = categoryMap[match[6].toLowerCase()] || 'reframe';
+      const { title, rest } = extractTitleAndBody(match[7].trim());
+      segments.push({ type: 'card', category, title, content: rest });
     }
 
     lastIndex = match.index + match[0].length;
@@ -367,7 +375,7 @@ export default function ChatScreen() {
                         ) : (
                           <div className="p-4 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-900 rounded-bl-md">
                             <ReactMarkdown components={markdownComponents}>
-                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1')}
+                              {msg.content.replace(/\[CARD:\w+\]([\s\S]*?)\[\/CARD\]/g, '$1').replace(/\[FOCUS\]([\s\S]*?)\[\/FOCUS\]/g, '$1').replace(/\[WIN(?::focus=[^\]]*?)?\]([\s\S]*?)\[\/WIN\]/g, '$1').replace(/\[(REFRAME|TRUTH|PLAN|PRACTICE|CONVERSATION_KIT)\]([\s\S]*?)\[\/\1\]/gi, '$2')}
                             </ReactMarkdown>
                           </div>
                         )}
