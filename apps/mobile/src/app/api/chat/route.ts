@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Load session context + message history in parallel ──
-    const [sessionResult, profileResult, cardsResult, winsResult, focusAreasResult, historyResult] = await Promise.all([
+    const [sessionResult, profileResult, cardsResult, winsResult, focusAreasResult, historyResult, prevNotesResult] = await Promise.all([
       ctx.supabase
         .from(ctx.table('sessions'))
         .select('hypothesis, leverage_point, curiosities')
@@ -62,6 +62,16 @@ export async function POST(request: NextRequest) {
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(100),
+      ctx.supabase
+        .from(ctx.table('sessions'))
+        .select('session_notes')
+        .eq('user_id', ctx.userId)
+        .eq('session_status', 'completed')
+        .not('session_notes', 'is', null)
+        .neq('id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const profile = profileResult.data as Profile | null;
@@ -70,6 +80,14 @@ export async function POST(request: NextRequest) {
     }
 
     const session = sessionResult.data as { hypothesis: string | null; leverage_point: string | null; curiosities: string | null } | null;
+
+    // Parse previous session notes (stored as JSON string)
+    let previousSessionNotes: { headline: string; narrative: string; keyMoments?: string[] } | null = null;
+    if (prevNotesResult.data?.session_notes) {
+      try {
+        previousSessionNotes = JSON.parse(prevNotesResult.data.session_notes as string);
+      } catch { /* ignore malformed notes */ }
+    }
 
     // ── Build system prompt from session + profile + DB context ──
     const systemPromptBlocks: SystemPromptBlock[] = buildSystemPrompt({
@@ -82,6 +100,7 @@ export async function POST(request: NextRequest) {
       recentWins: (winsResult.data || []) as Win[],
       activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
       language: profile.language,
+      previousSessionNotes,
     });
 
     const historyRows = historyResult.data;

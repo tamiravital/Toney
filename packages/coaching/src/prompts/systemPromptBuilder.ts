@@ -158,6 +158,8 @@ export interface BuildSystemPromptInput {
   activeFocusAreas?: FocusArea[];
   /** User's language preference (null = not yet detected, 'en' = English, 'he' = Hebrew, etc.) */
   language?: string | null;
+  /** Session notes from the most recent previous session (for "what did we talk about" context) */
+  previousSessionNotes?: { headline: string; narrative: string; keyMoments?: string[] } | null;
 }
 
 /**
@@ -198,6 +200,12 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
 
   if (input.activeFocusAreas && input.activeFocusAreas.length > 0) {
     sections.push(`FOCUS AREAS:\n${formatFocusAreas(input.activeFocusAreas)}`);
+  }
+
+  if (input.previousSessionNotes) {
+    const prev = input.previousSessionNotes;
+    const moments = prev.keyMoments?.length ? `\nKey moments:\n${prev.keyMoments.map(m => `- ${m}`).join('\n')}` : '';
+    sections.push(`LAST SESSION:\n"${prev.headline}"\n${prev.narrative}${moments}`);
   }
 
   sections.push(`COACHING STYLE:\n${formatCoachingStyle(profile)}`);
