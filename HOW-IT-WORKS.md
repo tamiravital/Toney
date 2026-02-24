@@ -215,7 +215,11 @@ Toney doesn't celebrate everything positive. Only real victories over your tensi
 
 You can end a session at any time by tapping "End Session" in the top right corner. Or, if more than 12 hours pass before your next message, Toney automatically treats it as a new session. If you end a session early (before much conversation happened), Toney skips the behind-the-scenes processing — no notes, no learning, no suggestions generated. If you never responded at all (only the Coach's opening message), the session is simply deleted as if it never happened.
 
-When a session ends, Toney immediately generates your **session notes** (the summary you see). Behind the scenes, one more thing happens in the background while you're already reading your notes:
+When a session ends, the **session notes overlay** slides up immediately — at first with a loading spinner while Toney prepares your notes, then the content fills in (usually within a few seconds).
+
+Before you dismiss the notes, Toney asks **"How are you leaving this session?"** with a set of emoji options (like "Lighter," "Curious," "Stuck," "Energized"). You must tap one before you can tap Done — this quick feedback helps Toney understand how its coaching is landing. You can also add an optional text note if you want Toney to know something specific. When you tap Done, the overlay slides down smoothly.
+
+Behind the scenes, one more thing happens in the background while you're already reading your notes:
 
 ### 1. Session Notes
 
@@ -265,7 +269,7 @@ These reflections accumulate over time on each focus area, creating a visible gr
 
 Not every session produces reflections for every focus area. Only areas that the session genuinely touched get an observation. This keeps them honest and meaningful.
 
-**Reliability:** Because this background work is important (it's how Toney gets smarter), it runs on a dedicated server with a long timeout (150 seconds) — separate from the main app server that handles your chat messages. This means the learning process has plenty of time to complete, even when the AI needs to think carefully about how your understanding has evolved. The system tracks whether the work completed successfully via an `evolution_status` marker on each session.
+**Reliability:** Because this background work is important (it's how Toney gets smarter), it runs with a long timeout (up to 5 minutes) in the background after your session closes — so it has plenty of time to complete, even when the AI needs to think carefully about how your understanding has evolved. The system tracks whether the work completed successfully via an `evolution_status` marker on each session.
 
 ---
 

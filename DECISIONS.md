@@ -4,6 +4,31 @@ Architectural, product, and technical decisions. Newest first.
 
 ---
 
+### Mandatory emoji feedback, optional text (2026-02-23)
+Post-session feedback emoji is now mandatory — the Done button stays disabled until you tap an emoji. The text field is optional and only appears after selecting an emoji (progressive disclosure). Rationale: every session should produce a signal about how it went, but forcing written feedback creates friction. The emoji is low-effort and high-signal. This also ensures the feedback API call fires (which triggers `evolveAndSuggest()` in background), preventing evolution from being silently skipped.
+
+---
+
+### Strip [LANG:xx] before JSON parsing in session notes (2026-02-23)
+When Haiku generates session notes in a non-English language, it sometimes appends `[LANG:xx]` outside the JSON body (or returns bare JSON without code fences). The previous regex only handled code-fenced JSON. Fix: strip `[LANG:xx]` suffix first, then try code-fenced match, then bare `{...}` match. Three extraction strategies instead of one — defense in depth for LLM output format variability.
+
+---
+
+### Show notes overlay immediately during loading, not after completion (2026-02-23)
+Previously the notes overlay only appeared once session notes were generated (3-5s). During that time, the user saw nothing — no indication that anything was happening. This led to confusion and impatience. Now the overlay appears immediately when `sessionStatus === 'ending'` with a loading spinner, and notes fill in when ready. The loading state uses `min-h-[50vh]` to prevent a tiny sheet. This is the same pattern used by iOS bottom sheets — show the container immediately, populate content when ready.
+
+---
+
+### Gate theme picker behind is_beta, not strip theme code (2026-02-23)
+The theme system (CSS variables, 10 presets, custom editor) was deeply interleaved with other dev branch changes — RTL `dir="auto"` attributes were applied to themed components, and 20+ files touched both features. Stripping theme code from 20+ files before merging was error-prone and risked breaking the RTL/language features. Instead: ship the entire theme system but gate the theme picker UI behind `profiles.is_beta = true`. Default theme is applied to all users (no visual change), but the picker is hidden unless admin flips the flag. This lets us ship everything safely, test themes with selected users, and remove the gate later with a one-line change.
+
+---
+
+### Defense-in-depth for LLM card syntax hallucination (2026-02-23)
+The Coach (Sonnet 4.5) hallucinated `[PRACTICE]...[/PRACTICE]` instead of `[CARD:practice]...[/CARD]`. Even with strong prompt instructions, LLMs will occasionally hallucinate alternative syntax. Fix: (1) Prompt-level — explicit anti-hallucination rule with wrong/right examples, prohibition against false save claims. (2) Parser-level — fallback regex catches all 5 known hallucination patterns and maps them to the correct card category. Both layers are needed: the prompt reduces hallucination frequency, the parser catches any that slip through. This same pattern (prompt + parser resilience) should be applied to any future marker syntax.
+
+---
+
 ### Manual Vercel env vars over Marketplace integration (2026-02-19)
 Researched the Vercel Marketplace Supabase integration for automatic env var syncing. Decided against it for this project. Reasons: (1) Public Alpha with known bugs — multiple reports of env vars not syncing correctly for preview deployments. (2) Can't link existing Supabase projects — integration is designed for new projects created through Vercel. (3) Transfers billing to Vercel and makes Supabase org management Vercel-only. (4) Integration-managed env vars become read-only in Vercel dashboard, blocking custom vars like `CLOSE_PIPELINE_SECRET`, `SIM_SECRET`, `ANTHROPIC_API_KEY`. (5) Manual env vars take 5 minutes and give full control. The Marketplace integration is better suited for greenfield projects. Supabase Branching (automatic per-PR preview databases) is the more compelling feature but also has rough edges — deferred for revisit in a few months.
 

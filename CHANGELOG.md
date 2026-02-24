@@ -1,5 +1,25 @@
 # Toney — Changelog
 
+## 2026-02-23 — Session Notes UX + Feedback Mechanism
+
+- **Session notes overlay fix**: Notes overlay wasn't appearing after ending a session — the suggestion picker's early-return condition was hiding it. Fixed by guarding `showSuggestionPicker` with `&& !sessionNotes`.
+- **Session notes JSON parsing hardened**: `generateSessionNotes()` failed when Haiku returned bare JSON (no code fences) with a `[LANG:xx]` suffix. Now strips language tags first, tries code-fenced JSON, then bare `{...}` match.
+- **Immediate loading overlay on End Session**: The notes overlay now appears instantly when you tap End Session (with a loading spinner), instead of making you wait 3-5 seconds with no visual feedback.
+- **Mandatory emoji feedback**: Post-session feedback emoji is now required — the Done button is disabled until you select an emoji. Textarea for optional text appears on tap with auto-scroll.
+- **Share button removed**: The "Share Session Notes" button was removed from the notes overlay. Feedback submission merged into the Done button handler.
+- **Slide-down dismiss animation**: Notes overlay slides down smoothly on dismiss (was: instant vanish). New `animate-slide-down` keyframes in globals.css.
+- **Min-height on loading sheet**: `min-h-[50vh]` on the notes overlay prevents a tiny bottom-sheet during the loading state.
+- **Auto-scroll to textarea on emoji tap**: `useRef` + `useEffect` with `requestAnimationFrame` delay → `scrollIntoView({ behavior: 'smooth', block: 'nearest' })`.
+- **Suggestion re-fetch after dismiss**: 15-second delayed re-fetch of `/api/suggestions` after dismissing notes, so new suggestions from background evolution appear without page reload.
+- **Deployed to PROD**: Merged dev→main (7 commits, 16 files). Migrations 039+040 pending on PROD.
+
+## 2026-02-23 — Card Syntax Fix + PROD Merge
+
+- **Card syntax hallucination fix**: Coach was occasionally writing `[PRACTICE]...[/PRACTICE]` instead of the correct `[CARD:practice]...[/CARD]`. Two-pronged fix: (1) Prompt: added explicit anti-hallucination syntax rule with wrong/right examples, added prohibition against claiming cards are "saved" (they're drafts the user taps Save on). (2) Parser: extended `markerRegex` with a 4th alternative that catches hallucinated tags (`[REFRAME]`, `[TRUTH]`, `[PLAN]`, `[PRACTICE]`, `[CONVERSATION_KIT]`) and maps them to the correct card category. Also extended the strip regex for previous-session messages.
+- **Dev→main merge to PROD**: All dev branch work merged into production — Edge Function elimination (after() on Vercel Pro), LLM usage tracking, multi-language/RTL support, CSS variable theme system, ToneyContext state fixes, admin dashboard enhancements.
+- **Theme picker gated behind `is_beta` profile flag**: Theme system (10 presets + custom editor) ships in the codebase, but the theme picker in Settings is only visible when `profiles.is_beta = true`. Admin can flip this per user. Migration 038 adds the column to both `profiles` and `sim_profiles`.
+- **4 PROD DB migrations applied**: 035 (llm_usage + sim_llm_usage tables), 036 (profiles.language column), 037 (RLS on all sim/telemetry tables), 038 (profiles.is_beta column).
+
 ## 2026-02-18 — Admin Visibility Pass + LLM Usage Tracking
 - **LLM usage tracking**: New `llm_usage` table (migration 035) captures token counts at all 9 LLM call sites — chat, session open, session close notes, session close evolve, seed understanding, seed suggestions, admin session split, and Edge Function calls. `saveUsage()` helper for Vercel routes, direct inserts in Edge Function.
 - **Admin: Usage tab**: Per-user LLM cost breakdown — stat cards (total cost, total calls, input/output tokens), per-call-site table, per-session cost table, cache hit rate.

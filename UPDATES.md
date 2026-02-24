@@ -4,6 +4,42 @@
 
 ---
 
+## February 23, 2026
+
+### Session notes now appear instantly when you end a session
+
+- When you tap "End Session," a **notes overlay slides up immediately** with a loading indicator while Toney prepares your session summary. Previously, there was a 3-5 second gap where nothing appeared on screen — you had no idea anything was happening. Now you see the overlay right away, and the notes fill in when they're ready.
+- When the notes appear, Toney asks **"How are you leaving this session?"** with emoji options like Lighter, Curious, Stuck, or Energized. You must tap one before you can dismiss — this helps Toney understand how its coaching is landing. You can optionally add a text note too.
+- When you tap Done, the overlay **slides down smoothly** instead of vanishing instantly.
+
+### Session notes work correctly in all languages
+
+- If you use Toney in a non-English language (like Hebrew or Spanish), session notes were sometimes showing raw data instead of a readable summary. This is now fixed — notes render correctly regardless of language.
+
+### New suggestions appear after each session
+
+- After ending a session, your **new personalized suggestions** now appear within about 15 seconds — even without refreshing the app. Previously, you had to close and reopen the app to see updated suggestions.
+
+### Cards now appear reliably in chat
+
+- When Toney co-creates a card with you during a session (a reframe, truth, plan, practice, or conversation kit), it should appear as an interactive card you can tap to save. In some sessions, the card wasn't appearing — Toney would describe the card in text but you'd never see the save button. This is now fixed. The card will always render properly, even if the AI formats it slightly differently than expected.
+- Toney no longer says "This is saved to your Rewire cards" when offering a card. Cards aren't automatically saved — they appear as drafts, and you choose whether to save them by tapping "Save to Rewire."
+
+### Multi-language support
+
+- Toney now **detects your language automatically** from your first message and responds in the same language for the rest of the session — and all future sessions. If you write in Hebrew, Spanish, or any other language, the Coach, session notes, suggestions, and growth observations will all be in your language.
+- The app interface stays in English, but all coaching content adapts to you.
+
+### Toney's learning is more reliable (improved)
+
+- The behind-the-scenes work that happens after each session (updating Toney's understanding of you, generating suggestions, writing growth observations) now runs with a much longer timeout — up to 5 minutes. Previously this sometimes failed silently. The improvement from February 17 has been further strengthened.
+
+### Themes (coming soon for select users)
+
+- A visual theme system has been built — 10 presets (like Midnight, Forest, Sunset) plus a custom theme editor. This is currently available only to select beta users. If you're interested in trying it, let us know.
+
+---
+
 ## February 17, 2026
 
 ### Sessions open instantly now
