@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
 
     if (sessionUpdateErr) {
       console.error('Session update failed:', sessionUpdateErr);
-      return NextResponse.json({ error: 'Failed to save session' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to save session', detail: sessionUpdateErr.message || sessionUpdateErr }, { status: 500 });
     }
 
     // ── Response (immediate) ──
