@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveContext } from '@/lib/supabase/sim';
 import { buildSystemPrompt } from '@toney/coaching';
+import { FEEDBACK_LABELS } from '@toney/constants';
 import { SystemPromptBlock, Profile, RewireCard, Win, FocusArea } from '@toney/types';
 import { saveUsage } from '@/lib/saveUsage';
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         .limit(100),
       ctx.supabase
         .from(ctx.table('sessions'))
-        .select('session_notes')
+        .select('session_notes, session_feedback_emoji, session_feedback_text')
         .eq('user_id', ctx.userId)
         .eq('session_status', 'completed')
         .not('session_notes', 'is', null)
@@ -89,6 +90,17 @@ export async function POST(request: NextRequest) {
       } catch { /* ignore malformed notes */ }
     }
 
+    // Parse previous session feedback
+    let previousSessionFeedback: { emoji: string; label: string; text?: string } | null = null;
+    if (prevNotesResult.data?.session_feedback_emoji) {
+      const fbEmoji = prevNotesResult.data.session_feedback_emoji as string;
+      previousSessionFeedback = {
+        emoji: fbEmoji,
+        label: FEEDBACK_LABELS[fbEmoji] || fbEmoji,
+        text: (prevNotesResult.data.session_feedback_text as string) || undefined,
+      };
+    }
+
     // ── Build system prompt from session + profile + DB context ──
     const systemPromptBlocks: SystemPromptBlock[] = buildSystemPrompt({
       understanding: profile.understanding || '',
@@ -101,6 +113,7 @@ export async function POST(request: NextRequest) {
       activeFocusAreas: (focusAreasResult.data || []) as FocusArea[],
       language: profile.language,
       previousSessionNotes,
+      previousSessionFeedback,
     });
 
     const historyRows = historyResult.data;

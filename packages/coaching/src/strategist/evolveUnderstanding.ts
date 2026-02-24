@@ -70,6 +70,8 @@ export interface EvolveAndSuggestInput extends EvolveUnderstandingInput {
   recentKeyMoments?: string[] | null;
   /** Previous suggestion titles (to avoid repetition) */
   previousSuggestionTitles?: string[];
+  /** Post-session feedback from the user (if submitted before evolution) */
+  sessionFeedback?: { emoji: string; label: string; text?: string } | null;
 }
 
 export interface FocusAreaGrowthReflection {
@@ -135,6 +137,7 @@ Your job is to EVOLVE the understanding — not rewrite it from scratch.
 - **Where growth is available** — which dimensions are active, stabilizing, or not yet ready. Weave these assessments into the narrative naturally:
 ${GROWTH_LENSES_DESCRIPTION}
 - **Stage of change** — where they are in the change process. This should be evident from the narrative itself.
+- **Session feedback signal** — if provided, the user's self-reported feeling after this session. This is ground truth — transcripts can look productive while the user felt unseen, or look stalled while something was quietly shifting. Trust the feedback signal over your transcript reading when they conflict.
 
 ---
 
@@ -300,6 +303,13 @@ export async function evolveAndSuggest(input: EvolveAndSuggestInput): Promise<Ev
   }
   if (input.previousSuggestionTitles && input.previousSuggestionTitles.length > 0) {
     sections.push(`## Previous Suggestion Titles (avoid repeating these exactly)\n${input.previousSuggestionTitles.map(t => `- "${t}"`).join('\n')}`);
+  }
+
+  // Post-session feedback from the user
+  if (input.sessionFeedback) {
+    const fb = input.sessionFeedback;
+    const textPart = fb.text ? `\nThey also shared: "${fb.text}"` : '';
+    sections.push(`## User's Post-Session Feedback\nAfter this session, the user reported: "${fb.label}"${textPart}\n\nThis is how they FELT about the session — which may differ from how the transcript reads. Factor this into your evolution. If they reported not feeling heard, identify what was missed. If something clicked, note what landed. If not sure, acknowledge that the work may still be settling.`);
   }
 
   // Language instruction for user-facing outputs

@@ -144,6 +144,7 @@ export default function ChatScreen() {
     sessionStatus,
     sessionNotes,
     endSession,
+    submitSessionFeedback,
     dismissSessionNotes,
     loadingChat,
     setActiveTab,
@@ -585,7 +586,7 @@ export default function ChatScreen() {
 
       {/* Session notes overlay */}
       {sessionNotes && (
-        <SessionNotesView notes={sessionNotes} onDismiss={dismissSessionNotes} />
+        <SessionNotesView notes={sessionNotes} onDismiss={dismissSessionNotes} onSubmitFeedback={submitSessionFeedback} />
       )}
     </div>
   );

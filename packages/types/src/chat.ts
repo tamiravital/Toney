@@ -40,4 +40,8 @@ export interface Session {
   focus_area_id?: string | null;
   /** Snapshot of profiles.understanding BEFORE this session's evolution */
   narrative_snapshot?: string | null;
+  /** Post-session feedback: emoji key (e.g., 'something_clicked', 'didnt_feel_heard') */
+  session_feedback_emoji?: string | null;
+  /** Post-session feedback: optional freeform text */
+  session_feedback_text?: string | null;
 }

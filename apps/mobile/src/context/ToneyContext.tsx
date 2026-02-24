@@ -127,6 +127,7 @@ interface ToneyContextValue {
   sessionStatus: SessionStatus;
   sessionNotes: SessionNotesOutput | null;
   endSession: () => Promise<void>;
+  submitSessionFeedback: (emoji: string, text?: string) => void;
   dismissSessionNotes: () => void;
   openSession: (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number, continuationNotes?: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] }) => Promise<void>;
   startNewSession: () => Promise<void>;
@@ -1073,6 +1074,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
   const endSession = useCallback(async () => {
     if (!currentSessionId || sessionStatus !== 'active') return;
+    feedbackSubmittedRef.current = false;
     setSessionStatus('ending');
 
     try {
@@ -1102,9 +1104,27 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
     }
   }, [currentSessionId, sessionStatus, buildApiUrl]);
 
+  const submitSessionFeedback = useCallback((emoji: string, text?: string) => {
+    if (!currentSessionId || feedbackSubmittedRef.current) return;
+    feedbackSubmittedRef.current = true;
+    fetch(buildApiUrl('/api/session/feedback'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentSessionId, emoji, text }),
+    }).catch(() => { /* non-critical */ });
+  }, [currentSessionId, buildApiUrl]);
+
   const dismissSessionNotes = useCallback(() => {
+    if (currentSessionId && !feedbackSubmittedRef.current) {
+      feedbackSubmittedRef.current = true;
+      fetch(buildApiUrl('/api/session/feedback'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: currentSessionId, skipped: true }),
+      }).catch(() => { /* non-critical */ });
+    }
     setSessionNotes(null);
-  }, []);
+  }, [currentSessionId, buildApiUrl]);
 
   const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number, continuationNotes?: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] }) => {
     if (!isSupabaseConfigured() && !simMode) return;
@@ -1295,6 +1315,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   const openSessionFailedRef = useRef(false); // Bug 3: prevent auto-retry after failure
   const messagesRef = useRef<Message[]>([]); // Bug 4: current messages for openSession closure
   const userInitiatedSessionRef = useRef(false); // Suppress auto-open when suggestion picker should show
+  const feedbackSubmittedRef = useRef(false); // Tracks whether feedback was submitted for current session
 
   const startNewSession = useCallback(async () => {
     const prevId = currentSessionId;
@@ -1783,6 +1804,7 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         sessionStatus,
         sessionNotes,
         endSession,
+        submitSessionFeedback,
         dismissSessionNotes,
         openSession,
         startNewSession,

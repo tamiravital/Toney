@@ -160,6 +160,8 @@ export interface BuildSystemPromptInput {
   language?: string | null;
   /** Session notes from the most recent previous session (for "what did we talk about" context) */
   previousSessionNotes?: { headline: string; narrative: string; keyMoments?: string[] } | null;
+  /** Post-session feedback from the most recent previous session */
+  previousSessionFeedback?: { emoji: string; label: string; text?: string } | null;
 }
 
 /**
@@ -205,7 +207,13 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): SystemPromptBl
   if (input.previousSessionNotes) {
     const prev = input.previousSessionNotes;
     const moments = prev.keyMoments?.length ? `\nKey moments:\n${prev.keyMoments.map(m => `- ${m}`).join('\n')}` : '';
-    sections.push(`LAST SESSION:\n"${prev.headline}"\n${prev.narrative}${moments}`);
+    let feedbackLine = '';
+    if (input.previousSessionFeedback) {
+      const fb = input.previousSessionFeedback;
+      feedbackLine = `\nHow they left that session: "${fb.label}"`;
+      if (fb.text) feedbackLine += ` — "${fb.text}"`;
+    }
+    sections.push(`LAST SESSION:\n"${prev.headline}"\n${prev.narrative}${moments}${feedbackLine}`);
   }
 
   sections.push(`COACHING STYLE:\n${formatCoachingStyle(profile)}`);

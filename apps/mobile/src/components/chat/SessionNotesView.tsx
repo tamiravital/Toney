@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { X, Sparkles, Layers } from 'lucide-react';
 import type { SessionNotesOutput } from '@toney/types';
+import { SESSION_FEEDBACK_OPTIONS } from '@toney/constants';
 import ReactMarkdown from 'react-markdown';
 import { ComponentPropsWithoutRef } from 'react';
 
@@ -23,10 +25,14 @@ interface SessionNotesViewProps {
   notes: SessionNotesOutput;
   onDismiss: () => void;
   onContinue?: () => void;
+  onSubmitFeedback?: (emoji: string, text?: string) => void;
   sessionDate?: Date;
 }
 
-export default function SessionNotesView({ notes, onDismiss, onContinue, sessionDate }: SessionNotesViewProps) {
+export default function SessionNotesView({ notes, onDismiss, onContinue, onSubmitFeedback, sessionDate }: SessionNotesViewProps) {
+  const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const dateLabel = (sessionDate ?? new Date()).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -99,6 +105,53 @@ export default function SessionNotesView({ notes, onDismiss, onContinue, session
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Feedback */}
+          {onSubmitFeedback && !feedbackSubmitted && (
+            <div className="bg-surface rounded-2xl p-4">
+              <p className="text-sm font-semibold text-primary mb-3">How are you leaving this session?</p>
+              <div className="flex flex-wrap gap-2">
+                {SESSION_FEEDBACK_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    onClick={() => setSelectedEmoji(selectedEmoji === option.key ? null : option.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm transition-all ${
+                      selectedEmoji === option.key
+                        ? 'bg-btn-primary text-btn-primary-text scale-[1.02]'
+                        : 'bg-input text-secondary hover:bg-default'
+                    }`}
+                  >
+                    <span>{option.emoji}</span>
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>
+              {selectedEmoji && (
+                <div className="mt-3 space-y-2 animate-fade-in">
+                  <textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="Anything you want Toney to know?"
+                    className="w-full bg-input text-primary text-sm rounded-xl p-3 resize-none placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+                    rows={2}
+                  />
+                  <button
+                    onClick={() => {
+                      onSubmitFeedback(selectedEmoji, feedbackText.trim() || undefined);
+                      setFeedbackSubmitted(true);
+                    }}
+                    className="w-full bg-btn-primary text-btn-primary-text py-2.5 rounded-xl font-semibold text-sm hover:bg-btn-primary-hover transition-all active:scale-[0.98]"
+                  >
+                    Share
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {feedbackSubmitted && (
+            <p className="text-xs text-muted text-center">Thanks for sharing. This helps Toney learn.</p>
           )}
         </div>
 

@@ -3,6 +3,7 @@
  * Loads data, applies tiered close, generates notes, evolves understanding, saves results.
  */
 import { generateSessionNotes, evolveAndSuggest } from '@toney/coaching';
+import { FEEDBACK_LABELS } from '@toney/constants';
 import { saveUsage } from '@/lib/saveUsage';
 import type { FocusArea, Win, RewireCard, SessionSuggestion } from '@toney/types';
 
@@ -65,7 +66,7 @@ export async function runClosePipeline(
       .limit(20),
     ctx.supabase
       .from(ctx.table('sessions'))
-      .select('hypothesis')
+      .select('hypothesis, session_feedback_emoji, session_feedback_text')
       .eq('id', sessionId)
       .maybeSingle(),
     ctx.supabase
@@ -203,6 +204,12 @@ export async function runClosePipeline(
     milestone: sessionNotes.milestone || null,
   }).eq('id', sessionId);
 
+  // ── Build feedback signal (if user submitted feedback before deferred close) ──
+  const feedbackEmoji = sessionResult.data?.session_feedback_emoji;
+  const sessionFeedback = feedbackEmoji
+    ? { emoji: feedbackEmoji, label: FEEDBACK_LABELS[feedbackEmoji] || feedbackEmoji, text: sessionResult.data?.session_feedback_text || undefined }
+    : null;
+
   // ── Evolve understanding + generate suggestions (Sonnet) ──
   const result = await evolveAndSuggest({
     currentUnderstanding, messages, tensionType, hypothesis,
@@ -211,6 +218,7 @@ export async function runClosePipeline(
     recentSessionHeadline: sessionNotes.headline,
     recentKeyMoments: sessionNotes.keyMoments,
     previousSuggestionTitles, language: userLanguage,
+    sessionFeedback,
   });
 
   if (result.usage) {
