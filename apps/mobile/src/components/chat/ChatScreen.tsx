@@ -227,6 +227,7 @@ export default function ChatScreen() {
 
   const showSuggestionPicker = !loadingChat && messages.length === 0
     && previousSessionMessages.length === 0
+    && !sessionNotes
     && (sessionStatus === 'completed' || sessionStatus === 'active');
 
   // ── Seeding in progress: show loading screen ──
