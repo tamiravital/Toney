@@ -1132,6 +1132,19 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
       }).catch(() => { /* non-critical */ });
     }
     setSessionNotes(null);
+
+    // Re-fetch suggestions after evolution has time to complete (~15-30s in after())
+    setTimeout(async () => {
+      try {
+        const res = await fetch(buildApiUrl('/api/suggestions'));
+        if (res.ok) {
+          const { suggestions: s } = await res.json();
+          if (Array.isArray(s) && s.length > 0) {
+            setSuggestions(s);
+          }
+        }
+      } catch { /* non-critical */ }
+    }, 15000);
   }, [currentSessionId, buildApiUrl]);
 
   const openSession = useCallback(async (previousSessionId?: string, preserveMessages?: boolean, suggestionIndex?: number, continuationNotes?: { headline: string; narrative: string; keyMoments?: string[]; cardsCreated?: { title: string; category: string }[] }) => {

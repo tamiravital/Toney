@@ -585,9 +585,14 @@ export default function ChatScreen() {
         </div>
       )}
 
-      {/* Session notes overlay */}
-      {sessionNotes && (
-        <SessionNotesView notes={sessionNotes} onDismiss={dismissSessionNotes} onSubmitFeedback={submitSessionFeedback} />
+      {/* Session notes overlay — shows immediately with loading state, fills in when notes arrive */}
+      {(sessionStatus === 'ending' || sessionNotes) && (
+        <SessionNotesView
+          notes={sessionNotes}
+          loading={sessionStatus === 'ending' && !sessionNotes}
+          onDismiss={dismissSessionNotes}
+          onSubmitFeedback={submitSessionFeedback}
+        />
       )}
     </div>
   );

@@ -123,9 +123,11 @@ export async function generateSessionNotes(input: SessionNotesInput): Promise<{ 
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
 
-  // Parse JSON from the response
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-  const jsonStr = jsonMatch ? jsonMatch[1] : text;
+  // Parse JSON from the response — strip [LANG:xx] first, then try code-fenced or bare JSON
+  const cleaned = text.replace(/\s*\[LANG:[a-z]{2,5}\]\s*$/i, '').trim();
+  const jsonMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
+  const bareMatch = !jsonMatch ? cleaned.match(/\{[\s\S]*\}/) : null;
+  const jsonStr = jsonMatch?.[1] || bareMatch?.[0] || cleaned;
 
   try {
     const parsed = JSON.parse(jsonStr);
