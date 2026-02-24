@@ -1073,24 +1073,32 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
   }, [identifiedTensionState, currentSessionId, simMode, buildApiUrl]);
 
   const endSession = useCallback(async () => {
-    if (!currentSessionId || sessionStatus !== 'active') return;
+    console.log('[endSession] called', { currentSessionId, sessionStatus });
+    if (!currentSessionId || sessionStatus !== 'active') {
+      console.warn('[endSession] guard failed', { currentSessionId, sessionStatus });
+      return;
+    }
     feedbackSubmittedRef.current = false;
     setSessionStatus('ending');
 
     try {
-      const res = await fetch(buildApiUrl('/api/session/close'), {
+      const url = buildApiUrl('/api/session/close');
+      console.log('[endSession] calling close route', { url, sessionId: currentSessionId });
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: currentSessionId }),
       });
 
       if (!res.ok) {
-        console.error('Session close failed:', res.status);
+        const errorBody = await res.text().catch(() => 'no body');
+        console.error('[endSession] close route failed', { status: res.status, body: errorBody });
         setSessionStatus('active');
         return;
       }
 
       const data = await res.json();
+      console.log('[endSession] close route success', { hasNotes: !!data.sessionNotes });
 
       if (data.sessionNotes) {
         setSessionNotes(data.sessionNotes as SessionNotesOutput);
@@ -1098,8 +1106,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
       setSessionStatus('completed');
       setMessages([]); // Clear messages so suggestion picker can show after notes dismiss
-    } catch {
-      // If session close fails, revert to active
+    } catch (err) {
+      console.error('[endSession] failed:', err);
       setSessionStatus('active');
     }
   }, [currentSessionId, sessionStatus, buildApiUrl]);
