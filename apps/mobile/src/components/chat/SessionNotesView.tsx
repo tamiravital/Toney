@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Sparkles, Layers } from 'lucide-react';
 import type { SessionNotesOutput } from '@toney/types';
 import { SESSION_FEEDBACK_OPTIONS } from '@toney/constants';
@@ -33,22 +33,42 @@ interface SessionNotesViewProps {
 export default function SessionNotesView({ notes, loading, onDismiss, onContinue, onSubmitFeedback, sessionDate }: SessionNotesViewProps) {
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
+  const [dismissing, setDismissing] = useState(false);
+  const feedbackTextRef = useRef<HTMLDivElement>(null);
   const dateLabel = (sessionDate ?? new Date()).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
   });
 
+  // Auto-scroll to reveal textarea when emoji is selected
+  useEffect(() => {
+    if (selectedEmoji && feedbackTextRef.current) {
+      requestAnimationFrame(() => {
+        feedbackTextRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+  }, [selectedEmoji]);
+
   const handleDone = () => {
     if (selectedEmoji && onSubmitFeedback) {
       onSubmitFeedback(selectedEmoji, feedbackText.trim() || undefined);
     }
-    onDismiss();
+    setDismissing(true);
+  };
+
+  const handleAnimationEnd = () => {
+    if (dismissing) {
+      onDismiss();
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'var(--bg-overlay)' }}>
-      <div className="w-full max-w-[430px] bg-elevated rounded-t-3xl max-h-[85vh] flex flex-col animate-slide-up">
+      <div
+        className={`w-full max-w-[430px] bg-elevated rounded-t-3xl max-h-[85vh] min-h-[50vh] flex flex-col ${dismissing ? 'animate-slide-down' : 'animate-slide-up'}`}
+        onAnimationEnd={handleAnimationEnd}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-default flex-shrink-0">
           <div>
@@ -148,7 +168,7 @@ export default function SessionNotesView({ notes, loading, onDismiss, onContinue
                     ))}
                   </div>
                   {selectedEmoji && (
-                    <div className="mt-3 animate-fade-in">
+                    <div ref={feedbackTextRef} className="mt-3 animate-fade-in">
                       <textarea
                         value={feedbackText}
                         onChange={(e) => setFeedbackText(e.target.value)}

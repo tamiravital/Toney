@@ -933,6 +933,22 @@ body {
   animation: slide-up 0.3s ease-out;
 }
 
+/* Slide-down animation for bottom sheet dismiss */
+@keyframes slide-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-in forwards;
+}
+
 /* 3D card flip utilities */
 .perspective-1000 {
   perspective: 1000px;
