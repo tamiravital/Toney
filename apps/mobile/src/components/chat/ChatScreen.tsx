@@ -264,16 +264,16 @@ export default function ChatScreen() {
                 style={{ background: 'linear-gradient(135deg, var(--featured-from), var(--featured-to))' }}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold" style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: 'var(--text-primary)' }}>
                     <Clock className="w-3 h-3" />
                     {lengthConfig[sortedSuggestions[0].length].label}
                   </span>
-                  <ArrowRight className="w-4 h-4 text-white opacity-60" />
+                  <ArrowRight className="w-4 h-4 text-primary opacity-60" />
                 </div>
-                <p dir="auto" className="text-base font-semibold text-white leading-snug mb-1.5">
+                <p dir="auto" className="text-base font-semibold text-primary leading-snug mb-1.5">
                   {sortedSuggestions[0].title}
                 </p>
-                <p dir="auto" className="text-sm text-white/75 leading-relaxed line-clamp-2">
+                <p dir="auto" className="text-sm leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
                   {sortedSuggestions[0].teaser}
                 </p>
               </button>

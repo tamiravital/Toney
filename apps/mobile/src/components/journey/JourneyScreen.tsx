@@ -188,7 +188,7 @@ export default function JourneyScreen() {
               <div key={node.id} className="relative pb-8 last:pb-0">
                 {/* Emoji circle on the line */}
                 <div
-                  className={`absolute -left-8 w-12 h-12 rounded-full border-4 border-white shadow-md flex items-center justify-center text-xl ${isNewest ? 'animate-node-pulse' : ''}`}
+                  className={`absolute -left-8 w-12 h-12 rounded-full border-4 border-surface shadow-md flex items-center justify-center text-xl ${isNewest ? 'animate-node-pulse' : ''}`}
                   style={{ backgroundColor: style.bg, top: 4 }}
                 >
                   {NODE_EMOJI[node.type]}
