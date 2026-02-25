@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, RotateCcw, LogOut, Globe } from 'lucide-react';
+import { X, RotateCcw, LogOut, Globe, Sun, Moon } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
-import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
+import { learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
 import { LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
@@ -45,7 +45,7 @@ const languageOptions = [
 ];
 
 export default function SettingsOverlay() {
-  const { identifiedTension, styleProfile, setStyleProfile, setShowSettings, displayName, setDisplayName, signOut, retakeQuiz } = useToney();
+  const { styleProfile, setStyleProfile, setShowSettings, displayName, setDisplayName, signOut, retakeQuiz, theme, setTheme } = useToney();
   const [localStyle, setLocalStyle] = useState({ ...styleProfile });
   const [localDisplayName, setLocalDisplayName] = useState(displayName || '');
   const [lifeStage, setLifeStage] = useState('');
@@ -125,9 +125,6 @@ export default function SettingsOverlay() {
     setShowSettings(false);
   };
 
-  const tension = identifiedTension;
-  const colors = tension ? tensionColor(tension.primary) : null;
-
   return (
     <div className="absolute inset-0 z-50 overflow-y-auto hide-scrollbar bg-surface">
       <div className="px-6 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
@@ -154,6 +151,35 @@ export default function SettingsOverlay() {
           />
         </div>
 
+        {/* Appearance (Light / Dark toggle) */}
+        <div className="mb-6">
+          <h3 className="font-semibold text-primary text-sm mb-3">Appearance</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setTheme('light')}
+              className={`p-3 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                theme === 'light'
+                  ? 'bg-pill-selected text-pill-selected-text border-pill-selected-border'
+                  : 'bg-pill-unselected text-pill-unselected-text border-pill-unselected-border hover:border-default'
+              }`}
+            >
+              <Sun className="w-4 h-4" />
+              Light
+            </button>
+            <button
+              onClick={() => setTheme('dark')}
+              className={`p-3 rounded-xl border-2 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                theme === 'dark'
+                  ? 'bg-pill-selected text-pill-selected-text border-pill-selected-border'
+                  : 'bg-pill-unselected text-pill-unselected-text border-pill-unselected-border hover:border-default'
+              }`}
+            >
+              <Moon className="w-4 h-4" />
+              Dark
+            </button>
+          </div>
+        </div>
+
         {/* Coach Language */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
@@ -173,21 +199,6 @@ export default function SettingsOverlay() {
           </select>
           <p className="text-xs text-muted mt-1.5">Toney will respond in this language</p>
         </div>
-
-        {/* Tension info */}
-        {tension && colors && (
-          <div className={`${colors.bg} rounded-2xl p-4 mb-6`}>
-            <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-              You tend to {tension.primary}
-            </div>
-            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Your money tension</div>
-            {tension.secondary && (
-              <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                Also tends to {tension.secondary}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Tone */}
         <div className="mb-6">
@@ -343,7 +354,7 @@ export default function SettingsOverlay() {
           className="w-full mt-3 flex items-center justify-center gap-2 text-secondary text-sm font-medium py-3 hover:text-primary transition-all"
         >
           <RotateCcw className="w-4 h-4" />
-          Retake tension quiz
+          Retake quiz
         </button>
 
         {/* Sign out */}

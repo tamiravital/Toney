@@ -10,6 +10,7 @@ type OnboardingStep = 'welcome' | 'questions';
 type AppPhase = 'loading' | 'signed_out' | 'onboarding' | 'main';
 type ActiveTab = 'home' | 'chat' | 'rewire' | 'journey';
 type SessionStatus = 'active' | 'ending' | 'completed';
+type ThemeMode = 'light' | 'dark';
 
 const VALID_TABS = new Set<ActiveTab>(['home', 'chat', 'rewire', 'journey']);
 
@@ -167,6 +168,10 @@ interface ToneyContextValue {
   // Onboarding completion
   finishOnboarding: () => void;
 
+  // Theme
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+
   // Reset
   resetAll: () => void;
   retakeQuiz: () => void;
@@ -223,6 +228,34 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
 
   // Focus Areas
   const [focusAreas, setFocusAreas] = useState<FocusArea[]>([]);
+
+  // Theme
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return (localStorage.getItem('toney_theme') as ThemeMode) || 'light';
+  });
+
+  const setTheme = useCallback((newTheme: ThemeMode) => {
+    setThemeState(newTheme);
+    localStorage.setItem('toney_theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    // Update meta theme-color
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', newTheme === 'dark' ? '#0c0a09' : '#FAF8F5');
+    }
+  }, []);
+
+  // Apply theme on mount
+  useEffect(() => {
+    const savedTheme = (localStorage.getItem('toney_theme') as ThemeMode) || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    setThemeState(savedTheme);
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', savedTheme === 'dark' ? '#0c0a09' : '#FAF8F5');
+    }
+  }, []);
 
   // Sim mode
   const [simMode, setSimMode] = useState(false);
@@ -1852,6 +1885,8 @@ export function ToneyProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         finishOnboarding,
+        theme,
+        setTheme,
         resetAll,
         retakeQuiz,
       }}

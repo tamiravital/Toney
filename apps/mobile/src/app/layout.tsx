@@ -43,7 +43,12 @@ export default function RootLayout({
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <meta name="theme-color" content="#0c0a09" />
+        <meta name="theme-color" content="#FAF8F5" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('toney_theme')||'light';document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#0c0a09':'#FAF8F5');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="font-sans antialiased bg-surface">
         <ToneyProvider>

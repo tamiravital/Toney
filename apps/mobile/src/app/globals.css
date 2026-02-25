@@ -1,169 +1,330 @@
 @import "tailwindcss";
 
 /* ============================================
-   TONEY DESIGN SYSTEM — Warm Earth (Dark)
+   TONEY DESIGN SYSTEM — Warm Earth
 
-   Single intentional palette. No theme switching.
+   Light mode default, dark mode via system preference.
    All colors flow from CSS variables.
    Tailwind maps them via @theme inline below.
    ============================================ */
 
+/* ── LIGHT MODE (default) ── */
 :root {
   /* Surfaces */
-  --bg-surface: #0c0a09;
-  --bg-card: #1c1917;
-  --bg-elevated: #292524;
-  --bg-input: #292524;
-  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --bg-surface: #FAF8F5;
+  --bg-card: #FFFFFF;
+  --bg-elevated: #F5F0EB;
+  --bg-input: #F5F0EB;
+  --bg-overlay: rgba(0, 0, 0, 0.3);
 
   /* Text */
-  --text-primary: #F5F0EB;
-  --text-secondary: #A8A29E;
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
   --text-muted: #78716c;
-  --text-inverse: #0c0a09;
+  --text-inverse: #F5F0EB;
 
   /* Borders */
-  --border-default: #44403c;
-  --border-subtle: #292524;
-  --border-focus: #F4D47C;
+  --border-default: #d6d3d1;
+  --border-subtle: #e7e5e4;
+  --border-focus: #c8a84e;
 
-  /* Accent (warm gold) */
-  --accent: #F4D47C;
-  --accent-hover: #e6c35a;
-  --accent-light: #2a2318;
-  --accent-subtle: #332b1a;
-  --accent-text: #F4D47C;
+  /* Accent (warm gold — deeper for light bg) */
+  --accent: #c8a84e;
+  --accent-hover: #b8952f;
+  --accent-light: #fdf8eb;
+  --accent-subtle: #faf3dc;
+  --accent-text: #8a6d1b;
 
   /* Secondary accent (terracotta) */
   --secondary: #C8846C;
-  --secondary-light: #2a1f1a;
+  --secondary-light: #fdf0eb;
 
   /* CTA / energy (coral) */
-  --cta: #E88D67;
-  --cta-hover: #d67a54;
+  --cta: #d67a54;
+  --cta-hover: #c46840;
 
   /* Success (sage green) */
-  --success: #86A789;
-  --success-light: #1a2a1d;
-  --success-medium: #243028;
-  --success-text: #a3c4a6;
-  --success-border: #3a5a3e;
+  --success: #5f8a62;
+  --success-light: #eef5ef;
+  --success-medium: #e0ede1;
+  --success-text: #3d6940;
+  --success-border: #b8d4ba;
 
   /* Warning (warm amber) */
-  --warning: #E88D67;
-  --warning-light: #2a1f1a;
-  --warning-text: #f0a882;
+  --warning: #d67a54;
+  --warning-light: #fdf0eb;
+  --warning-text: #b35c36;
 
   /* Danger (muted red) */
-  --danger: #e57373;
-  --danger-light: #2a1a1a;
+  --danger: #d14343;
+  --danger-light: #fdeaea;
 
   /* Amber (gold tones for truth cards) */
-  --amber: #F4D47C;
-  --amber-light: #2a2318;
-  --amber-medium: #332b1a;
-  --amber-text: #F4D47C;
-  --amber-border: #5a4a2a;
+  --amber: #c8a84e;
+  --amber-light: #fdf8eb;
+  --amber-medium: #faf3dc;
+  --amber-text: #8a6d1b;
+  --amber-border: #e5d5a0;
 
   /* Nav */
-  --nav-bg: rgba(12, 10, 9, 0.92);
-  --nav-active: #F4D47C;
-  --nav-inactive: #78716c;
-  --nav-border: #1c1917;
+  --nav-bg: rgba(250, 248, 245, 0.92);
+  --nav-active: #8a6d1b;
+  --nav-inactive: #a8a29e;
+  --nav-border: #e7e5e4;
 
   /* Chat bubbles */
   --chat-user-bg: #C8846C;
-  --chat-user-text: #F5F0EB;
-  --chat-coach-bg: #1c1917;
-  --chat-coach-text: #F5F0EB;
+  --chat-user-text: #FFFFFF;
+  --chat-coach-bg: #FFFFFF;
+  --chat-coach-text: #1c1917;
 
   /* Buttons */
-  --btn-primary-bg: #E88D67;
-  --btn-primary-text: #0c0a09;
-  --btn-primary-hover: #d67a54;
-  --btn-secondary-bg: #292524;
-  --btn-secondary-text: #A8A29E;
-  --btn-secondary-hover: #44403c;
-  --btn-disabled-bg: #292524;
-  --btn-disabled-text: #57534e;
+  --btn-primary-bg: #d67a54;
+  --btn-primary-text: #FFFFFF;
+  --btn-primary-hover: #c46840;
+  --btn-secondary-bg: #F5F0EB;
+  --btn-secondary-text: #57534e;
+  --btn-secondary-hover: #e7e5e4;
+  --btn-disabled-bg: #e7e5e4;
+  --btn-disabled-text: #a8a29e;
 
   /* Pills (selectable options) */
-  --pill-selected-bg: #2a2318;
-  --pill-selected-text: #F4D47C;
-  --pill-selected-border: #F4D47C;
+  --pill-selected-bg: #fdf8eb;
+  --pill-selected-text: #8a6d1b;
+  --pill-selected-border: #c8a84e;
   --pill-unselected-bg: transparent;
-  --pill-unselected-text: #A8A29E;
-  --pill-unselected-border: #44403c;
+  --pill-unselected-text: #57534e;
+  --pill-unselected-border: #d6d3d1;
 
-  /* Card categories — adapted for dark warm palette */
-  --cat-reframe-bg: #1f1a2e;
-  --cat-reframe-text: #c4b5fd;
-  --cat-reframe-border: #3a2d5c;
-  --cat-reframe-accent: #a78bfa;
+  /* Card categories — light palette */
+  --cat-reframe-bg: #f3f0ff;
+  --cat-reframe-text: #6d28d9;
+  --cat-reframe-border: #ddd6fe;
+  --cat-reframe-accent: #7c3aed;
 
-  --cat-truth-bg: #2a2318;
-  --cat-truth-text: #F4D47C;
-  --cat-truth-border: #5a4a2a;
-  --cat-truth-accent: #F4D47C;
+  --cat-truth-bg: #fdf8eb;
+  --cat-truth-text: #8a6d1b;
+  --cat-truth-border: #e5d5a0;
+  --cat-truth-accent: #c8a84e;
 
-  --cat-plan-bg: #1a2030;
-  --cat-plan-text: #93c5fd;
-  --cat-plan-border: #2a3a5a;
-  --cat-plan-accent: #60a5fa;
+  --cat-plan-bg: #eff6ff;
+  --cat-plan-text: #1d4ed8;
+  --cat-plan-border: #bfdbfe;
+  --cat-plan-accent: #3b82f6;
 
-  --cat-practice-bg: #1a2a1d;
-  --cat-practice-text: #86A789;
-  --cat-practice-border: #3a5a3e;
-  --cat-practice-accent: #86A789;
+  --cat-practice-bg: #eef5ef;
+  --cat-practice-text: #3d6940;
+  --cat-practice-border: #b8d4ba;
+  --cat-practice-accent: #5f8a62;
 
-  --cat-kit-bg: #1a2a28;
-  --cat-kit-text: #5eead4;
-  --cat-kit-border: #2a4a46;
-  --cat-kit-accent: #2dd4bf;
+  --cat-kit-bg: #ecfdf5;
+  --cat-kit-text: #047857;
+  --cat-kit-border: #a7f3d0;
+  --cat-kit-accent: #10b981;
 
   /* Journey timeline */
-  --journey-line: #44403c;
-  --journey-win-bg: #1a2a1d;
-  --journey-win-border: #3a5a3e;
-  --journey-win-tag: #86A789;
-  --journey-milestone-bg: #2a2318;
-  --journey-milestone-border: #5a4a2a;
-  --journey-milestone-tag: #F4D47C;
-  --journey-first-bg: #2a1f1a;
-  --journey-first-border: #5a3a2a;
-  --journey-first-tag: #E88D67;
+  --journey-line: #d6d3d1;
+  --journey-win-bg: #eef5ef;
+  --journey-win-border: #b8d4ba;
+  --journey-win-tag: #5f8a62;
+  --journey-milestone-bg: #fdf8eb;
+  --journey-milestone-border: #e5d5a0;
+  --journey-milestone-tag: #c8a84e;
+  --journey-first-bg: #fdf0eb;
+  --journey-first-border: #f0c4ae;
+  --journey-first-tag: #d67a54;
 
-  /* Focus area hues (7 rotating — dark palette) */
-  --focus-0-bg: #2a2318; --focus-0-border: #5a4a2a; --focus-0-tag: #F4D47C;
-  --focus-1-bg: #2a1a22; --focus-1-border: #5a3040; --focus-1-tag: #f9a8d4;
-  --focus-2-bg: #1a2030; --focus-2-border: #2a3a5a; --focus-2-tag: #7dd3fc;
-  --focus-3-bg: #1f1a2e; --focus-3-border: #3a2d5c; --focus-3-tag: #c4b5fd;
-  --focus-4-bg: #2a1f1a; --focus-4-border: #5a3a2a; --focus-4-tag: #E88D67;
-  --focus-5-bg: #2a2818; --focus-5-border: #5a5020; --focus-5-tag: #fde047;
-  --focus-6-bg: #1a2a22; --focus-6-border: #2a5a3a; --focus-6-tag: #6ee7b7;
+  /* Focus area hues (7 rotating — light palette) */
+  --focus-0-bg: #fdf8eb; --focus-0-border: #e5d5a0; --focus-0-tag: #c8a84e;
+  --focus-1-bg: #fdf2f8; --focus-1-border: #f9a8d4; --focus-1-tag: #db2777;
+  --focus-2-bg: #eff6ff; --focus-2-border: #bfdbfe; --focus-2-tag: #3b82f6;
+  --focus-3-bg: #f3f0ff; --focus-3-border: #ddd6fe; --focus-3-tag: #7c3aed;
+  --focus-4-bg: #fdf0eb; --focus-4-border: #f0c4ae; --focus-4-tag: #d67a54;
+  --focus-5-bg: #fefce8; --focus-5-border: #fde68a; --focus-5-tag: #ca8a04;
+  --focus-6-bg: #ecfdf5; --focus-6-border: #a7f3d0; --focus-6-tag: #10b981;
 
   /* Suggestion length badges */
-  --length-quick: #86A789;
-  --length-medium: #60a5fa;
-  --length-deep: #c4b5fd;
-  --length-standing: #F4D47C;
+  --length-quick: #5f8a62;
+  --length-medium: #3b82f6;
+  --length-deep: #7c3aed;
+  --length-standing: #c8a84e;
 
   /* Featured suggestion gradient */
   --featured-from: #C8846C;
-  --featured-to: #E88D67;
+  --featured-to: #d67a54;
 
   /* Loading dots */
-  --loading-dot: #57534e;
-  --loading-dot-accent: #F4D47C;
+  --loading-dot: #d6d3d1;
+  --loading-dot-accent: #c8a84e;
 
   /* Quick reply chips */
-  --chip-bg: #1c1917;
-  --chip-text: #F4D47C;
-  --chip-border: #44403c;
-  --chip-hover: #292524;
+  --chip-bg: #FFFFFF;
+  --chip-text: #8a6d1b;
+  --chip-border: #d6d3d1;
+  --chip-hover: #F5F0EB;
 
   /* Meta / browser chrome */
-  --theme-color: #0c0a09;
+  --theme-color: #FAF8F5;
+}
+
+
+/* ── DARK MODE (user toggle) ── */
+[data-theme="dark"] {
+    /* Surfaces */
+    --bg-surface: #0c0a09;
+    --bg-card: #1c1917;
+    --bg-elevated: #292524;
+    --bg-input: #292524;
+    --bg-overlay: rgba(0, 0, 0, 0.6);
+
+    /* Text — muted bumped to #a8a29e for readability */
+    --text-primary: #F5F0EB;
+    --text-secondary: #d6d3d1;
+    --text-muted: #a8a29e;
+    --text-inverse: #0c0a09;
+
+    /* Borders */
+    --border-default: #44403c;
+    --border-subtle: #292524;
+    --border-focus: #F4D47C;
+
+    /* Accent (warm gold) */
+    --accent: #F4D47C;
+    --accent-hover: #e6c35a;
+    --accent-light: #2a2318;
+    --accent-subtle: #332b1a;
+    --accent-text: #F4D47C;
+
+    /* Secondary accent (terracotta) */
+    --secondary: #C8846C;
+    --secondary-light: #2a1f1a;
+
+    /* CTA / energy (coral) */
+    --cta: #E88D67;
+    --cta-hover: #d67a54;
+
+    /* Success (sage green) */
+    --success: #86A789;
+    --success-light: #1a2a1d;
+    --success-medium: #243028;
+    --success-text: #a3c4a6;
+    --success-border: #3a5a3e;
+
+    /* Warning (warm amber) */
+    --warning: #E88D67;
+    --warning-light: #2a1f1a;
+    --warning-text: #f0a882;
+
+    /* Danger (muted red) */
+    --danger: #e57373;
+    --danger-light: #2a1a1a;
+
+    /* Amber (gold tones for truth cards) */
+    --amber: #F4D47C;
+    --amber-light: #2a2318;
+    --amber-medium: #332b1a;
+    --amber-text: #F4D47C;
+    --amber-border: #5a4a2a;
+
+    /* Nav */
+    --nav-bg: rgba(12, 10, 9, 0.92);
+    --nav-active: #F4D47C;
+    --nav-inactive: #a8a29e;
+    --nav-border: #1c1917;
+
+    /* Chat bubbles */
+    --chat-user-bg: #C8846C;
+    --chat-user-text: #F5F0EB;
+    --chat-coach-bg: #1c1917;
+    --chat-coach-text: #F5F0EB;
+
+    /* Buttons */
+    --btn-primary-bg: #E88D67;
+    --btn-primary-text: #0c0a09;
+    --btn-primary-hover: #d67a54;
+    --btn-secondary-bg: #292524;
+    --btn-secondary-text: #d6d3d1;
+    --btn-secondary-hover: #44403c;
+    --btn-disabled-bg: #292524;
+    --btn-disabled-text: #78716c;
+
+    /* Pills (selectable options) */
+    --pill-selected-bg: #2a2318;
+    --pill-selected-text: #F4D47C;
+    --pill-selected-border: #F4D47C;
+    --pill-unselected-bg: transparent;
+    --pill-unselected-text: #d6d3d1;
+    --pill-unselected-border: #44403c;
+
+    /* Card categories — dark palette */
+    --cat-reframe-bg: #1f1a2e;
+    --cat-reframe-text: #c4b5fd;
+    --cat-reframe-border: #3a2d5c;
+    --cat-reframe-accent: #a78bfa;
+
+    --cat-truth-bg: #2a2318;
+    --cat-truth-text: #F4D47C;
+    --cat-truth-border: #5a4a2a;
+    --cat-truth-accent: #F4D47C;
+
+    --cat-plan-bg: #1a2030;
+    --cat-plan-text: #93c5fd;
+    --cat-plan-border: #2a3a5a;
+    --cat-plan-accent: #60a5fa;
+
+    --cat-practice-bg: #1a2a1d;
+    --cat-practice-text: #86A789;
+    --cat-practice-border: #3a5a3e;
+    --cat-practice-accent: #86A789;
+
+    --cat-kit-bg: #1a2a28;
+    --cat-kit-text: #5eead4;
+    --cat-kit-border: #2a4a46;
+    --cat-kit-accent: #2dd4bf;
+
+    /* Journey timeline */
+    --journey-line: #44403c;
+    --journey-win-bg: #1a2a1d;
+    --journey-win-border: #3a5a3e;
+    --journey-win-tag: #86A789;
+    --journey-milestone-bg: #2a2318;
+    --journey-milestone-border: #5a4a2a;
+    --journey-milestone-tag: #F4D47C;
+    --journey-first-bg: #2a1f1a;
+    --journey-first-border: #5a3a2a;
+    --journey-first-tag: #E88D67;
+
+    /* Focus area hues (7 rotating — dark palette) */
+    --focus-0-bg: #2a2318; --focus-0-border: #5a4a2a; --focus-0-tag: #F4D47C;
+    --focus-1-bg: #2a1a22; --focus-1-border: #5a3040; --focus-1-tag: #f9a8d4;
+    --focus-2-bg: #1a2030; --focus-2-border: #2a3a5a; --focus-2-tag: #7dd3fc;
+    --focus-3-bg: #1f1a2e; --focus-3-border: #3a2d5c; --focus-3-tag: #c4b5fd;
+    --focus-4-bg: #2a1f1a; --focus-4-border: #5a3a2a; --focus-4-tag: #E88D67;
+    --focus-5-bg: #2a2818; --focus-5-border: #5a5020; --focus-5-tag: #fde047;
+    --focus-6-bg: #1a2a22; --focus-6-border: #2a5a3a; --focus-6-tag: #6ee7b7;
+
+    /* Suggestion length badges */
+    --length-quick: #86A789;
+    --length-medium: #60a5fa;
+    --length-deep: #c4b5fd;
+    --length-standing: #F4D47C;
+
+    /* Featured suggestion gradient */
+    --featured-from: #C8846C;
+    --featured-to: #E88D67;
+
+    /* Loading dots */
+    --loading-dot: #57534e;
+    --loading-dot-accent: #F4D47C;
+
+    /* Quick reply chips */
+    --chip-bg: #1c1917;
+    --chip-text: #F4D47C;
+    --chip-border: #44403c;
+    --chip-hover: #292524;
+
+    /* Meta / browser chrome */
+    --theme-color: #0c0a09;
 }
 
 
