@@ -1,50 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, RotateCcw, LogOut, Check, Palette, Globe } from 'lucide-react';
+import { X, RotateCcw, LogOut, Globe } from 'lucide-react';
 import { useToney } from '@/context/ToneyContext';
 import { tensionColor, learningStyleOptions, toneLabel, depthLabel } from '@toney/constants';
 import { LearningStyle } from '@toney/types';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
-import CustomThemeEditor, { restoreCustomTheme } from './CustomThemeEditor';
-
-type ThemeOption = 'default' | 'dark' | 'warm' | 'ocean' | 'forest' | 'sunset' | 'lavender' | 'midnight' | 'sand' | 'rose' | 'custom';
-
-const themeOptions: { value: ThemeOption; label: string; accent: string; surface: string }[] = [
-  { value: 'default', label: 'Light', accent: '#4f46e5', surface: '#f9fafb' },
-  { value: 'dark', label: 'Dark', accent: '#818cf8', surface: '#0f172a' },
-  { value: 'warm', label: 'Warm', accent: '#b45309', surface: '#faf7f2' },
-  { value: 'ocean', label: 'Ocean', accent: '#0891b2', surface: '#f0f9ff' },
-  { value: 'forest', label: 'Forest', accent: '#15803d', surface: '#f0fdf4' },
-  { value: 'sunset', label: 'Sunset', accent: '#ea580c', surface: '#fff7ed' },
-  { value: 'lavender', label: 'Lavender', accent: '#7c3aed', surface: '#faf5ff' },
-  { value: 'midnight', label: 'Midnight', accent: '#eab308', surface: '#0f172a' },
-  { value: 'sand', label: 'Sand', accent: '#a16207', surface: '#fafaf9' },
-  { value: 'rose', label: 'Rose', accent: '#e11d48', surface: '#fff1f2' },
-  { value: 'custom', label: 'Custom', accent: '#888888', surface: '#ffffff' },
-];
-
-function applyTheme(theme: ThemeOption) {
-  if (theme === 'default') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme);
-  }
-  try { localStorage.setItem('toney_theme', theme); } catch { /* */ }
-  // Update meta theme-color
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) {
-    const color = getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();
-    if (color) meta.setAttribute('content', color);
-  }
-}
-
-function getStoredTheme(): ThemeOption {
-  if (typeof window === 'undefined') return 'default';
-  try {
-    return (localStorage.getItem('toney_theme') as ThemeOption) || 'default';
-  } catch { return 'default'; }
-}
 
 const lifeStageOptions = [
   { value: 'student', label: 'Student' },
@@ -71,16 +32,16 @@ const relationshipOptions = [
 const languageOptions = [
   { value: '', label: 'Auto-detect' },
   { value: 'en', label: 'English' },
-  { value: 'he', label: 'עברית (Hebrew)' },
-  { value: 'es', label: 'Español (Spanish)' },
-  { value: 'fr', label: 'Français (French)' },
+  { value: 'he', label: '\u05e2\u05d1\u05e8\u05d9\u05ea (Hebrew)' },
+  { value: 'es', label: 'Espa\u00f1ol (Spanish)' },
+  { value: 'fr', label: 'Fran\u00e7ais (French)' },
   { value: 'de', label: 'Deutsch (German)' },
-  { value: 'pt', label: 'Português (Portuguese)' },
-  { value: 'ar', label: 'العربية (Arabic)' },
-  { value: 'ru', label: 'Русский (Russian)' },
-  { value: 'zh', label: '中文 (Chinese)' },
-  { value: 'ja', label: '日本語 (Japanese)' },
-  { value: 'ko', label: '한국어 (Korean)' },
+  { value: 'pt', label: 'Portugu\u00eas (Portuguese)' },
+  { value: 'ar', label: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629 (Arabic)' },
+  { value: 'ru', label: '\u0420\u0443\u0441\u0441\u043a\u0438\u0439 (Russian)' },
+  { value: 'zh', label: '\u4e2d\u6587 (Chinese)' },
+  { value: 'ja', label: '\u65e5\u672c\u8a9e (Japanese)' },
+  { value: 'ko', label: '\ud55c\uad6d\uc5b4 (Korean)' },
 ];
 
 export default function SettingsOverlay() {
@@ -93,15 +54,6 @@ export default function SettingsOverlay() {
   const [emotionalWhy, setEmotionalWhy] = useState('');
   const [language, setLanguage] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isBeta, setIsBeta] = useState(false);
-  const [activeTheme, setActiveTheme] = useState<ThemeOption>(getStoredTheme);
-  const [showCustomEditor, setShowCustomEditor] = useState(false);
-
-  // Apply theme on mount (for page refresh) + restore custom CSS if needed
-  useEffect(() => {
-    applyTheme(activeTheme);
-    restoreCustomTheme();
-  }, [activeTheme]);
 
   // Load About You fields from profile on mount
   useEffect(() => {
@@ -113,7 +65,7 @@ export default function SettingsOverlay() {
         if (!user) return;
         const { data } = await supabase
           .from('profiles')
-          .select('life_stage, income_type, relationship_status, emotional_why, language, is_beta')
+          .select('life_stage, income_type, relationship_status, emotional_why, language')
           .eq('id', user.id)
           .single();
         if (data) {
@@ -122,7 +74,6 @@ export default function SettingsOverlay() {
           if (data.relationship_status) setRelationship(data.relationship_status);
           if (data.emotional_why) setEmotionalWhy(data.emotional_why);
           if (data.language) setLanguage(data.language);
-          if (data.is_beta) setIsBeta(true);
         }
       } catch {
         // Silent fail
@@ -182,7 +133,7 @@ export default function SettingsOverlay() {
       <div className="px-6 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-bold text-primary">Settings</h2>
+          <h2 className="text-2xl font-bold text-primary font-heading">Settings</h2>
           <button
             onClick={() => setShowSettings(false)}
             className="w-10 h-10 rounded-full bg-input flex items-center justify-center hover:bg-default transition-all"
@@ -190,68 +141,6 @@ export default function SettingsOverlay() {
             <X className="w-5 h-5 text-secondary" />
           </button>
         </div>
-
-        {/* Theme — only visible to beta users (set via admin) */}
-        {isBeta && (
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <Palette className="w-4 h-4 text-accent" />
-            <h3 className="font-semibold text-primary text-sm">Theme</h3>
-          </div>
-
-          {/* Theme circles grid */}
-          <div className="grid grid-cols-5 gap-3">
-            {themeOptions.map((opt) => {
-              const isActive = activeTheme === opt.value;
-              const isDark = opt.value === 'dark' || opt.value === 'midnight';
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => {
-                    setActiveTheme(opt.value);
-                    applyTheme(opt.value);
-                    if (opt.value === 'custom') {
-                      restoreCustomTheme();
-                      setShowCustomEditor(true);
-                    }
-                  }}
-                  className="flex flex-col items-center gap-1.5"
-                >
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                      isActive ? 'ring-2 ring-offset-2' : ''
-                    }`}
-                    style={{
-                      backgroundColor: opt.surface,
-                      border: `2.5px solid ${opt.accent}`,
-                      '--tw-ring-color': opt.accent,
-                    } as React.CSSProperties}
-                  >
-                    {opt.value === 'custom' ? (
-                      <Palette className="w-4 h-4" style={{ color: opt.accent }} />
-                    ) : isActive ? (
-                      <Check className="w-4 h-4" style={{ color: isDark ? '#fff' : opt.accent }} />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full" style={{ backgroundColor: opt.accent }} />
-                    )}
-                  </div>
-                  <span className={`text-[10px] font-medium ${isActive ? 'text-accent-text' : 'text-muted'}`}>
-                    {opt.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {activeTheme === 'custom' && (
-            <button
-              onClick={() => { restoreCustomTheme(); setShowCustomEditor(true); }}
-              className="mt-2 text-xs font-medium text-accent hover:underline"
-            >
-              Edit custom theme...
-            </button>
-          )}
-        </div>
-        )}
 
         {/* Display name */}
         <div className="mb-6">
@@ -466,9 +355,6 @@ export default function SettingsOverlay() {
           Sign out
         </button>
       </div>
-      {showCustomEditor && (
-        <CustomThemeEditor onClose={() => setShowCustomEditor(false)} />
-      )}
     </div>
   );
 }

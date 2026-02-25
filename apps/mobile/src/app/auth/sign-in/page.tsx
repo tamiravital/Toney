@@ -23,15 +23,15 @@ export default function SignIn() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+    <div className="min-h-screen bg-surface flex items-center justify-center px-6">
       <div className="w-full max-w-sm text-center">
         <div className="text-6xl mb-6">{"\u{1F499}"}</div>
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">Toney</h1>
-        <p className="text-gray-500 mb-10">Finally feel good about money</p>
+        <h1 className="text-4xl font-bold text-primary font-heading mb-2">Toney</h1>
+        <p className="text-secondary mb-10">Finally feel good about money</p>
 
         <button
           onClick={handleGoogleSignIn}
-          className="w-full bg-white border border-gray-200 text-gray-700 py-4 px-6 rounded-2xl font-semibold text-base hover:bg-gray-50 transition-all active:scale-[0.98] flex items-center justify-center gap-3 shadow-sm"
+          className="w-full bg-card border border-default text-primary py-4 px-6 rounded-2xl font-semibold text-base hover:bg-elevated transition-all active:scale-[0.98] flex items-center justify-center gap-3 shadow-sm"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -54,7 +54,7 @@ export default function SignIn() {
           Continue with Google
         </button>
 
-        <p className="text-xs text-gray-400 mt-6">
+        <p className="text-xs text-muted mt-6">
           Your data stays private. We never access your bank accounts.
         </p>
       </div>

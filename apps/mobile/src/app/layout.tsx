@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Plus_Jakarta_Sans, DM_Sans } from 'next/font/google';
 import './globals.css';
 import { ToneyProvider } from '@/context/ToneyContext';
 
-const inter = Inter({
-  variable: '--font-inter',
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: '--font-heading',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+});
+
+const dmSans = DM_Sans({
+  variable: '--font-dm-sans',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
 });
 
 export const metadata: Metadata = {
@@ -32,14 +39,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${plusJakarta.variable} ${dmSans.variable}`} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('toney_theme');if(t&&t!=='default'){document.documentElement.setAttribute('data-theme',t)}var m=document.querySelector('meta[name="theme-color"]');if(m){var c=getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim();if(c)m.setAttribute('content',c)}}catch(e){}})()` }} />
-        <meta name="theme-color" content="#f9fafb" />
+        <meta name="theme-color" content="#0c0a09" />
       </head>
-      <body className="font-sans antialiased bg-white">
+      <body className="font-sans antialiased bg-surface">
         <ToneyProvider>
           {children}
         </ToneyProvider>
